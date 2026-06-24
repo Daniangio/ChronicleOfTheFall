@@ -32,10 +32,10 @@ Make sure these are already true:
 
 The deploy workflow expects these files to already exist on the VM:
 
-- `/opt/xenobloom/.env`
-- `/opt/xenobloom/secrets/firebase-admin.prod.json`
+- `/opt/chronicleofthefall/.env`
+- `/opt/chronicleofthefall/secrets/firebase-admin.prod.json`
 
-And `/opt/xenobloom/.env` should include (at minimum):
+And `/opt/chronicleofthefall/.env` should include (at minimum):
 
 - distributed runtime flags (`USE_DISTRIBUTED_MATCH_RUNTIME=true`, `DISTRIBUTED_GATEWAY_RUN_BRIDGE=false`)
 - Redis connection settings (`REDIS_URL`, optionally `REDIS_PASSWORD`)
@@ -59,14 +59,14 @@ These are separate and should not be mixed together.
 Run this on your local machine:
 
 ```bash
-ssh-keygen -t ed25519 -C "github-actions-xenobloom" -f ./xenobloom-actions
+ssh-keygen -t ed25519 -C "github-actions-chronicleofthefall" -f ./chronicleofthefall-actions
 ```
 
 This creates:
 
-- `xenobloom-actions`
+- `chronicleofthefall-actions`
   This is the private key. Keep it private.
-- `xenobloom-actions.pub`
+- `chronicleofthefall-actions.pub`
   This is the public key. Put this on the VM.
 
 ### 2.1 Put the public key on the VM
@@ -82,7 +82,7 @@ chmod 700 ~/.ssh
 nano ~/.ssh/authorized_keys
 ```
 
-Paste the full contents of `xenobloom-actions.pub` as a new line, save, then run:
+Paste the full contents of `chronicleofthefall-actions.pub` as a new line, save, then run:
 
 ```bash
 chmod 600 ~/.ssh/authorized_keys
@@ -91,13 +91,13 @@ chmod 600 ~/.ssh/authorized_keys
 If you prefer copying from your local machine:
 
 ```bash
-scp ./xenobloom-actions.pub ubuntu@158.180.234.11:/tmp/xenobloom-actions.pub
+scp ./chronicleofthefall-actions.pub ubuntu@158.180.234.11:/tmp/chronicleofthefall-actions.pub
 ssh ubuntu@158.180.234.11
 mkdir -p ~/.ssh
 chmod 700 ~/.ssh
-cat /tmp/xenobloom-actions.pub >> ~/.ssh/authorized_keys
+cat /tmp/chronicleofthefall-actions.pub >> ~/.ssh/authorized_keys
 chmod 600 ~/.ssh/authorized_keys
-rm /tmp/xenobloom-actions.pub
+rm /tmp/chronicleofthefall-actions.pub
 ```
 
 ### 2.2 Test the SSH key from your local machine
@@ -105,7 +105,7 @@ rm /tmp/xenobloom-actions.pub
 Run:
 
 ```bash
-ssh -i ./xenobloom-actions ubuntu@158.180.234.11
+ssh -i ./chronicleofthefall-actions ubuntu@158.180.234.11
 ```
 
 If this works without prompting for a password, the key is installed correctly.
@@ -115,7 +115,7 @@ If this works without prompting for a password, the key is installed correctly.
 Open the private key file locally:
 
 ```bash
-cat ./xenobloom-actions
+cat ./chronicleofthefall-actions
 ```
 
 Copy the entire file contents, including:
@@ -211,8 +211,8 @@ Because your repository is private, the VM needs its own GitHub credentials so i
 
 ```bash
 docker login ghcr.io
-docker pull ghcr.io/<owner>/xenobloom-backend:latest
-docker pull ghcr.io/<owner>/xenobloom-frontend:latest
+docker pull ghcr.io/<owner>/chronicleofthefall-backend:latest
+docker pull ghcr.io/<owner>/chronicleofthefall-frontend:latest
 ```
 
 ### 4.1 Choose the GitHub account that the VM will use
@@ -233,7 +233,7 @@ While logged into GitHub as that account:
 3. Open `Personal access tokens`
 4. Open `Tokens (classic)`
 5. Click `Generate new token (classic)`
-6. Give it a name such as `xenobloom-ghcr-read`
+6. Give it a name such as `chronicleofthefall-ghcr-read`
 7. Set an expiration
 8. Enable this scope:
    - `read:packages`
@@ -305,7 +305,7 @@ Recommended preview values for your current VM:
 - `PREVIEW_VM_HOST` = `178.105.53.1`
 - `PREVIEW_VM_SSH_PORT` = `22`
 - `PREVIEW_VM_USER` = `root`
-- `PREVIEW_VM_SSH_PRIVATE_KEY` = full contents of `xenobloom-actions`
+- `PREVIEW_VM_SSH_PRIVATE_KEY` = full contents of `chronicleofthefall-actions`
 - `PREVIEW_VM_SSH_FINGERPRINT` = only the `SHA256:...` part from the fingerprint command
 
 Notes:
@@ -361,8 +361,8 @@ Important:
 The workflow pushes images to:
 
 ```text
-ghcr.io/<lowercase-github-owner>/xenobloom-backend:latest
-ghcr.io/<lowercase-github-owner>/xenobloom-frontend:latest
+ghcr.io/<lowercase-github-owner>/chronicleofthefall-backend:latest
+ghcr.io/<lowercase-github-owner>/chronicleofthefall-frontend:latest
 ```
 
 For a private repository, the VM account in `GHCR_USERNAME` must be allowed to read those packages.
@@ -386,12 +386,12 @@ That is the correct registry for Docker images stored in `ghcr.io`.
 After the images have been pushed once:
 
 1. Open GitHub
-2. Open the package page for `xenobloom-backend`
+2. Open the package page for `chronicleofthefall-backend`
 3. Open the package settings
 4. Confirm one of these is true:
    - the package inherits permissions from this repository
    - the user in `GHCR_USERNAME` has explicit read access
-5. Repeat for `xenobloom-frontend`
+5. Repeat for `chronicleofthefall-frontend`
 
 ## 8. Test GHCR Access Manually on the VM
 
@@ -399,8 +399,8 @@ Before you trust the workflow, SSH into the VM and test:
 
 ```bash
 echo "<ghcr-token>" | docker login ghcr.io -u "<github-username>" --password-stdin
-docker pull ghcr.io/<lowercase-github-owner>/xenobloom-backend:latest
-docker pull ghcr.io/<lowercase-github-owner>/xenobloom-frontend:latest
+docker pull ghcr.io/<lowercase-github-owner>/chronicleofthefall-backend:latest
+docker pull ghcr.io/<lowercase-github-owner>/chronicleofthefall-frontend:latest
 ```
 
 If login fails, the token is wrong.
@@ -447,8 +447,8 @@ Runtime behavior:
 
 The deploy workflow assumes these files already exist on the VM:
 
-- `/opt/xenobloom/.env`
-- `/opt/xenobloom/secrets/firebase-admin.prod.json`
+- `/opt/chronicleofthefall/.env`
+- `/opt/chronicleofthefall/secrets/firebase-admin.prod.json`
 
 The VM-side setup for those files is documented in [vm_bootstrap.md](/home/angiod@usi.ch/AstraliaChronicles/documentation/vm_bootstrap.md).
 
@@ -466,7 +466,7 @@ The VM-side setup for those files is documented in [vm_bootstrap.md](/home/angio
 On VM:
 
 ```bash
-cd /opt/xenobloom
+cd /opt/chronicleofthefall
 docker compose --env-file .env ps
 docker compose --env-file .env logs --tail=200 caddy backend backend-worker frontend
 ```

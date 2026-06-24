@@ -12,16 +12,16 @@ Enable GCS only when all required environment variables are configured:
 ```env
 USE_OBJECT_STORAGE_REPLAYS=true
 REPLAY_STORAGE_KIND=gcs
-REPLAY_BUCKET=xenobloom-replays-dev
+REPLAY_BUCKET=chronicleofthefall-replays-dev
 REPLAY_EPHEMERAL_PREFIX=replays/ephemeral
 REPLAY_PERMANENT_PREFIX=replays/permanent
-GOOGLE_APPLICATION_CREDENTIALS=/opt/xenobloom/secrets/gcp-service-account.dev.json
+GOOGLE_APPLICATION_CREDENTIALS=/opt/chronicleofthefall/secrets/gcp-service-account.dev.json
 ```
 
 For local Docker development, the same credential path defaults to:
 
 ```env
-GOOGLE_APPLICATION_CREDENTIALS=/workspaces/xenobloom/secrets/gcp-service-account.dev.json
+GOOGLE_APPLICATION_CREDENTIALS=/workspaces/chronicleofthefall/secrets/gcp-service-account.dev.json
 ```
 
 The repository expects local credentials in `secrets/gcp-service-account.dev.json`. Do not commit that file.
@@ -38,7 +38,7 @@ The repository expects local credentials in `secrets/gcp-service-account.dev.jso
 4. Grant the service account `Storage Object Admin` for the replay bucket.
    - Object admin is needed because the backend uploads, reads, copies, and deletes replay objects.
 5. Generate a JSON service account key and place it on the VM at:
-   - `/opt/xenobloom/secrets/gcp-service-account.dev.json`
+   - `/opt/chronicleofthefall/secrets/gcp-service-account.dev.json`
 
 ## Prefix Convention
 
@@ -78,17 +78,17 @@ Do not delete the Redis replay stream until GCS upload and PostgreSQL artifact c
 
 ## Docker Configuration
 
-`docker-compose.yml` and `deploy/docker-compose.yml` pass these replay variables to both `backend` and `backend-worker`. Production mounts `/opt/xenobloom/secrets` read-only into the containers.
+`docker-compose.yml` and `deploy/docker-compose.yml` pass these replay variables to both `backend` and `backend-worker`. Production mounts `/opt/chronicleofthefall/secrets` read-only into the containers.
 
 For VM deployment:
 
 ```bash
-sudo mkdir -p /opt/xenobloom/secrets
-sudo cp gcp-service-account.dev.json /opt/xenobloom/secrets/gcp-service-account.dev.json
-sudo chmod 600 /opt/xenobloom/secrets/gcp-service-account.dev.json
+sudo mkdir -p /opt/chronicleofthefall/secrets
+sudo cp gcp-service-account.dev.json /opt/chronicleofthefall/secrets/gcp-service-account.dev.json
+sudo chmod 600 /opt/chronicleofthefall/secrets/gcp-service-account.dev.json
 ```
 
-Then set the replay variables in `/opt/xenobloom/.env`.
+Then set the replay variables in `/opt/chronicleofthefall/.env`.
 
 ## Redis Chat
 

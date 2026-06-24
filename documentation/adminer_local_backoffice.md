@@ -23,9 +23,9 @@ Use these values in the Adminer login page:
 
 - System: `PostgreSQL`
 - Server: `postgres`
-- Username: `xenobloom`
+- Username: `chronicleofthefall`
 - Password: `xenobloom_dev_password`
-- Database: `xenobloom`
+- Database: `chronicleofthefall`
 
 ## Start it
 

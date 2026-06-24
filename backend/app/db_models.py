@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, JSON, String
+from sqlalchemy import Boolean, DateTime, ForeignKey, JSON, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .database import Base
@@ -94,4 +94,27 @@ class AdminAuditLogRecord(Base):
         nullable=False,
         default=utc_now,
         index=True,
+    )
+
+
+class GameCatalogEntryRecord(Base):
+    __tablename__ = "game_catalog_entries"
+    __table_args__ = (UniqueConstraint("kind", "id", name="uq_game_catalog_entries_kind_id"),)
+
+    id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    kind: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    category: Mapped[str] = mapped_column(String(128), nullable=False, default="")
+    summary: Mapped[str] = mapped_column(String(2000), nullable=False, default="")
+    color: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
+    data: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=utc_now,
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=utc_now,
     )

@@ -7,9 +7,23 @@ from sqlalchemy.orm import Session
 
 from .database import get_db
 from .db_models import AdminAuditLogRecord, UserProfileRecord
+from .empire_catalog import (
+    CatalogKind,
+    catalog_record_summary,
+    create_catalog_record,
+    delete_catalog_record,
+    list_catalog_records,
+    normalize_catalog_id,
+    update_catalog_record,
+    validate_catalog_kind,
+)
 from .friend_service import list_friends_summary
 from .runtime_state import get_presence_service
 from .schemas import (
+    AdminCatalogEntry,
+    AdminCatalogEntryCreate,
+    AdminCatalogEntryUpdate,
+    AdminCatalogSummary,
     AdminAuditLogEntry,
     AdminMutationStatus,
     AdminUserAdminUpdate,
@@ -210,6 +224,149 @@ async def admin_list_audit_logs(
     ]
 
 
+def _catalog_entry_response(entry) -> AdminCatalogEntry:
+    return AdminCatalogEntry(
+        id=entry.id,
+        name=entry.name,
+        kind=entry.kind,
+        category=entry.category,
+        summary=entry.summary,
+        color=entry.color,
+        data=entry.data or {},
+    )
+
+
+def _catalog_response(db: Session, kind: CatalogKind | None = None) -> list[AdminCatalogEntry]:
+    return [
+        _catalog_entry_response(entry)
+        for entry in list_catalog_records(db, kind)
+    ]
+
+
+@router.get("/admin/catalog/summary", response_model=AdminCatalogSummary)
+async def admin_catalog_summary(
+    _admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    return AdminCatalogSummary(**catalog_record_summary(db))
+
+
+@router.get("/admin/tags", response_model=list[AdminCatalogEntry])
+async def admin_list_tags(_admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    return _catalog_response(db, "tags")
+
+
+@router.get("/admin/cards", response_model=list[AdminCatalogEntry])
+async def admin_list_cards(_admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    return _catalog_response(db, "cards")
+
+
+@router.get("/admin/roles", response_model=list[AdminCatalogEntry])
+async def admin_list_roles(_admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    return _catalog_response(db, "roles")
+
+
+@router.get("/admin/agendas", response_model=list[AdminCatalogEntry])
+async def admin_list_agendas(_admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    return _catalog_response(db, "agendas")
+
+
+@router.get("/admin/events", response_model=list[AdminCatalogEntry])
+async def admin_list_events(_admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    return _catalog_response(db, "events")
+
+
+@router.post("/admin/{kind}", response_model=AdminCatalogEntry)
+async def admin_create_catalog_entry(
+    kind: str,
+    payload: AdminCatalogEntryCreate,
+    _admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    try:
+        catalog_kind = validate_catalog_kind(kind)
+        entry = create_catalog_record(
+            db,
+            kind=catalog_kind,
+            entry_id=payload.id or payload.name,
+            name=payload.name,
+            category=payload.category,
+            summary=payload.summary,
+            color=payload.color,
+            data=payload.data,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    _record_admin_audit(
+        db,
+        admin=_admin,
+        action="create_catalog_entry",
+        target_type=catalog_kind,
+        target_id=entry.id,
+        payload=_catalog_entry_response(entry).model_dump(),
+    )
+    return _catalog_entry_response(entry)
+
+
+@router.put("/admin/{kind}/{entry_id}", response_model=AdminCatalogEntry)
+async def admin_update_catalog_entry(
+    kind: str,
+    entry_id: str,
+    payload: AdminCatalogEntryUpdate,
+    _admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    try:
+        catalog_kind = validate_catalog_kind(kind)
+        entry = update_catalog_record(
+            db,
+            kind=catalog_kind,
+            entry_id=entry_id,
+            name=payload.name,
+            category=payload.category,
+            summary=payload.summary,
+            color=payload.color,
+            data=payload.data,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    if entry is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Catalog entry not found.")
+    _record_admin_audit(
+        db,
+        admin=_admin,
+        action="update_catalog_entry",
+        target_type=catalog_kind,
+        target_id=entry.id,
+        payload=_catalog_entry_response(entry).model_dump(),
+    )
+    return _catalog_entry_response(entry)
+
+
+@router.delete("/admin/{kind}/{entry_id}", response_model=AdminMutationStatus)
+async def admin_delete_catalog_entry(
+    kind: str,
+    entry_id: str,
+    _admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    try:
+        catalog_kind = validate_catalog_kind(kind)
+        normalized_id = normalize_catalog_id(entry_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    if not delete_catalog_record(db, kind=catalog_kind, entry_id=normalized_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Catalog entry not found.")
+    _record_admin_audit(
+        db,
+        admin=_admin,
+        action="delete_catalog_entry",
+        target_type=catalog_kind,
+        target_id=normalized_id,
+    )
+    return AdminMutationStatus(status="ok", message="Catalog entry deleted.")
+
+
 @router.get("/admin/health", response_model=AdminMutationStatus)
 async def admin_health(_admin: User = Depends(require_admin)):
-    return AdminMutationStatus(status="ok", message="Admin backoffice is available.")
+    return AdminMutationStatus(status="ok", message="Echoes of Empire admin console is available.")

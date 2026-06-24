@@ -5,7 +5,7 @@ from pydantic_settings import SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    APP_NAME: str = "Deployable Web Game Template"
+    APP_NAME: str = "Echoes of Empire"
     SECRET_KEY: str = "local-dev-only-change-me"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24
     DATABASE_URL: str = "sqlite:///./backend/data/app.db"

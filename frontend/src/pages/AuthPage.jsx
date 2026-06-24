@@ -31,15 +31,15 @@ const AuthPage = () => {
         <div className="flex min-h-[28rem] flex-col justify-between bg-[radial-gradient(circle_at_20%_20%,rgba(45,212,191,0.22),transparent_32%),linear-gradient(135deg,#0f172a,#111827_55%,#022c22)] p-8">
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.22em] text-teal-200">
-              Game Services Template
+              Echoes of Empire
             </p>
             <h1 className="mt-4 max-w-xl text-4xl font-semibold tracking-normal text-white">
-              Auth, lobby, profiles, friends, chat, and admin backoffice.
+              Chronicle the rise and collapse of a shared empire.
             </h1>
           </div>
           <p className="max-w-xl text-sm leading-6 text-slate-300">
-            Bring your own game loop. This template provides the reusable account and
-            social layer around it.
+            Sign in to prepare the cooperative narrative strategy engine, manage the
+            catalog, and join future chronicles.
           </p>
         </div>
 

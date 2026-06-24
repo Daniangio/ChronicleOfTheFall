@@ -12,7 +12,7 @@ const SoloPlayPage = () => {
   const [error, setError] = useState("");
   const [creating, setCreating] = useState(false);
 
-  const createQuickMatch = async () => {
+  const createChronicleRoom = async () => {
     if (!token || creating) return;
     setCreating(true);
     setError("");
@@ -23,7 +23,7 @@ const SoloPlayPage = () => {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ mode: "solo", game_type: "quick_match" }),
+        body: JSON.stringify({ mode: "solo", game_type: "chronicle_solo" }),
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.detail || "Failed to create game room.");
@@ -42,7 +42,7 @@ const SoloPlayPage = () => {
       <section className="mb-5">
         <h1 className="text-2xl font-semibold text-white">Solo Play</h1>
         <p className="mt-1 max-w-3xl text-sm text-slate-400">
-          Grow an alien colony engine, adapt to shifting hazards, and push maturity as high as possible.
+          Start a solo Chronicle room for the cooperative empire-collapse engine.
         </p>
       </section>
 
@@ -51,19 +51,19 @@ const SoloPlayPage = () => {
       <section className="grid gap-4 md:grid-cols-3">
         <ModeCard
           title="Campaign"
-          description="A structured sequence of colony scenarios. Prepared for future content."
+          description="A connected sequence of empire chronicles. Prepared for future content."
           disabled
         />
         <ModeCard
           title="Missions"
-          description="Standalone spatial puzzles with specific scoring constraints. Prepared for future content."
+          description="Standalone crisis scenarios with specific historical constraints. Prepared for future content."
           disabled
         />
         <ModeCard
-          title="Quick Match"
-          description="Create a solo room immediately with mock lifecycle handling."
+          title="Chronicle Solo"
+          description="Create a solo room immediately while the empire engine is being built."
           actionLabel={creating ? "Creating..." : "Start"}
-          onClick={createQuickMatch}
+          onClick={createChronicleRoom}
           disabled={creating}
         />
       </section>

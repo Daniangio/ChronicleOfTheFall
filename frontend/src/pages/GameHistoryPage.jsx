@@ -61,10 +61,10 @@ const GameHistoryPage = () => {
               to={`/games/${result.room_id}/post-game`}
             >
               <span>
-                <span className="font-medium text-white">Solo quick match</span>
+                <span className="font-medium text-white">Chronicle solo</span>
                 <span className="ml-2 text-xs text-slate-500">{new Date(result.created_at).toLocaleString()}</span>
               </span>
-              <span className="text-sm text-slate-300">{result.maturity} maturity</span>
+              <span className="text-sm text-slate-300">{result.maturity} legacy</span>
             </Link>
           ))}
         </div>

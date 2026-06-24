@@ -12,6 +12,7 @@ from .server_models import User
 ROOM_STATE_IN_GAME = "IN_GAME"
 ROOM_STATE_FINISHED = "FINISHED"
 COMMAND_STREAM_KEY = "game:commands"
+DEFAULT_GAME_TYPE = "chronicle_solo"
 
 
 def _now_iso() -> str:
@@ -35,7 +36,7 @@ def _public_room(room: dict[str, Any]) -> dict[str, Any]:
         "id": room.get("id", ""),
         "owner_user_id": room.get("owner_user_id", ""),
         "mode": room.get("mode", "solo"),
-        "game_type": room.get("game_type", "quick_match"),
+        "game_type": room.get("game_type", DEFAULT_GAME_TYPE),
         "state": room.get("state", ROOM_STATE_IN_GAME),
         "created_at": room.get("created_at", ""),
         "started_at": room.get("started_at", ""),
@@ -55,10 +56,10 @@ class GameRoomService:
         self.redis = redis_client
 
     async def create_room(self, *, user: User, game_type: str) -> dict[str, Any]:
-        normalized_game_type = str(game_type or "quick_match").strip() or "quick_match"
-        if normalized_game_type != "quick_match":
-            raise ValueError("Only quick match is available right now.")
-        room_id = f"solo_{uuid.uuid4().hex[:16]}"
+        normalized_game_type = str(game_type or DEFAULT_GAME_TYPE).strip() or DEFAULT_GAME_TYPE
+        if normalized_game_type != DEFAULT_GAME_TYPE:
+            raise ValueError("Only Chronicle solo rooms are available right now.")
+        room_id = f"chronicle_{uuid.uuid4().hex[:16]}"
         now = _now_iso()
         room = {
             "id": room_id,
@@ -114,12 +115,12 @@ class GameRoomService:
             "room_id": room_id,
             "user_id": user_id,
             "mode": room.get("mode", "solo"),
-            "game_type": room.get("game_type", "quick_match"),
+            "game_type": room.get("game_type", DEFAULT_GAME_TYPE),
             "outcome": "completed",
             "maturity": "128",
             "turns": "8",
             "duration_seconds": str(max(1, int(time.time() - _iso_to_epoch(room.get("started_at"))))),
-            "summary": "Mock colony stabilized after a quick solo simulation.",
+            "summary": "Chronicle solo room ended before the empire engine is implemented.",
             "created_at": now,
         }
         room.update({"state": ROOM_STATE_FINISHED, "ended_at": now, "result_id": room_id})
@@ -171,7 +172,7 @@ class GameRoomService:
             "id": result.get("id", ""),
             "room_id": result.get("room_id", ""),
             "mode": result.get("mode", "solo"),
-            "game_type": result.get("game_type", "quick_match"),
+            "game_type": result.get("game_type", DEFAULT_GAME_TYPE),
             "outcome": result.get("outcome", "completed"),
             "maturity": int(result.get("maturity") or 0),
             "turns": int(result.get("turns") or 0),

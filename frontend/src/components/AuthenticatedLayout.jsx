@@ -42,7 +42,7 @@ const AuthenticatedLayout = ({ children, onLogout }) => {
       <div className="mx-auto max-w-6xl">
         <header className="mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-4">
           <NavLink to="/lobby" className="text-lg font-semibold text-white">
-            Game Services Template
+            Echoes of Empire
           </NavLink>
           <nav className="flex flex-wrap items-center gap-2">
             <NavLink
@@ -71,7 +71,7 @@ const AuthenticatedLayout = ({ children, onLogout }) => {
             </NavLink>
             {user?.is_admin ? (
               <NavLink
-                to="/admin"
+                to="/admin/users"
                 className={({ isActive }) =>
                   `${topNavBase} ${isActive ? topNavActive : topNavInactive}`
                 }

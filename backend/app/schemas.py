@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class UserPublic(BaseModel):
@@ -62,7 +62,7 @@ class LobbyStateResponse(BaseModel):
 
 class GameRoomCreateRequest(BaseModel):
     mode: str = "solo"
-    game_type: str = "quick_match"
+    game_type: str = "chronicle_solo"
 
 
 class GameRoomResponse(BaseModel):
@@ -136,3 +136,38 @@ class AdminAuditLogEntry(BaseModel):
     target_id: str
     payload: Dict[str, Any]
     created_at: datetime
+
+
+class AdminCatalogEntry(BaseModel):
+    id: str
+    name: str
+    kind: str
+    category: str
+    summary: str
+    color: Optional[str] = None
+    data: Dict[str, Any] = Field(default_factory=dict)
+
+
+class AdminCatalogEntryCreate(BaseModel):
+    id: Optional[str] = None
+    name: str
+    category: str = ""
+    summary: str = ""
+    color: Optional[str] = None
+    data: Dict[str, Any] = Field(default_factory=dict)
+
+
+class AdminCatalogEntryUpdate(BaseModel):
+    name: str
+    category: str = ""
+    summary: str = ""
+    color: Optional[str] = None
+    data: Dict[str, Any] = Field(default_factory=dict)
+
+
+class AdminCatalogSummary(BaseModel):
+    tags: int = 0
+    cards: int = 0
+    roles: int = 0
+    agendas: int = 0
+    events: int = 0

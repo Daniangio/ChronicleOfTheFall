@@ -1,11 +1,15 @@
-# Deployable Web Game Template
+# Echoes of Empire: Chronicle of the Fall
 
-This repository is a game-unspecific browser game services template. It provides
-the reusable backbone around a game: Firebase auth, player profiles, friends,
-presence, global/group/direct chat, and a small admin backoffice.
+Echoes of Empire is being built as a cooperative narrative strategy game about
+an empire whose collapse is inevitable. The current application provides the
+authenticated web shell, lobby, social systems, realtime chat, room lifecycle,
+and an admin console for preparing the game catalog.
 
-It intentionally does not create game rooms or implement game rules. Add those
-inside your game-specific layer.
+The first game-specific layer is a read-only Chronicle catalog exposed through
+admin subpages for tags, cards, minister roles, hidden agendas, and events.
+Those catalog endpoints are intentionally separated from the account and
+realtime services so persistence and creation workflows can be added next
+without mixing game rules into generic infrastructure.
 
 ## Stack
 
@@ -44,14 +48,6 @@ inside your game-specific layer.
    - Backend API: `http://localhost:${BACKEND_PORT}` from `.env`
    - Backend docs: `http://localhost:${BACKEND_PORT}/docs` from `.env`
    - Adminer: `http://localhost:${ADMINER_PORT}` from `.env`
-
-## Configuration
-
-All local runtime configuration is in `.env`. Use `.env.example` as the source
-of truth for ports, Firebase, Redis, Postgres, chat retention, and backend
-session settings.
-
-Secret files under `secrets/` are intentionally ignored by git.
 
 ## Validation
 

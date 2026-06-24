@@ -9,10 +9,10 @@ class TestGameRoomService(unittest.IsolatedAsyncioTestCase):
         service = GameRoomService()
         user = User(id="user_1", username="Player One")
 
-        room = await service.create_room(user=user, game_type="quick_match")
+        room = await service.create_room(user=user, game_type="chronicle_solo")
         self.assertEqual(room["state"], ROOM_STATE_IN_GAME)
         self.assertEqual(room["mode"], "solo")
-        self.assertEqual(room["game_type"], "quick_match")
+        self.assertEqual(room["game_type"], "chronicle_solo")
 
         await service.enqueue_end_room(room_id=room["id"], user=user)
         finished = await service.get_room(room_id=room["id"], user=user)
@@ -29,7 +29,7 @@ class TestGameRoomService(unittest.IsolatedAsyncioTestCase):
         owner = User(id="owner", username="Owner")
         other = User(id="other", username="Other")
 
-        room = await service.create_room(user=owner, game_type="quick_match")
+        room = await service.create_room(user=owner, game_type="chronicle_solo")
         await service.enqueue_end_room(room_id=room["id"], user=owner)
 
         self.assertIsNone(await service.get_room(room_id=room["id"], user=other))
@@ -39,5 +39,5 @@ class TestGameRoomService(unittest.IsolatedAsyncioTestCase):
         service = GameRoomService()
         user = User(id="user_1", username="Player One")
 
-        with self.assertRaisesRegex(ValueError, "Only quick match"):
+        with self.assertRaisesRegex(ValueError, "Only Chronicle solo"):
             await service.create_room(user=user, game_type="campaign")
