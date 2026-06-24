@@ -276,6 +276,24 @@ async def admin_list_events(_admin: User = Depends(require_admin), db: Session =
     return _catalog_response(db, "events")
 
 
+@router.get("/admin/groups", response_model=list[AdminCatalogEntry])
+async def admin_list_groups(_admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    return _catalog_response(db, "groups")
+
+
+@router.get("/admin/card-categories", response_model=list[AdminCatalogEntry])
+async def admin_list_card_categories(
+    _admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    return _catalog_response(db, "card-categories")
+
+
+@router.get("/admin/decks", response_model=list[AdminCatalogEntry])
+async def admin_list_decks(_admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    return _catalog_response(db, "decks")
+
+
 @router.post("/admin/{kind}", response_model=AdminCatalogEntry)
 async def admin_create_catalog_entry(
     kind: str,

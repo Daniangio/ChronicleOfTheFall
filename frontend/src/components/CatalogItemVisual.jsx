@@ -13,6 +13,7 @@ const tagKeyNames = new Set([
   "default_jurisdiction",
   "jurisdiction_tags",
   "event_domain",
+  "replacement_effects",
 ]);
 
 const normalizeTagId = (value) =>
@@ -62,7 +63,75 @@ const TagValue = ({ value, tagLookup }) => {
   return <TagIcon tag={tagLookup[normalizeTagId(value)]} label={value} />;
 };
 
-const DataValue = ({ itemKey, value, tagLookup }) => {
+const RequirementValue = ({ value, tagLookup, cardLookup }) => {
+  const requirements = Array.isArray(value) ? value : [];
+  if (!requirements.length) return <span className="text-slate-600">None</span>;
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {requirements.map((requirement, index) => {
+        if (requirement?.type === "not_condition") {
+          const tag = tagLookup[normalizeTagId(requirement.tag_id)];
+          return (
+            <span key={`${requirement.type}-${requirement.tag_id}-${index}`} className="inline-flex items-center gap-1">
+              <span className="rounded-md border border-rose-700 px-2 py-1 text-xs font-semibold text-rose-300">NO</span>
+              <TagIcon tag={tag} label={requirement.tag_id} />
+            </span>
+          );
+        }
+        if (requirement?.type === "has_card") {
+          const card = cardLookup[normalizeTagId(requirement.card_id)];
+          return (
+            <span
+              key={`${requirement.type}-${requirement.card_id}-${index}`}
+              className="rounded-md border border-slate-700 bg-slate-950/60 px-2 py-1 text-xs font-semibold text-slate-300"
+            >
+              HAS {(card?.name || requirement.card_id || "").toUpperCase()} · {(requirement.scope || "city").toUpperCase()}
+            </span>
+          );
+        }
+        return (
+          <span key={index} className="rounded-md border border-slate-700 px-2 py-1 text-xs text-slate-300">
+            {primitiveText(requirement)}
+          </span>
+        );
+      })}
+    </div>
+  );
+};
+
+const ReplacementEffectsValue = ({ value, tagLookup }) => {
+  const effects = Array.isArray(value) ? value : [];
+  if (!effects.length) return <span className="text-slate-600">None</span>;
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {effects.map((effect, index) => {
+        const tag = tagLookup[normalizeTagId(effect?.tag_id)];
+        return (
+          <span key={index} className="inline-flex items-center gap-1 rounded-md border border-slate-700 bg-slate-950/60 px-2 py-1 text-xs text-slate-300">
+            {(effect?.scope || "target").toUpperCase()}
+            <TagIcon tag={tag} label={effect?.tag_id} count={effect?.amount || null} />
+          </span>
+        );
+      })}
+    </div>
+  );
+};
+
+const DataValue = ({ itemKey, value, tagLookup, cardLookup, groupLookup }) => {
+  if (itemKey === "requirements") {
+    return <RequirementValue value={value} tagLookup={tagLookup} cardLookup={cardLookup} />;
+  }
+  if (itemKey === "replacement_effects") {
+    return <ReplacementEffectsValue value={value} tagLookup={tagLookup} />;
+  }
+  if (itemKey === "mutually_exclusive_group") {
+    const group = groupLookup[normalizeTagId(value)];
+    return (
+      <span className="rounded-md border border-slate-700 bg-slate-950/60 px-2 py-1 text-xs font-semibold text-slate-300">
+        {(group?.name || value || "").toUpperCase()}
+      </span>
+    );
+  }
   if (tagKeyNames.has(itemKey)) return <TagValue value={value} tagLookup={tagLookup} />;
 
   if (Array.isArray(value) && value.every((item) => tagLookup[normalizeTagId(item)])) {
@@ -76,9 +145,11 @@ const DataValue = ({ itemKey, value, tagLookup }) => {
   return <span className="text-slate-300">{primitiveText(value)}</span>;
 };
 
-const CatalogItemVisual = ({ entry, tags = [], actions = null }) => {
+const CatalogItemVisual = ({ entry, tags = [], cards = [], groups = [], actions = null }) => {
   const color = entry?.color || fallbackColor;
   const tagLookup = buildTagLookup(tags);
+  const cardLookup = Object.fromEntries((cards || []).map((card) => [normalizeTagId(card.id || card.name), card]));
+  const groupLookup = Object.fromEntries((groups || []).map((group) => [normalizeTagId(group.id || group.name), group]));
   const dataEntries = Object.entries(entry?.data || {}).slice(0, 6);
 
   return (
@@ -113,7 +184,7 @@ const CatalogItemVisual = ({ entry, tags = [], actions = null }) => {
               <div key={key} className="grid gap-1">
                 <dt className="text-slate-500">{humanizeKey(key)}</dt>
                 <dd className="min-w-0">
-                  <DataValue itemKey={key} value={value} tagLookup={tagLookup} />
+                  <DataValue itemKey={key} value={value} tagLookup={tagLookup} cardLookup={cardLookup} groupLookup={groupLookup} />
                 </dd>
               </div>
             ))}

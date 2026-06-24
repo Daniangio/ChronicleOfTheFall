@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from .db_models import GameCatalogEntryRecord, utc_now
 
 
-CatalogKind = Literal["tags", "cards", "roles", "agendas", "events"]
+CatalogKind = Literal["tags", "cards", "roles", "agendas", "events", "groups", "card-categories", "decks"]
 
 
 @dataclass(frozen=True)
@@ -115,7 +115,32 @@ CATALOG_ENTRIES: tuple[CatalogEntry, ...] = (
         kind="cards",
         category="foundation",
         summary="Starting city anchor for the empire map.",
-        data={"placement": "setup", "is_capital": True},
+        data={
+            "placement": "city",
+            "is_capital": True,
+            "exhaust": {"labor": 1, "wealth": 1, "influence": 1},
+        },
+    ),
+    CatalogEntry(
+        id="foundation",
+        name="Foundation",
+        kind="card-categories",
+        category="card-category",
+        summary="City anchor cards that define map nodes.",
+    ),
+    CatalogEntry(
+        id="institution",
+        name="Institution",
+        kind="card-categories",
+        category="card-category",
+        summary="Cards played onto a city or empire zone to provide tags and effects.",
+    ),
+    CatalogEntry(
+        id="route",
+        name="Route",
+        kind="card-categories",
+        category="card-category",
+        summary="Cards that connect cities or define topological constraints.",
     ),
     CatalogEntry(
         id="lumber-camp",
@@ -123,7 +148,7 @@ CATALOG_ENTRIES: tuple[CatalogEntry, ...] = (
         kind="cards",
         category="institution",
         summary="Tier 1 local Agrarian institution that generates Labor.",
-        data={"tier": 1, "cost": {"labor": 1}, "tags": ["agrarian"], "exhaust": {"labor": 1}},
+        data={"placement": "city", "tier": 1, "cost": {"labor": 1}, "tags": ["agrarian"], "exhaust": {"labor": 1}},
     ),
     CatalogEntry(
         id="militia-garrison",
@@ -131,7 +156,7 @@ CATALOG_ENTRIES: tuple[CatalogEntry, ...] = (
         kind="cards",
         category="institution",
         summary="Tier 1 local Military institution that generates Influence.",
-        data={"tier": 1, "cost": {"wealth": 1}, "tags": ["military"], "exhaust": {"influence": 1}},
+        data={"placement": "city", "tier": 1, "cost": {"wealth": 1}, "tags": ["military"], "exhaust": {"influence": 1}},
     ),
     CatalogEntry(
         id="grand-basilica",
@@ -141,10 +166,11 @@ CATALOG_ENTRIES: tuple[CatalogEntry, ...] = (
         summary="Tier 2 global Religion institution gated by stable city conditions.",
         data={
             "tier": 2,
+            "placement": "empire",
             "cost": {"labor": 2, "wealth": 1},
             "tags": ["religion"],
             "scope": "global",
-            "requires": ["no_unrest"],
+            "requirements": [{"type": "not_condition", "tag_id": "unrest"}],
             "exhaust": {"influence": 2},
         },
     ),
@@ -156,9 +182,10 @@ CATALOG_ENTRIES: tuple[CatalogEntry, ...] = (
         summary="Tier 2 local Commerce institution that requires road access.",
         data={
             "tier": 2,
+            "placement": "city",
             "cost": {"labor": 1, "influence": 1},
             "tags": ["commerce"],
-            "requires": ["connected_to_paved_road"],
+            "requirements": [{"type": "has_card", "card_id": "paved-road", "scope": "city"}],
             "exhaust": {"wealth": 2},
         },
     ),
@@ -170,6 +197,7 @@ CATALOG_ENTRIES: tuple[CatalogEntry, ...] = (
         summary="Tier 3 Military upgrade that suppresses unrest near the capital.",
         data={
             "tier": 3,
+            "placement": "empire",
             "cost": {"labor": 2, "wealth": 2},
             "tags": ["military"],
             "scope": "global",
@@ -183,7 +211,7 @@ CATALOG_ENTRIES: tuple[CatalogEntry, ...] = (
         kind="cards",
         category="route",
         summary="Route that lets connected cities share Commerce tags.",
-        data={"cost": {"labor": 1}, "tags": ["fast-travel"], "effect": "share_commerce"},
+        data={"placement": "city", "cost": {"labor": 1}, "tags": ["fast-travel"], "effect": "share_commerce"},
     ),
     CatalogEntry(
         id="mountain-pass",
@@ -191,7 +219,7 @@ CATALOG_ENTRIES: tuple[CatalogEntry, ...] = (
         kind="cards",
         category="route",
         summary="Route that blocks condition propagation from event text.",
-        data={"cost": {"labor": 2}, "tags": ["chokepoint"], "effect": "block_condition_spread"},
+        data={"placement": "city", "cost": {"labor": 2}, "tags": ["chokepoint"], "effect": "block_condition_spread"},
     ),
     CatalogEntry(
         id="minister-state",
@@ -273,9 +301,69 @@ CATALOG_ENTRIES: tuple[CatalogEntry, ...] = (
         summary="Final Epoch collapse that removes Bureaucracy and punishes undefended cities.",
         data={"ends_game": True},
     ),
+    CatalogEntry(
+        id="government-form",
+        name="Government Form",
+        kind="groups",
+        category="mutually-exclusive",
+        summary="Only one government-form card can exist in the same target zone.",
+        data={"type": "mutually_exclusive"},
+    ),
+    CatalogEntry(
+        id="default-card-deck",
+        name="Default Card Deck",
+        kind="decks",
+        category="cards",
+        summary="Starter deck for goldfishing card draws.",
+        data={
+            "deck_type": "cards",
+            "item_ids": [
+                "lumber-camp",
+                "militia-garrison",
+                "paved-road",
+                "market-hub",
+                "lumber-camp",
+                "militia-garrison",
+                "mountain-pass",
+                "grand-basilica",
+                "lumber-camp",
+                "militia-garrison",
+                "paved-road",
+                "iron-citadel",
+                "lumber-camp",
+                "militia-garrison",
+                "market-hub",
+                "mountain-pass",
+                "paved-road",
+                "grand-basilica",
+                "iron-citadel",
+                "market-hub",
+            ],
+        },
+    ),
+    CatalogEntry(
+        id="default-event-deck",
+        name="Default Event Deck",
+        kind="decks",
+        category="events",
+        summary="Starter event deck placeholder for goldfishing setup.",
+        data={
+            "deck_type": "events",
+            "item_ids": ["black-year", "barbarian-incursion", "shattered-crown"],
+        },
+    ),
 )
 
-CATALOG_KINDS: tuple[CatalogKind, ...] = ("tags", "cards", "roles", "agendas", "events")
+CATALOG_KINDS: tuple[CatalogKind, ...] = (
+    "tags",
+    "cards",
+    "roles",
+    "agendas",
+    "events",
+    "groups",
+    "card-categories",
+    "decks",
+)
 HEX_COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
 
 
@@ -287,7 +375,7 @@ def list_catalog_entries(kind: CatalogKind | None = None) -> list[CatalogEntry]:
 
 
 def catalog_summary() -> dict[str, int]:
-    summary = {kind: 0 for kind in ("tags", "cards", "roles", "agendas", "events")}
+    summary = {kind: 0 for kind in CATALOG_KINDS}
     for entry in CATALOG_ENTRIES:
         summary[entry.kind] += 1
     return summary
@@ -370,10 +458,11 @@ def list_catalog_records(db: Session, kind: CatalogKind | None = None) -> list[G
 
 
 def catalog_record_summary(db: Session) -> dict[str, int]:
-    summary = {kind: 0 for kind in CATALOG_KINDS}
+    summary = {kind.replace("-", "_"): 0 for kind in CATALOG_KINDS}
     for entry in db.execute(select(GameCatalogEntryRecord.kind)).scalars().all():
-        if entry in summary:
-            summary[entry] += 1
+        key = str(entry).replace("-", "_")
+        if key in summary:
+            summary[key] += 1
     return summary
 
 

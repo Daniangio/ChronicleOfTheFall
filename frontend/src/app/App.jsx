@@ -245,6 +245,7 @@ function AppContent() {
           <Route path="/games/:roomId/post-game" element={authenticatedPage(<PostGamePage />)} />
           <Route path="/admin" element={authenticatedPage(<AdminPage />)} />
           <Route path="/admin/:section" element={authenticatedPage(<AdminPage />)} />
+          <Route path="/admin/:section/:subsection" element={authenticatedPage(<AdminPage />)} />
           <Route path="*" element={<Navigate to={token ? "/lobby" : "/auth"} />} />
         </Routes>
       </StateGuard>

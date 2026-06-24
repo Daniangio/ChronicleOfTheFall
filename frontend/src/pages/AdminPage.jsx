@@ -1,6 +1,6 @@
 import { Edit3, Plus, Save, Search, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { Link, Navigate, useParams } from "react-router-dom";
+import { Link, Navigate, NavLink, useParams } from "react-router-dom";
 import { PageSubnavigation } from "../components/AuthenticatedLayout.jsx";
 import CatalogItemVisual from "../components/CatalogItemVisual.jsx";
 import TagIcon from "../components/TagIcon.jsx";
@@ -15,9 +15,20 @@ const sections = [
   { key: "roles", label: "Roles", to: "/admin/roles" },
   { key: "agendas", label: "Agendas", to: "/admin/agendas" },
   { key: "events", label: "Events", to: "/admin/events" },
+  { key: "groups", label: "Groups", to: "/admin/groups" },
+  { key: "decks", label: "Decks", to: "/admin/decks" },
 ];
 
-const catalogSections = new Set(["tags", "cards", "roles", "agendas", "events"]);
+const catalogSections = new Set([
+  "tags",
+  "cards",
+  "roles",
+  "agendas",
+  "events",
+  "groups",
+  "card-categories",
+  "decks",
+]);
 
 const DataPill = ({ children }) => (
   <span className="rounded bg-slate-800 px-2 py-1 text-xs font-medium text-slate-300">
@@ -53,7 +64,7 @@ const dataForForm = (form) => {
 const stringifyData = (data) => JSON.stringify(data || {}, null, 2);
 
 const tagListFieldsBySection = {
-  cards: ["tags", "requires"],
+  cards: ["tags"],
   roles: ["exhaust_tags", "jurisdiction_tags"],
   agendas: [],
   events: ["tags", "condition_tags"],
@@ -72,6 +83,14 @@ const tagSingleFieldsBySection = {
   agendas: [],
   events: ["event_domain"],
 };
+
+const placementOptions = [
+  { value: "city", label: "City" },
+  { value: "empire", label: "Empire Zone" },
+];
+
+const emptyRequirement = { type: "not_condition", tag_id: "", card_id: "", scope: "city" };
+const emptyReplacementEffect = { type: "add_condition", tag_id: "", scope: "target", amount: 1 };
 
 const groupedTags = (tags) =>
   (tags || []).reduce((groups, tag) => {
@@ -188,7 +207,272 @@ const TagSingleSelect = ({ label, tags, selectedId, onSelect }) => (
   </div>
 );
 
-const GuidedMetadataEditor = ({ activeSection, catalogForm, setCatalogForm, tagEntries }) => {
+const SelectField = ({ label, value, options, onChange }) => (
+  <label className="block">
+    <span className="text-sm font-medium text-slate-300">{label}</span>
+    <select
+      value={value || ""}
+      onChange={(event) => onChange(event.target.value)}
+      className="mt-2 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none focus:border-teal-400"
+    >
+      {options.map((option) => (
+        <option key={option.value} value={option.value}>{option.label}</option>
+      ))}
+    </select>
+  </label>
+);
+
+const CardGuidedFields = ({ data, setField, tagEntries, cardEntries, groupEntries }) => {
+  const conditionTags = tagEntries.filter((tag) => tag.category === "condition");
+  const cardOptions = cardEntries.filter((entry) => entry.kind === "cards");
+  const groups = groupEntries.filter((entry) => entry.category === "mutually-exclusive" || entry.data?.type === "mutually_exclusive");
+  const requirements = Array.isArray(data.requirements) ? data.requirements : [];
+  const replacementEffects = Array.isArray(data.replacement_effects) ? data.replacement_effects : [];
+
+  const updateRequirement = (index, patch) => {
+    const next = [...requirements];
+    next[index] = { ...next[index], ...patch };
+    setField("requirements", next);
+  };
+
+  const updateReplacementEffect = (index, patch) => {
+    const next = [...replacementEffects];
+    next[index] = { ...next[index], ...patch };
+    setField("replacement_effects", next);
+  };
+
+  return (
+    <>
+      <SelectField
+        label="Placement"
+        value={data.placement || "city"}
+        options={placementOptions}
+        onChange={(value) => setField("placement", value)}
+      />
+
+      <div className="space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <h4 className="text-sm font-semibold text-slate-300">Requirements</h4>
+          <button
+            className="rounded-md border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800"
+            onClick={() => setField("requirements", [...requirements, emptyRequirement])}
+            type="button"
+          >
+            Add requirement
+          </button>
+        </div>
+        {requirements.map((requirement, index) => (
+          <div key={index} className="space-y-3 rounded-md border border-slate-800 bg-slate-950 p-3">
+            <SelectField
+              label="Type"
+              value={requirement.type}
+              options={[
+                { value: "not_condition", label: "No condition" },
+                { value: "has_card", label: "Has card" },
+              ]}
+              onChange={(value) => updateRequirement(index, { type: value })}
+            />
+            {requirement.type === "not_condition" ? (
+              <TagSingleSelect
+                label="Condition"
+                tags={conditionTags}
+                selectedId={requirement.tag_id || ""}
+                onSelect={(tagId) => updateRequirement(index, { tag_id: tagId })}
+              />
+            ) : (
+              <div className="grid gap-3 sm:grid-cols-2">
+                <SelectField
+                  label="Card"
+                  value={requirement.card_id || ""}
+                  options={[
+                    { value: "", label: "Select card" },
+                    ...cardOptions.map((card) => ({ value: card.id, label: card.name })),
+                  ]}
+                  onChange={(value) => updateRequirement(index, { card_id: value })}
+                />
+                <SelectField
+                  label="Scope"
+                  value={requirement.scope || "city"}
+                  options={[
+                    { value: "city", label: "Same city" },
+                    { value: "empire", label: "Empire zone" },
+                    { value: "global", label: "Anywhere/global" },
+                  ]}
+                  onChange={(value) => updateRequirement(index, { scope: value })}
+                />
+              </div>
+            )}
+            <button
+              className="text-xs font-semibold text-rose-300 hover:text-rose-200"
+              onClick={() => setField("requirements", requirements.filter((_, itemIndex) => itemIndex !== index))}
+              type="button"
+            >
+              Remove requirement
+            </button>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <SelectField
+          label="Mutually Exclusive Group"
+          value={data.mutually_exclusive_group || ""}
+          options={[
+            { value: "", label: "None" },
+            ...groups.map((group) => ({ value: group.id, label: group.name })),
+          ]}
+          onChange={(value) => setField("mutually_exclusive_group", value)}
+        />
+      </div>
+
+      <div className="space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <h4 className="text-sm font-semibold text-slate-300">Replacement Effects</h4>
+          <button
+            className="rounded-md border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800"
+            onClick={() => setField("replacement_effects", [...replacementEffects, emptyReplacementEffect])}
+            type="button"
+          >
+            Add effect
+          </button>
+        </div>
+        {replacementEffects.map((effect, index) => (
+          <div key={index} className="space-y-3 rounded-md border border-slate-800 bg-slate-950 p-3">
+            <div className="grid gap-3 sm:grid-cols-3">
+              <SelectField
+                label="Scope"
+                value={effect.scope || "target"}
+                options={[
+                  { value: "target", label: "Target zone" },
+                  { value: "empire", label: "Empire zone" },
+                  { value: "city", label: "City" },
+                ]}
+                onChange={(value) => updateReplacementEffect(index, { scope: value })}
+              />
+              <label className="block">
+                <span className="text-sm font-medium text-slate-300">Amount</span>
+                <input
+                  type="number"
+                  min="1"
+                  value={Number(effect.amount || 1)}
+                  onChange={(event) => updateReplacementEffect(index, { amount: Number(event.target.value || 1) })}
+                  className="mt-2 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none focus:border-teal-400"
+                />
+              </label>
+            </div>
+            <TagSingleSelect
+              label="Condition"
+              tags={conditionTags}
+              selectedId={effect.tag_id || ""}
+              onSelect={(tagId) => updateReplacementEffect(index, { tag_id: tagId })}
+            />
+            <button
+              className="text-xs font-semibold text-rose-300 hover:text-rose-200"
+              onClick={() => setField("replacement_effects", replacementEffects.filter((_, itemIndex) => itemIndex !== index))}
+              type="button"
+            >
+              Remove effect
+            </button>
+          </div>
+        ))}
+      </div>
+    </>
+  );
+};
+
+const DeckGuidedFields = ({ data, setField, cardEntries, eventEntries }) => {
+  const deckType = data.deck_type === "events" ? "events" : "cards";
+  const items = deckType === "events" ? eventEntries : cardEntries.filter((entry) => entry.id !== "capital-foundation");
+  const selectedIds = Array.isArray(data.item_ids) ? data.item_ids : [];
+  const copyCounts = selectedIds.reduce((counts, itemId) => {
+    return { ...counts, [itemId]: Number(counts[itemId] || 0) + 1 };
+  }, {});
+
+  const setCopies = (itemId, copies) => {
+    const normalizedCopies = Math.max(0, Math.min(99, Number(copies) || 0));
+    const withoutItem = selectedIds.filter((id) => id !== itemId);
+    setField("item_ids", [...withoutItem, ...Array.from({ length: normalizedCopies }, () => itemId)]);
+  };
+
+  return (
+    <>
+      <SelectField
+        label="Deck Type"
+        value={deckType}
+        options={[
+          { value: "cards", label: "Cards" },
+          { value: "events", label: "Events" },
+        ]}
+        onChange={(value) => {
+          setField("deck_type", value);
+          setField("item_ids", []);
+        }}
+      />
+      <div>
+        <p className="mb-2 text-sm font-medium text-slate-300">Deck Items</p>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {items.map((item) => {
+            const copies = Number(copyCounts[item.id] || 0);
+            return (
+              <div
+                key={item.id}
+                className={`rounded-md border px-3 py-2 text-sm transition ${
+                  copies > 0
+                    ? "border-teal-400 bg-teal-400/10 text-teal-100"
+                    : "border-slate-800 bg-slate-950 text-slate-300"
+                }`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <span className="min-w-0">
+                    <span className="block truncate font-semibold">{item.name}</span>
+                    <span className="mt-1 block text-xs text-slate-500">{item.category || item.id}</span>
+                  </span>
+                  <span className="flex shrink-0 items-center gap-1">
+                    <button
+                      className="h-7 w-7 rounded border border-slate-700 text-slate-300 hover:bg-slate-800 disabled:opacity-40"
+                      disabled={copies <= 0}
+                      onClick={() => setCopies(item.id, copies - 1)}
+                      type="button"
+                    >
+                      -
+                    </button>
+                    <input
+                      aria-label={`${item.name} copies`}
+                      className="h-7 w-12 rounded border border-slate-700 bg-slate-950 px-1 text-center text-sm text-white outline-none focus:border-teal-400"
+                      min="0"
+                      max="99"
+                      onChange={(event) => setCopies(item.id, event.target.value)}
+                      type="number"
+                      value={copies}
+                    />
+                    <button
+                      className="h-7 w-7 rounded border border-slate-700 text-slate-300 hover:bg-slate-800"
+                      onClick={() => setCopies(item.id, copies + 1)}
+                      type="button"
+                    >
+                      +
+                    </button>
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+          {items.length === 0 ? <p className="text-sm text-slate-500">No valid items available.</p> : null}
+        </div>
+      </div>
+    </>
+  );
+};
+
+const GuidedMetadataEditor = ({
+  activeSection,
+  catalogForm,
+  setCatalogForm,
+  tagEntries,
+  cardEntries,
+  groupEntries,
+  eventEntries,
+}) => {
   if (activeSection === "tags") return null;
 
   const data = dataForForm(catalogForm);
@@ -196,19 +480,29 @@ const GuidedMetadataEditor = ({ activeSection, catalogForm, setCatalogForm, tagE
   const listFields = tagListFieldsBySection[activeSection] || [];
   const singleFields = tagSingleFieldsBySection[activeSection] || [];
   const usefulFields = [...countFields, ...listFields, ...singleFields];
-  if (!usefulFields.length) return null;
+  const hasCardGuidance = activeSection === "cards";
+  const hasDeckGuidance = activeSection === "decks";
+  if (!usefulFields.length && !hasCardGuidance && !hasDeckGuidance) return null;
 
   const setField = (field, value) => {
-    const nextData = { ...data };
-    if (
-      (Array.isArray(value) && value.length === 0) ||
-      (value && typeof value === "object" && !Array.isArray(value) && Object.keys(value).length === 0)
-    ) {
-      delete nextData[field];
-    } else {
-      nextData[field] = value;
-    }
-    setCatalogForm((state) => ({ ...state, dataText: stringifyData(nextData) }));
+    setCatalogForm((state) => {
+      let currentData = {};
+      try {
+        currentData = parseDataText(state.dataText);
+      } catch (_error) {
+        currentData = data;
+      }
+      const nextData = { ...currentData };
+      if (
+        (Array.isArray(value) && value.length === 0) ||
+        (value && typeof value === "object" && !Array.isArray(value) && Object.keys(value).length === 0)
+      ) {
+        delete nextData[field];
+      } else {
+        nextData[field] = value;
+      }
+      return { ...state, dataText: stringifyData(nextData) };
+    });
   };
 
   const updateCount = (field, tagId, count) => {
@@ -237,6 +531,23 @@ const GuidedMetadataEditor = ({ activeSection, catalogForm, setCatalogForm, tagE
   return (
     <div className="space-y-5 rounded-lg border border-slate-800 bg-slate-950 p-4">
       <h3 className="font-semibold text-white">Guided Metadata</h3>
+      {hasCardGuidance ? (
+        <CardGuidedFields
+          data={data}
+          setField={setField}
+          tagEntries={tagEntries}
+          cardEntries={cardEntries}
+          groupEntries={groupEntries}
+        />
+      ) : null}
+      {hasDeckGuidance ? (
+        <DeckGuidedFields
+          data={data}
+          setField={setField}
+          cardEntries={cardEntries}
+          eventEntries={eventEntries}
+        />
+      ) : null}
       {countFields.map((field) => (
         <TagCounterGroup
           key={field}
@@ -269,7 +580,7 @@ const GuidedMetadataEditor = ({ activeSection, catalogForm, setCatalogForm, tagE
 };
 
 const AdminPage = () => {
-  const { section = "users" } = useParams();
+  const { section = "users", subsection = "" } = useParams();
   const { token, user } = useStore();
   const [query, setQuery] = useState("");
   const [users, setUsers] = useState([]);
@@ -277,6 +588,10 @@ const AdminPage = () => {
   const [auditLogs, setAuditLogs] = useState([]);
   const [catalogEntries, setCatalogEntries] = useState([]);
   const [tagEntries, setTagEntries] = useState([]);
+  const [cardEntries, setCardEntries] = useState([]);
+  const [eventEntries, setEventEntries] = useState([]);
+  const [cardCategories, setCardCategories] = useState([]);
+  const [groupEntries, setGroupEntries] = useState([]);
   const [catalogSummary, setCatalogSummary] = useState(null);
   const [editingEntry, setEditingEntry] = useState(null);
   const [catalogForm, setCatalogForm] = useState(emptyCatalogForm);
@@ -286,7 +601,10 @@ const AdminPage = () => {
   const [busy, setBusy] = useState(false);
 
   const activeSection = sections.some((entry) => entry.key === section) ? section : null;
-  const isCatalogSection = catalogSections.has(activeSection);
+  const activeCatalogKind =
+    activeSection === "cards" && subsection === "categories" ? "card-categories" : activeSection;
+  const isCatalogSection = catalogSections.has(activeCatalogKind);
+  const isCardCategoriesPage = activeCatalogKind === "card-categories";
 
   const request = async (path, options = {}) => {
     const response = await fetch(buildApiUrl(path), {
@@ -332,10 +650,33 @@ const AdminPage = () => {
       if (targetSection !== "tags") {
         requests.push(request("/api/admin/tags"));
       }
-      const [summary, entries, tags = entries] = await Promise.all(requests);
+      if (targetSection !== "cards") {
+        requests.push(request("/api/admin/cards"));
+      }
+      if (targetSection !== "groups") {
+        requests.push(request("/api/admin/groups"));
+      }
+      if (targetSection !== "events") {
+        requests.push(request("/api/admin/events"));
+      }
+      if (targetSection !== "card-categories") {
+        requests.push(request("/api/admin/card-categories"));
+      }
+      const results = await Promise.all(requests);
+      const [summary, entries] = results;
+      let resultIndex = 2;
+      const tags = targetSection === "tags" ? entries : results[resultIndex++];
+      const cards = targetSection === "cards" ? entries : results[resultIndex++];
+      const groups = targetSection === "groups" ? entries : results[resultIndex++];
+      const events = targetSection === "events" ? entries : results[resultIndex++];
+      const categories = targetSection === "card-categories" ? entries : results[resultIndex++];
       setCatalogSummary(summary);
       setCatalogEntries(entries);
       setTagEntries(targetSection === "tags" ? entries : tags);
+      setCardEntries(targetSection === "cards" ? entries : cards);
+      setGroupEntries(targetSection === "groups" ? entries : groups);
+      setEventEntries(targetSection === "events" ? entries : events);
+      setCardCategories(targetSection === "card-categories" ? entries : categories);
       setEditingEntry(null);
       setCatalogForm(emptyCatalogForm);
       setEditorOpen(false);
@@ -360,9 +701,9 @@ const AdminPage = () => {
     } else if (activeSection === "audit") {
       void loadAudit();
     } else if (isCatalogSection) {
-      void loadCatalog(activeSection);
+      void loadCatalog(activeCatalogKind);
     }
-  }, [activeSection, isCatalogSection, token]);
+  }, [activeCatalogKind, activeSection, isCatalogSection, token]);
 
   const filteredCatalogEntries = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -371,12 +712,12 @@ const AdminPage = () => {
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(normalized));
       const matchesCategory =
-        activeSection !== "tags" ||
+        activeCatalogKind !== "tags" ||
         tagCategoryFilter === "all" ||
         entry.category === tagCategoryFilter;
       return matchesQuery && matchesCategory;
     });
-  }, [activeSection, catalogEntries, query, tagCategoryFilter]);
+  }, [activeCatalogKind, catalogEntries, query, tagCategoryFilter]);
 
   const tagCategories = useMemo(
     () => Array.from(new Set(catalogEntries.map((entry) => entry.category || "uncategorized"))).sort(),
@@ -384,17 +725,31 @@ const AdminPage = () => {
   );
 
   const groupedCatalogEntries = useMemo(() => {
-    if (activeSection !== "tags") return [["", filteredCatalogEntries]];
+    if (activeCatalogKind !== "tags") return [["", filteredCatalogEntries]];
     return Object.entries(groupedTags(filteredCatalogEntries)).sort(([left], [right]) =>
       left.localeCompare(right)
     );
-  }, [activeSection, filteredCatalogEntries]);
+  }, [activeCatalogKind, filteredCatalogEntries]);
 
   const beginCreateCatalogEntry = () => {
     setEditingEntry(null);
     setCatalogForm({
       ...emptyCatalogForm,
-      color: activeSection === "tags" ? "#64748b" : "",
+      color: activeCatalogKind === "tags" ? "#64748b" : "",
+      category:
+        activeCatalogKind === "groups"
+          ? "mutually-exclusive"
+          : activeCatalogKind === "card-categories"
+            ? "card-category"
+            : activeCatalogKind === "decks"
+              ? "cards"
+            : "",
+      dataText:
+        activeCatalogKind === "groups"
+          ? stringifyData({ type: "mutually_exclusive" })
+          : activeCatalogKind === "decks"
+            ? stringifyData({ deck_type: "cards", item_ids: [] })
+            : "{}",
     });
     setEditorOpen(true);
     setError("");
@@ -427,16 +782,28 @@ const AdminPage = () => {
     setBusy(true);
     setError("");
     try {
+      const parsedData = parseCatalogData();
       const payload = {
         name: catalogForm.name,
-        category: catalogForm.category,
+        category:
+          activeCatalogKind === "groups"
+            ? "mutually-exclusive"
+            : activeCatalogKind === "card-categories"
+              ? "card-category"
+              : activeCatalogKind === "decks"
+                ? parsedData.deck_type || catalogForm.category || "cards"
+              : catalogForm.category,
         summary: catalogForm.summary,
-        color: activeSection === "tags" ? catalogForm.color : null,
-        data: parseCatalogData(),
+        color: activeCatalogKind === "tags" ? catalogForm.color : null,
+        data: activeCatalogKind === "groups"
+          ? { ...parsedData, type: "mutually_exclusive" }
+          : activeCatalogKind === "decks"
+            ? { ...parsedData, deck_type: parsedData.deck_type || "cards", item_ids: Array.isArray(parsedData.item_ids) ? parsedData.item_ids : [] }
+            : parsedData,
       };
       const path = editingEntry
-        ? `/api/admin/${activeSection}/${editingEntry.id}`
-        : `/api/admin/${activeSection}`;
+        ? `/api/admin/${activeCatalogKind}/${editingEntry.id}`
+        : `/api/admin/${activeCatalogKind}`;
       const saved = await request(path, {
         method: editingEntry ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
@@ -448,8 +815,40 @@ const AdminPage = () => {
           `${a.category}:${a.name}:${a.id}`.localeCompare(`${b.category}:${b.name}:${b.id}`)
         );
       });
-      if (activeSection === "tags") {
+      if (activeCatalogKind === "tags") {
         setTagEntries((entries) => {
+          const withoutSaved = entries.filter((entry) => entry.id !== saved.id);
+          return [...withoutSaved, saved].sort((a, b) =>
+            `${a.category}:${a.name}:${a.id}`.localeCompare(`${b.category}:${b.name}:${b.id}`)
+          );
+        });
+      }
+      if (activeCatalogKind === "cards") {
+        setCardEntries((entries) => {
+          const withoutSaved = entries.filter((entry) => entry.id !== saved.id);
+          return [...withoutSaved, saved].sort((a, b) =>
+            `${a.category}:${a.name}:${a.id}`.localeCompare(`${b.category}:${b.name}:${b.id}`)
+          );
+        });
+      }
+      if (activeCatalogKind === "groups") {
+        setGroupEntries((entries) => {
+          const withoutSaved = entries.filter((entry) => entry.id !== saved.id);
+          return [...withoutSaved, saved].sort((a, b) =>
+            `${a.category}:${a.name}:${a.id}`.localeCompare(`${b.category}:${b.name}:${b.id}`)
+          );
+        });
+      }
+      if (activeCatalogKind === "events") {
+        setEventEntries((entries) => {
+          const withoutSaved = entries.filter((entry) => entry.id !== saved.id);
+          return [...withoutSaved, saved].sort((a, b) =>
+            `${a.category}:${a.name}:${a.id}`.localeCompare(`${b.category}:${b.name}:${b.id}`)
+          );
+        });
+      }
+      if (activeCatalogKind === "card-categories") {
+        setCardCategories((entries) => {
           const withoutSaved = entries.filter((entry) => entry.id !== saved.id);
           return [...withoutSaved, saved].sort((a, b) =>
             `${a.category}:${a.name}:${a.id}`.localeCompare(`${b.category}:${b.name}:${b.id}`)
@@ -481,10 +880,22 @@ const AdminPage = () => {
     setBusy(true);
     setError("");
     try {
-      await request(`/api/admin/${activeSection}/${entry.id}`, { method: "DELETE" });
+      await request(`/api/admin/${activeCatalogKind}/${entry.id}`, { method: "DELETE" });
       setCatalogEntries((entries) => entries.filter((candidate) => candidate.id !== entry.id));
-      if (activeSection === "tags") {
+      if (activeCatalogKind === "tags") {
         setTagEntries((entries) => entries.filter((candidate) => candidate.id !== entry.id));
+      }
+      if (activeCatalogKind === "cards") {
+        setCardEntries((entries) => entries.filter((candidate) => candidate.id !== entry.id));
+      }
+      if (activeCatalogKind === "groups") {
+        setGroupEntries((entries) => entries.filter((candidate) => candidate.id !== entry.id));
+      }
+      if (activeCatalogKind === "events") {
+        setEventEntries((entries) => entries.filter((candidate) => candidate.id !== entry.id));
+      }
+      if (activeCatalogKind === "card-categories") {
+        setCardCategories((entries) => entries.filter((candidate) => candidate.id !== entry.id));
       }
       if (editingEntry?.id === entry.id) {
         setEditingEntry(null);
@@ -644,6 +1055,28 @@ const AdminPage = () => {
               ))}
             </div>
           ) : null}
+          {activeSection === "cards" ? (
+            <nav className="flex flex-wrap gap-2 border-b border-slate-800 pb-4">
+              <NavLink
+                to="/admin/cards"
+                end
+                className={({ isActive }) =>
+                  `rounded-md px-3 py-2 text-sm font-medium transition hover:bg-slate-800 hover:text-white ${isActive ? "bg-slate-800 text-white" : "text-slate-400"}`
+                }
+              >
+                Cards
+              </NavLink>
+              <NavLink
+                to="/admin/cards/categories"
+                className={({ isActive }) =>
+                  `rounded-md px-3 py-2 text-sm font-medium transition hover:bg-slate-800 hover:text-white ${isActive ? "bg-slate-800 text-white" : "text-slate-400"}`
+                }
+              >
+                Categories
+              </NavLink>
+            </nav>
+          ) : null}
+
           <div className="flex flex-wrap items-center justify-between gap-3">
             {activeSection === "tags" ? (
               <label className="flex items-center gap-2 text-sm text-slate-300">
@@ -668,13 +1101,13 @@ const AdminPage = () => {
               type="button"
             >
               <Plus className="h-4 w-4" aria-hidden="true" />
-              New {activeSection.slice(0, -1)}
+              New {isCardCategoriesPage ? "category" : activeSection.slice(0, -1)}
             </button>
           </div>
           <div className="space-y-6">
             {groupedCatalogEntries.map(([category, entries]) => (
               <section key={category || "all"} className="space-y-3">
-                {activeSection === "tags" ? (
+                {activeCatalogKind === "tags" ? (
                   <h2 className="border-b border-slate-800 pb-2 text-sm font-semibold uppercase tracking-normal text-slate-400">
                     {category}
                   </h2>
@@ -685,6 +1118,8 @@ const AdminPage = () => {
                       key={entry.id}
                       entry={entry}
                       tags={tagEntries}
+                      cards={cardEntries}
+                      groups={groupEntries}
                       actions={
                         <>
                           <button
@@ -723,7 +1158,7 @@ const AdminPage = () => {
             <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-slate-800 bg-slate-900 px-5 py-4">
               <div>
                 <h2 className="font-semibold text-white">{editingEntry ? "Edit Item" : "Create Item"}</h2>
-                <p className="mt-1 text-xs text-slate-500">{activeSection}</p>
+                <p className="mt-1 text-xs text-slate-500">{isCardCategoriesPage ? "card category" : activeSection}</p>
               </div>
               <button
                 className="rounded-md border border-slate-700 p-2 text-slate-300 hover:bg-slate-800"
@@ -762,14 +1197,31 @@ const AdminPage = () => {
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
-                <label className="block">
-                  <span className="text-sm font-medium text-slate-300">Category</span>
-                  <input
-                    value={catalogForm.category}
-                    onChange={(event) => setCatalogForm((state) => ({ ...state, category: event.target.value }))}
-                    className="mt-2 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none focus:border-teal-400"
-                  />
-                </label>
+                {activeCatalogKind === "cards" ? (
+                  <label className="block">
+                    <span className="text-sm font-medium text-slate-300">Category</span>
+                    <select
+                      value={catalogForm.category}
+                      onChange={(event) => setCatalogForm((state) => ({ ...state, category: event.target.value }))}
+                      className="mt-2 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none focus:border-teal-400"
+                    >
+                      <option value="">Select category</option>
+                      {cardCategories.map((category) => (
+                        <option key={category.id} value={category.id}>{category.name}</option>
+                      ))}
+                    </select>
+                  </label>
+                ) : (
+                  <label className="block">
+                    <span className="text-sm font-medium text-slate-300">Category</span>
+                    <input
+                      value={catalogForm.category}
+                      onChange={(event) => setCatalogForm((state) => ({ ...state, category: event.target.value }))}
+                      className="mt-2 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none focus:border-teal-400 disabled:text-slate-500"
+                      disabled={activeCatalogKind === "card-categories" || activeCatalogKind === "groups"}
+                    />
+                  </label>
+                )}
                 {activeSection === "tags" ? (
                   <label className="block">
                     <span className="text-sm font-medium text-slate-300">Color</span>
@@ -800,10 +1252,13 @@ const AdminPage = () => {
               </label>
 
               <GuidedMetadataEditor
-                activeSection={activeSection}
+                activeSection={activeCatalogKind}
                 catalogForm={catalogForm}
                 setCatalogForm={setCatalogForm}
                 tagEntries={tagEntries}
+                cardEntries={cardEntries}
+                groupEntries={groupEntries}
+                eventEntries={eventEntries}
               />
 
               <label className="block">

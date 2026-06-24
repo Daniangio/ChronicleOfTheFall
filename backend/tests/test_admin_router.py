@@ -13,7 +13,10 @@ from backend.app.admin_router import (
     admin_list_agendas,
     admin_list_audit_logs,
     admin_list_cards,
+    admin_list_card_categories,
+    admin_list_decks,
     admin_list_events,
+    admin_list_groups,
     admin_list_roles,
     admin_list_tags,
     admin_list_users,
@@ -106,18 +109,27 @@ def test_admin_can_list_echoes_catalog(tmp_path):
         assert summary.roles >= 1
         assert summary.agendas >= 1
         assert summary.events >= 1
+        assert summary.groups >= 1
+        assert summary.card_categories >= 1
+        assert summary.decks >= 1
 
         tags = asyncio.run(admin_list_tags(_admin=admin, db=db))
         cards = asyncio.run(admin_list_cards(_admin=admin, db=db))
         roles = asyncio.run(admin_list_roles(_admin=admin, db=db))
         agendas = asyncio.run(admin_list_agendas(_admin=admin, db=db))
         events = asyncio.run(admin_list_events(_admin=admin, db=db))
+        groups = asyncio.run(admin_list_groups(_admin=admin, db=db))
+        card_categories = asyncio.run(admin_list_card_categories(_admin=admin, db=db))
+        decks = asyncio.run(admin_list_decks(_admin=admin, db=db))
 
         assert {entry.kind for entry in tags} == {"tags"}
         assert any(entry.id == "lumber-camp" for entry in cards)
         assert any(entry.id == "minister-state" for entry in roles)
         assert any(entry.id == "merchant-syndicate" for entry in agendas)
         assert any(entry.id == "shattered-crown" for entry in events)
+        assert any(entry.id == "government-form" for entry in groups)
+        assert any(entry.id == "institution" for entry in card_categories)
+        assert any(entry.id == "default-card-deck" for entry in decks)
 
 
 def test_admin_can_create_update_and_delete_catalog_entries(tmp_path):

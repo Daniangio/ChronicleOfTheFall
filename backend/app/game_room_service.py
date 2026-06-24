@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import time
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Optional
 
 from .server_models import User
+from .goldfishing_engine import assign_mana, exhaust_card, pass_turn, propose_project
 
 
 ROOM_STATE_IN_GAME = "IN_GAME"
@@ -55,11 +57,21 @@ class GameRoomService:
     def configure_redis(self, redis_client) -> None:
         self.redis = redis_client
 
-    async def create_room(self, *, user: User, game_type: str) -> dict[str, Any]:
+    def new_room_id(self) -> str:
+        return f"chronicle_{uuid.uuid4().hex[:16]}"
+
+    async def create_room(
+        self,
+        *,
+        user: User,
+        game_type: str,
+        game_state: dict[str, Any] | None = None,
+        room_id: str | None = None,
+    ) -> dict[str, Any]:
         normalized_game_type = str(game_type or DEFAULT_GAME_TYPE).strip() or DEFAULT_GAME_TYPE
         if normalized_game_type != DEFAULT_GAME_TYPE:
             raise ValueError("Only Chronicle solo rooms are available right now.")
-        room_id = f"chronicle_{uuid.uuid4().hex[:16]}"
+        room_id = room_id or self.new_room_id()
         now = _now_iso()
         room = {
             "id": room_id,
@@ -72,12 +84,68 @@ class GameRoomService:
             "started_at": now,
             "ended_at": "",
             "result_id": "",
+            "game_state": json.dumps(game_state or {}),
         }
         if self.redis is None:
             self._memory_rooms[room_id] = room
             return _public_room(room)
         await self.redis.hset(_room_key(room_id), mapping=room)
         return _public_room(room)
+
+    async def get_game_state(self, *, room_id: str, user: User) -> dict[str, Any] | None:
+        room = await self._load_room(room_id)
+        if not room or room.get("owner_user_id") != user.id:
+            return None
+        return _decode_state(room.get("game_state"))
+
+    async def apply_goldfishing_action(
+        self,
+        *,
+        room_id: str,
+        user: User,
+        action: str,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        room = await self._load_room(room_id)
+        if not room or room.get("owner_user_id") != user.id:
+            raise LookupError("Game room not found.")
+        if room.get("state") == ROOM_STATE_FINISHED:
+            raise ValueError("Game room is finished.")
+        state = _decode_state(room.get("game_state"))
+        if state.get("mode") != "goldfishing":
+            raise ValueError("This room is not a goldfishing game.")
+        if action == "propose_project":
+            state = propose_project(
+                state,
+                player_id=str(payload.get("player_id") or ""),
+                card_id=str(payload.get("card_id") or ""),
+            )
+        elif action == "exhaust_card":
+            state = exhaust_card(
+                state,
+                player_id=str(payload.get("player_id") or ""),
+                city_id=str(payload.get("city_id") or ""),
+                card_id=str(payload.get("card_id") or ""),
+            )
+        elif action == "assign_mana":
+            state = assign_mana(
+                state,
+                player_id=str(payload.get("player_id") or ""),
+                project_id=str(payload.get("project_id") or ""),
+                tag_id=str(payload.get("tag_id") or ""),
+                amount=int(payload.get("amount") or 1),
+                city_id=str(payload.get("city_id") or "capital"),
+            )
+        elif action == "pass_turn":
+            state = pass_turn(state, player_id=str(payload.get("player_id") or ""))
+        else:
+            raise ValueError("Unknown game action.")
+        room["game_state"] = json.dumps(state)
+        if self.redis is None:
+            self._memory_rooms[room_id] = room
+        else:
+            await self.redis.hset(_room_key(room_id), mapping=room)
+        return state
 
     async def get_room(self, *, room_id: str, user: User) -> dict[str, Any] | None:
         room = await self._load_room(room_id)
@@ -238,3 +306,15 @@ def _iso_to_epoch(value: Any) -> float:
         return datetime.fromisoformat(str(value).replace("Z", "+00:00")).timestamp()
     except (TypeError, ValueError):
         return time.time()
+
+
+def _decode_state(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return value
+    if not value:
+        return {}
+    try:
+        decoded = json.loads(str(value))
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return {}
+    return decoded if isinstance(decoded, dict) else {}

@@ -94,6 +94,29 @@ class GameHistoryResponse(BaseModel):
     results: List[GameResultResponse]
 
 
+class GoldfishingProposeRequest(BaseModel):
+    player_id: str
+    card_id: str
+
+
+class GoldfishingExhaustRequest(BaseModel):
+    player_id: str
+    city_id: str
+    card_id: str
+
+
+class GoldfishingAssignManaRequest(BaseModel):
+    player_id: str
+    project_id: str
+    tag_id: str
+    amount: int = Field(default=1, ge=1)
+    city_id: str = "capital"
+
+
+class GoldfishingPassRequest(BaseModel):
+    player_id: str
+
+
 class AuthMeResponse(BaseModel):
     uid: str
     email: Optional[str] = None
@@ -171,3 +194,6 @@ class AdminCatalogSummary(BaseModel):
     roles: int = 0
     agendas: int = 0
     events: int = 0
+    groups: int = 0
+    card_categories: int = 0
+    decks: int = 0
