@@ -23,7 +23,7 @@ Events are loaded into an event deck but do not resolve yet.
 
 The central board shows the capital city. City cards are grouped by card category, such as foundation, institution, or route.
 
-The project zone can hold up to three projects. A project is a card from a player's hand that is waiting for its cost to be paid.
+The project zone can hold up to three projects. A project is a card from a player's hand that is waiting for its cost to be paid. The design target is a common pool/market source; v0 still uses player hands as the project source.
 
 The focused player board appears at the bottom of the screen. The focused player can be changed by clicking a player in the left turn-order panel. The active player is the player whose turn is currently being resolved.
 
@@ -34,27 +34,70 @@ Cards display:
 - Tier and cost chips at the top.
 - Requirements below the title.
 - Tags in the body.
-- Exhaust production at the bottom.
+- Manual action production at the bottom.
 
 Requirements currently support display only. Enforcement will be added as the engine matures.
 
 ## Turn Actions
 
-The active player can take one of these actions:
+During a player's turn, they may take any number of free actions, then exactly one turn-ending action.
 
-1. Place one card from hand into the project zone, if there is an empty project slot.
-2. Exhaust one non-exhausted card in the capital city to add its produced mana tokens to that player's pool.
-3. Pass.
+Free actions:
 
-After placing a project, exhausting a card, or passing, active player advances to the next non-passed player in turn order.
+- Exhaust a ready card in the capital city to execute a `manual_action` logic node. In v0 this usually marks the card exhausted and adds volatile mana to the active player's pool.
+- Assign volatile mana from the active player's pool onto a project.
+
+Turn-ending actions:
+
+- Propose a project by moving one card from hand into the project zone. If the project zone is full, the oldest project is discarded.
+- Pass.
+
+After proposing or passing, the active player's volatile mana pool is emptied and active player advances to the next non-passed player in turn order.
+
+The Administration phase ends when all players consecutively pass.
 
 ## Mana And Projects
 
-Mana tokens are stored on player boards.
+Mana tokens are volatile and are stored on player boards only during that player's current turn.
 
-Players can assign stored mana tokens to projects through backend action endpoints. When a project has received all required mana, it completes immediately and the card is placed into the capital city.
+Players can assign stored mana tokens to projects through backend action endpoints. Projects do not build immediately. During Decay, completed projects are moved onto the capital city board.
 
-Newly built cards are not exhausted by default, so they are available for a later player action.
+During Decay:
+
+- Completed projects are built into the capital city.
+- All unfinished project contributions are wiped to zero.
+- All exhausted cards refresh.
+
+Newly built cards are ready after Decay.
+
+## Card Logic Nodes
+
+Cards can define dynamic behavior with `logic_nodes`, using the Trigger-Precondition-Effect model.
+
+Supported v0 triggers:
+
+- `manual_action`
+- `on_event_phase_start`
+- `on_epoch_end`
+
+Supported v0 precondition condition shape:
+
+```json
+{
+  "target": "this_card",
+  "variable": "is_exhausted",
+  "operator": "==",
+  "value": false
+}
+```
+
+Supported v0 effect types:
+
+- `set_state`, currently used for `{"variable": "is_exhausted", "value": true}`.
+- `modify_mana`, used for adding or removing volatile mana from the active player's pool.
+- `modify_token`, `move_card`, and `draw_card` are part of the schema and will be wired incrementally.
+
+Legacy `exhaust` metadata remains supported as a shortcut. If a card has no matching `manual_action` logic node, the backend builds an equivalent exhaust action from `exhaust`.
 
 ## Admin Catalog
 
@@ -79,3 +122,5 @@ An event deck uses:
 ```
 
 The admin console exposes deck creation, modification, and deletion alongside the other catalog pages.
+
+Cards can also be configured with `logic_nodes` from the guided card editor. The existing cost and exhaust controls are still available for simple cards.

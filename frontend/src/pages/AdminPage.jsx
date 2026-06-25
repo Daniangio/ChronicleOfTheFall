@@ -1,4 +1,4 @@
-import { Edit3, Plus, Save, Search, Trash2, X } from "lucide-react";
+import { Download, Edit3, Plus, Save, Search, Trash2, Upload, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate, NavLink, useParams } from "react-router-dom";
 import { PageSubnavigation } from "../components/AuthenticatedLayout.jsx";
@@ -91,6 +91,18 @@ const placementOptions = [
 
 const emptyRequirement = { type: "not_condition", tag_id: "", card_id: "", scope: "city" };
 const emptyReplacementEffect = { type: "add_condition", tag_id: "", scope: "target", amount: 1 };
+const emptyCondition = { target: "this_card", variable: "is_exhausted", operator: "==", value: false };
+const emptyEffect = { effect_type: "modify_mana", payload: { mana_type: "", amount: 1 } };
+const defaultManualNode = {
+  name: "Manual Action",
+  trigger: "manual_action",
+  ends_turn: false,
+  preconditions: { logic_gate: "AND", conditions: [emptyCondition] },
+  effects: [
+    { effect_type: "set_state", payload: { variable: "is_exhausted", value: true } },
+    emptyEffect,
+  ],
+};
 
 const groupedTags = (tags) =>
   (tags || []).reduce((groups, tag) => {
@@ -222,12 +234,274 @@ const SelectField = ({ label, value, options, onChange }) => (
   </label>
 );
 
+const parseConditionValue = (value) => {
+  const raw = String(value ?? "").trim();
+  if (raw === "true") return true;
+  if (raw === "false") return false;
+  if (raw !== "" && !Number.isNaN(Number(raw))) return Number(raw);
+  return raw;
+};
+
+const LogicNodeEditor = ({ logicNodes, setLogicNodes, tagEntries }) => {
+  const updateNode = (index, patch) => {
+    const next = [...logicNodes];
+    next[index] = { ...next[index], ...patch };
+    setLogicNodes(next);
+  };
+
+  const updatePreconditions = (index, patch) => {
+    const node = logicNodes[index];
+    updateNode(index, { preconditions: { ...(node.preconditions || {}), ...patch } });
+  };
+
+  const updateCondition = (nodeIndex, conditionIndex, patch) => {
+    const node = logicNodes[nodeIndex];
+    const preconditions = node.preconditions || { logic_gate: "AND", conditions: [] };
+    const conditions = [...(preconditions.conditions || [])];
+    conditions[conditionIndex] = { ...conditions[conditionIndex], ...patch };
+    updatePreconditions(nodeIndex, { conditions });
+  };
+
+  const updateEffect = (nodeIndex, effectIndex, patch) => {
+    const node = logicNodes[nodeIndex];
+    const effects = [...(node.effects || [])];
+    effects[effectIndex] = { ...effects[effectIndex], ...patch };
+    updateNode(nodeIndex, { effects });
+  };
+
+  const updateEffectPayload = (nodeIndex, effectIndex, patch) => {
+    const effect = logicNodes[nodeIndex]?.effects?.[effectIndex] || emptyEffect;
+    updateEffect(nodeIndex, effectIndex, { payload: { ...(effect.payload || {}), ...patch } });
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <h4 className="text-sm font-semibold text-slate-300">Logic Nodes</h4>
+        <button
+          className="rounded-md border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800"
+          onClick={() => setLogicNodes([...logicNodes, defaultManualNode])}
+          type="button"
+        >
+          Add node
+        </button>
+      </div>
+      {logicNodes.map((node, nodeIndex) => {
+        const preconditions = node.preconditions || { logic_gate: "AND", conditions: [] };
+        const conditions = preconditions.conditions || [];
+        const effects = node.effects || [];
+        return (
+          <div key={nodeIndex} className="space-y-4 rounded-md border border-slate-800 bg-slate-950 p-3">
+            <div className="grid gap-3 sm:grid-cols-[1fr_10rem_8rem]">
+              <label className="block">
+                <span className="text-sm font-medium text-slate-300">Name</span>
+                <input
+                  value={node.name || ""}
+                  onChange={(event) => updateNode(nodeIndex, { name: event.target.value })}
+                  className="mt-2 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none focus:border-teal-400"
+                />
+              </label>
+              <SelectField
+                label="Trigger"
+                value={node.trigger || "manual_action"}
+                options={[
+                  { value: "manual_action", label: "Manual action" },
+                  { value: "on_event_phase_start", label: "Event phase" },
+                  { value: "on_epoch_end", label: "Epoch end" },
+                ]}
+                onChange={(value) => updateNode(nodeIndex, { trigger: value })}
+              />
+              <label className="flex items-end gap-2 pb-2 text-sm font-medium text-slate-300">
+                <input
+                  checked={Boolean(node.ends_turn)}
+                  onChange={(event) => updateNode(nodeIndex, { ends_turn: event.target.checked })}
+                  type="checkbox"
+                />
+                Ends turn
+              </label>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <SelectField
+                  label="Precondition Gate"
+                  value={preconditions.logic_gate || "AND"}
+                  options={[
+                    { value: "AND", label: "AND" },
+                    { value: "OR", label: "OR" },
+                  ]}
+                  onChange={(value) => updatePreconditions(nodeIndex, { logic_gate: value })}
+                />
+                <button
+                  className="mt-7 rounded-md border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800"
+                  onClick={() => updatePreconditions(nodeIndex, { conditions: [...conditions, emptyCondition] })}
+                  type="button"
+                >
+                  Add condition
+                </button>
+              </div>
+              {conditions.map((condition, conditionIndex) => (
+                <div key={conditionIndex} className="grid gap-2 sm:grid-cols-[8rem_1fr_6rem_8rem_auto]">
+                  <SelectField
+                    label="Target"
+                    value={condition.target || "this_card"}
+                    options={[
+                      { value: "this_card", label: "This card" },
+                      { value: "local_city", label: "Local city" },
+                      { value: "global", label: "Global" },
+                      { value: "player", label: "Player" },
+                    ]}
+                    onChange={(value) => updateCondition(nodeIndex, conditionIndex, { target: value })}
+                  />
+                  <label className="block">
+                    <span className="text-sm font-medium text-slate-300">Variable</span>
+                    <input
+                      list="logic-token-options"
+                      value={condition.variable || ""}
+                      onChange={(event) => updateCondition(nodeIndex, conditionIndex, { variable: event.target.value })}
+                      className="mt-2 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none focus:border-teal-400"
+                    />
+                  </label>
+                  <SelectField
+                    label="Op"
+                    value={condition.operator || "=="}
+                    options={["==", "!=", ">=", "<=", ">", "<"].map((operator) => ({ value: operator, label: operator }))}
+                    onChange={(value) => updateCondition(nodeIndex, conditionIndex, { operator: value })}
+                  />
+                  <label className="block">
+                    <span className="text-sm font-medium text-slate-300">Value</span>
+                    <input
+                      value={String(condition.value ?? "")}
+                      onChange={(event) => updateCondition(nodeIndex, conditionIndex, { value: parseConditionValue(event.target.value) })}
+                      className="mt-2 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none focus:border-teal-400"
+                    />
+                  </label>
+                  <button
+                    className="mt-7 text-xs font-semibold text-rose-300 hover:text-rose-200"
+                    onClick={() => updatePreconditions(nodeIndex, { conditions: conditions.filter((_, index) => index !== conditionIndex) })}
+                    type="button"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <h5 className="text-sm font-semibold text-slate-300">Effects</h5>
+                <button
+                  className="rounded-md border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800"
+                  onClick={() => updateNode(nodeIndex, { effects: [...effects, emptyEffect] })}
+                  type="button"
+                >
+                  Add effect
+                </button>
+              </div>
+              {effects.map((effect, effectIndex) => (
+                <div key={effectIndex} className="grid gap-2 sm:grid-cols-[11rem_1fr_7rem_auto]">
+                  <SelectField
+                    label="Type"
+                    value={effect.effect_type || "modify_mana"}
+                    options={[
+                      { value: "modify_mana", label: "Modify mana" },
+                      { value: "set_state", label: "Set state" },
+                      { value: "modify_token", label: "Modify token" },
+                      { value: "move_card", label: "Move card" },
+                      { value: "draw_card", label: "Draw card" },
+                    ]}
+                    onChange={(value) => updateEffect(nodeIndex, effectIndex, { effect_type: value, payload: {} })}
+                  />
+                  {effect.effect_type === "modify_mana" ? (
+                    <>
+                      <SelectField
+                        label="Mana"
+                        value={effect.payload?.mana_type || ""}
+                        options={[
+                          { value: "", label: "Select mana" },
+                          ...tagEntries.map((tag) => ({ value: tag.id, label: tag.name })),
+                        ]}
+                        onChange={(value) => updateEffectPayload(nodeIndex, effectIndex, { mana_type: value })}
+                      />
+                      <label className="block">
+                        <span className="text-sm font-medium text-slate-300">Amount</span>
+                        <input
+                          type="number"
+                          value={Number(effect.payload?.amount || 0)}
+                          onChange={(event) => updateEffectPayload(nodeIndex, effectIndex, { amount: Number(event.target.value || 0) })}
+                          className="mt-2 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none focus:border-teal-400"
+                        />
+                      </label>
+                    </>
+                  ) : effect.effect_type === "set_state" ? (
+                    <>
+                      <SelectField
+                        label="Variable"
+                        value={effect.payload?.variable || "is_exhausted"}
+                        options={[{ value: "is_exhausted", label: "Is exhausted" }]}
+                        onChange={(value) => updateEffectPayload(nodeIndex, effectIndex, { variable: value })}
+                      />
+                      <label className="flex items-end gap-2 pb-2 text-sm font-medium text-slate-300">
+                        <input
+                          checked={Boolean(effect.payload?.value)}
+                          onChange={(event) => updateEffectPayload(nodeIndex, effectIndex, { value: event.target.checked })}
+                          type="checkbox"
+                        />
+                        True
+                      </label>
+                    </>
+                  ) : (
+                    <label className="block sm:col-span-2">
+                      <span className="text-sm font-medium text-slate-300">Payload JSON</span>
+                      <textarea
+                        value={JSON.stringify(effect.payload || {}, null, 2)}
+                        onChange={(event) => {
+                          try {
+                            updateEffect(nodeIndex, effectIndex, { payload: JSON.parse(event.target.value || "{}") });
+                          } catch (_error) {
+                            updateEffect(nodeIndex, effectIndex, { payload: effect.payload || {} });
+                          }
+                        }}
+                        className="mt-2 min-h-[5rem] w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 font-mono text-xs text-white outline-none focus:border-teal-400"
+                      />
+                    </label>
+                  )}
+                  <button
+                    className="mt-7 text-xs font-semibold text-rose-300 hover:text-rose-200"
+                    onClick={() => updateNode(nodeIndex, { effects: effects.filter((_, index) => index !== effectIndex) })}
+                    type="button"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <button
+              className="text-xs font-semibold text-rose-300 hover:text-rose-200"
+              onClick={() => setLogicNodes(logicNodes.filter((_, index) => index !== nodeIndex))}
+              type="button"
+            >
+              Remove node
+            </button>
+          </div>
+        );
+      })}
+      <datalist id="logic-token-options">
+        <option value="is_exhausted" />
+        {tagEntries.map((tag) => <option key={tag.id} value={tag.id} />)}
+      </datalist>
+    </div>
+  );
+};
+
 const CardGuidedFields = ({ data, setField, tagEntries, cardEntries, groupEntries }) => {
   const conditionTags = tagEntries.filter((tag) => tag.category === "condition");
   const cardOptions = cardEntries.filter((entry) => entry.kind === "cards");
   const groups = groupEntries.filter((entry) => entry.category === "mutually-exclusive" || entry.data?.type === "mutually_exclusive");
   const requirements = Array.isArray(data.requirements) ? data.requirements : [];
   const replacementEffects = Array.isArray(data.replacement_effects) ? data.replacement_effects : [];
+  const logicNodes = Array.isArray(data.logic_nodes) ? data.logic_nodes : [];
 
   const updateRequirement = (index, patch) => {
     const next = [...requirements];
@@ -248,6 +522,12 @@ const CardGuidedFields = ({ data, setField, tagEntries, cardEntries, groupEntrie
         value={data.placement || "city"}
         options={placementOptions}
         onChange={(value) => setField("placement", value)}
+      />
+
+      <LogicNodeEditor
+        logicNodes={logicNodes}
+        setLogicNodes={(nextNodes) => setField("logic_nodes", nextNodes)}
+        tagEntries={tagEntries}
       />
 
       <div className="space-y-3">
@@ -910,6 +1190,61 @@ const AdminPage = () => {
     }
   };
 
+  const downloadJson = (payload, filename) => {
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const exportCatalog = async (kind = "") => {
+    if (!isCatalogSection || busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      const suffix = kind ? `?kind=${encodeURIComponent(kind)}` : "";
+      const payload = await request(`/api/admin/catalog/export${suffix}`);
+      const exportedKind = kind || "all";
+      downloadJson(payload, `chronicle-catalog-${exportedKind}.json`);
+    } catch (exportError) {
+      setError(exportError.message || "Failed to export catalog.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const importCatalogFile = async (file, importAll = false) => {
+    if (!file || !isCatalogSection || busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      const text = await file.text();
+      const payload = JSON.parse(text);
+      const entries = Array.isArray(payload.entries) ? payload.entries : [];
+      const normalizedPayload = {
+        version: Number(payload.version || 1),
+        kind: importAll ? "all" : activeCatalogKind,
+        entries: entries.map((entry) => ({ ...entry, kind: entry.kind || activeCatalogKind })),
+      };
+      const result = await request("/api/admin/catalog/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(normalizedPayload),
+      });
+      await loadCatalog(activeCatalogKind);
+      window.alert(`Import complete: ${result.created} created, ${result.updated} updated, ${result.skipped} skipped.`);
+    } catch (importError) {
+      setError(importError.message || "Failed to import catalog.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const toggleAdmin = async (target) => {
     if (!target?.id) return;
     setBusy(true);
@@ -1095,14 +1430,64 @@ const AdminPage = () => {
             ) : (
               <span />
             )}
-            <button
-              className="inline-flex items-center gap-2 rounded-md bg-teal-400 px-3 py-2 text-sm font-semibold text-slate-950 hover:bg-teal-300"
-              onClick={beginCreateCatalogEntry}
-              type="button"
-            >
-              <Plus className="h-4 w-4" aria-hidden="true" />
-              New {isCardCategoriesPage ? "category" : activeSection.slice(0, -1)}
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                className="inline-flex items-center gap-2 rounded-md border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800 disabled:opacity-60"
+                disabled={busy}
+                onClick={() => exportCatalog(activeCatalogKind)}
+                type="button"
+              >
+                <Download className="h-4 w-4" aria-hidden="true" />
+                Export Page
+              </button>
+              <button
+                className="inline-flex items-center gap-2 rounded-md border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800 disabled:opacity-60"
+                disabled={busy}
+                onClick={() => exportCatalog("")}
+                type="button"
+              >
+                <Download className="h-4 w-4" aria-hidden="true" />
+                Export All
+              </button>
+              <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800">
+                <Upload className="h-4 w-4" aria-hidden="true" />
+                Import Page
+                <input
+                  accept="application/json,.json"
+                  className="hidden"
+                  disabled={busy}
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    void importCatalogFile(file);
+                    event.target.value = "";
+                  }}
+                  type="file"
+                />
+              </label>
+              <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800">
+                <Upload className="h-4 w-4" aria-hidden="true" />
+                Import All
+                <input
+                  accept="application/json,.json"
+                  className="hidden"
+                  disabled={busy}
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    void importCatalogFile(file, true);
+                    event.target.value = "";
+                  }}
+                  type="file"
+                />
+              </label>
+              <button
+                className="inline-flex items-center gap-2 rounded-md bg-teal-400 px-3 py-2 text-sm font-semibold text-slate-950 hover:bg-teal-300"
+                onClick={beginCreateCatalogEntry}
+                type="button"
+              >
+                <Plus className="h-4 w-4" aria-hidden="true" />
+                New {isCardCategoriesPage ? "category" : activeSection.slice(0, -1)}
+              </button>
+            </div>
           </div>
           <div className="space-y-6">
             {groupedCatalogEntries.map(([category, entries]) => (

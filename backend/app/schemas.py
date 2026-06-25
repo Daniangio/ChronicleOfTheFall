@@ -188,6 +188,29 @@ class AdminCatalogEntryUpdate(BaseModel):
     data: Dict[str, Any] = Field(default_factory=dict)
 
 
+class AdminCatalogImportEntry(BaseModel):
+    id: str
+    kind: str
+    name: str
+    category: str = ""
+    summary: str = ""
+    color: Optional[str] = None
+    data: Dict[str, Any] = Field(default_factory=dict)
+
+
+class AdminCatalogImportPayload(BaseModel):
+    version: int = 1
+    kind: Optional[str] = None
+    entries: List[AdminCatalogImportEntry] = Field(default_factory=list)
+
+
+class AdminCatalogImportResult(BaseModel):
+    status: str
+    created: int = 0
+    updated: int = 0
+    skipped: int = 0
+
+
 class AdminCatalogSummary(BaseModel):
     tags: int = 0
     cards: int = 0

@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .database import get_db
-from .db_models import AdminAuditLogRecord, UserProfileRecord
+from .db_models import AdminAuditLogRecord, GameCatalogEntryRecord, UserProfileRecord
 from .empire_catalog import (
     CatalogKind,
     catalog_record_summary,
@@ -22,6 +22,8 @@ from .runtime_state import get_presence_service
 from .schemas import (
     AdminCatalogEntry,
     AdminCatalogEntryCreate,
+    AdminCatalogImportPayload,
+    AdminCatalogImportResult,
     AdminCatalogEntryUpdate,
     AdminCatalogSummary,
     AdminAuditLogEntry,
@@ -292,6 +294,87 @@ async def admin_list_card_categories(
 @router.get("/admin/decks", response_model=list[AdminCatalogEntry])
 async def admin_list_decks(_admin: User = Depends(require_admin), db: Session = Depends(get_db)):
     return _catalog_response(db, "decks")
+
+
+@router.get("/admin/catalog/export")
+async def admin_export_catalog(
+    kind: str = Query(default=""),
+    _admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    try:
+        catalog_kind = validate_catalog_kind(kind) if str(kind or "").strip() else None
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    entries = [_catalog_entry_response(entry).model_dump() for entry in list_catalog_records(db, catalog_kind)]
+    return {
+        "version": 1,
+        "kind": catalog_kind or "all",
+        "entries": entries,
+    }
+
+
+@router.post("/admin/catalog/import", response_model=AdminCatalogImportResult)
+async def admin_import_catalog(
+    payload: AdminCatalogImportPayload,
+    _admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    created = 0
+    updated = 0
+    skipped = 0
+    forced_kind = None
+    if payload.kind and payload.kind != "all":
+        try:
+            forced_kind = validate_catalog_kind(payload.kind)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    try:
+        for entry in payload.entries:
+            catalog_kind = forced_kind or validate_catalog_kind(entry.kind)
+            if forced_kind is not None and entry.kind != forced_kind:
+                skipped += 1
+                continue
+            normalized_id = normalize_catalog_id(entry.id)
+            existing = db.get(GameCatalogEntryRecord, normalized_id)
+            if existing is not None and existing.kind != catalog_kind:
+                skipped += 1
+                continue
+            if existing is None:
+                create_catalog_record(
+                    db,
+                    kind=catalog_kind,
+                    entry_id=normalized_id,
+                    name=entry.name,
+                    category=entry.category,
+                    summary=entry.summary,
+                    color=entry.color,
+                    data=entry.data,
+                )
+                created += 1
+            else:
+                update_catalog_record(
+                    db,
+                    kind=catalog_kind,
+                    entry_id=normalized_id,
+                    name=entry.name,
+                    category=entry.category,
+                    summary=entry.summary,
+                    color=entry.color,
+                    data=entry.data,
+                )
+                updated += 1
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    _record_admin_audit(
+        db,
+        admin=_admin,
+        action="import_catalog_entries",
+        target_type=forced_kind or "catalog",
+        target_id=forced_kind or "all",
+        payload={"created": created, "updated": updated, "skipped": skipped},
+    )
+    return AdminCatalogImportResult(status="ok", created=created, updated=updated, skipped=skipped)
 
 
 @router.post("/admin/{kind}", response_model=AdminCatalogEntry)

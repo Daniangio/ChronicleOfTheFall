@@ -9,6 +9,8 @@ from backend.app.admin_router import (
     admin_catalog_summary,
     admin_create_catalog_entry,
     admin_delete_catalog_entry,
+    admin_export_catalog,
+    admin_import_catalog,
     admin_get_user_detail,
     admin_list_agendas,
     admin_list_audit_logs,
@@ -26,7 +28,13 @@ from backend.app.admin_router import (
 )
 from backend.app.database import Base, _build_engine
 from backend.app.empire_catalog import seed_catalog_entries
-from backend.app.schemas import AdminCatalogEntryCreate, AdminCatalogEntryUpdate, AdminUserAdminUpdate
+from backend.app.schemas import (
+    AdminCatalogEntryCreate,
+    AdminCatalogEntryUpdate,
+    AdminCatalogImportEntry,
+    AdminCatalogImportPayload,
+    AdminUserAdminUpdate,
+)
 from backend.app.user_repository import create_registered_user
 
 
@@ -185,3 +193,54 @@ def test_admin_can_create_update_and_delete_catalog_entries(tmp_path):
 
         logs = asyncio.run(admin_list_audit_logs(query="catalog_entry", _admin=admin, db=db))
         assert len(logs) == 3
+
+
+def test_admin_can_export_and_import_catalog_entries(tmp_path):
+    session_factory = build_test_session(f"sqlite:///{tmp_path / 'catalog_import.db'}")
+    with session_factory() as db:
+        admin = ensure_user_bootstrap(
+            db,
+            create_registered_user(db, "admin@test.local", "verysecurepassword"),
+            force_admin=True,
+        )
+        seed_catalog_entries(db)
+
+        exported = asyncio.run(admin_export_catalog(kind="tags", _admin=admin, db=db))
+        assert exported["kind"] == "tags"
+        assert any(entry["id"] == "labor" for entry in exported["entries"])
+
+        result = asyncio.run(
+            admin_import_catalog(
+                AdminCatalogImportPayload(
+                    kind="tags",
+                    entries=[
+                        AdminCatalogImportEntry(
+                            id="labor",
+                            kind="tags",
+                            name="Labor Pool",
+                            category="mana",
+                            summary="Updated by import.",
+                            color="#b45309",
+                            data={},
+                        ),
+                        AdminCatalogImportEntry(
+                            id="stone",
+                            kind="tags",
+                            name="Stone",
+                            category="mana",
+                            summary="Imported construction resource.",
+                            color="#78716c",
+                            data={},
+                        ),
+                    ],
+                ),
+                _admin=admin,
+                db=db,
+            )
+        )
+
+        assert result.created == 1
+        assert result.updated == 1
+        tags = asyncio.run(admin_list_tags(_admin=admin, db=db))
+        assert any(entry.id == "stone" for entry in tags)
+        assert next(entry for entry in tags if entry.id == "labor").name == "Labor Pool"

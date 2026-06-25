@@ -9,10 +9,22 @@ const normalize = (value) => String(value || "").trim().toLowerCase().replace(/[
 
 const buildLookup = (entries = []) => Object.fromEntries(entries.map((entry) => [normalize(entry.id), entry]));
 
+const manualActionMana = (data = {}) => {
+  const node = (data.logic_nodes || []).find((entry) => entry?.trigger === "manual_action");
+  if (!node) return {};
+  return (node.effects || []).reduce((mana, effect) => {
+    if (effect?.effect_type !== "modify_mana") return mana;
+    const payload = effect.payload || {};
+    const manaType = payload.mana_type || payload.tag_id;
+    if (!manaType) return mana;
+    return { ...mana, [manaType]: Number(mana[manaType] || 0) + Number(payload.amount || 0) };
+  }, {});
+};
+
 const CardMini = ({ card, tagLookup, exhausted = false, onExhaust, canExhaust = false, onPropose, canPropose = false }) => {
   const data = card?.data || {};
   const cost = data.cost || {};
-  const exhaust = data.exhaust || {};
+  const exhaust = Object.keys(data.exhaust || {}).length ? data.exhaust : manualActionMana(data);
   const tags = Array.isArray(data.tags) ? data.tags : [];
   const requirements = Array.isArray(data.requirements) ? data.requirements : [];
   const hasExhaust = Object.keys(exhaust).length > 0;
