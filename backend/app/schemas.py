@@ -113,6 +113,12 @@ class GoldfishingAssignManaRequest(BaseModel):
     city_id: str = "capital"
 
 
+class GoldfishingBuildProjectRequest(BaseModel):
+    player_id: str
+    project_id: str
+    city_id: str = "capital"
+
+
 class GoldfishingPassRequest(BaseModel):
     player_id: str
 

@@ -343,6 +343,24 @@
       }
     },
     {
+      "id": "default-common-pool",
+      "name": "Default Common Pool",
+      "kind": "decks",
+      "category": "common-pool",
+      "summary": "Starter shared card pool for project proposals.",
+      "color": null,
+      "data": {
+        "deck_type": "common-pool",
+        "item_ids": [
+          "lumber-camp",
+          "militia-garrison",
+          "paved-road",
+          "market-hub",
+          "mountain-pass"
+        ]
+      }
+    },
+    {
       "id": "black-year",
       "name": "The Black Year",
       "kind": "events",

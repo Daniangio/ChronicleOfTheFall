@@ -661,7 +661,7 @@ const CardGuidedFields = ({ data, setField, tagEntries, cardEntries, groupEntrie
 };
 
 const DeckGuidedFields = ({ data, setField, cardEntries, eventEntries }) => {
-  const deckType = data.deck_type === "events" ? "events" : "cards";
+  const deckType = data.deck_type === "events" || data.deck_type === "common-pool" ? data.deck_type : "cards";
   const items = deckType === "events" ? eventEntries : cardEntries.filter((entry) => entry.id !== "capital-foundation");
   const selectedIds = Array.isArray(data.item_ids) ? data.item_ids : [];
   const copyCounts = selectedIds.reduce((counts, itemId) => {
@@ -681,6 +681,7 @@ const DeckGuidedFields = ({ data, setField, cardEntries, eventEntries }) => {
         value={deckType}
         options={[
           { value: "cards", label: "Cards" },
+          { value: "common-pool", label: "Common Pool" },
           { value: "events", label: "Events" },
         ]}
         onChange={(value) => {

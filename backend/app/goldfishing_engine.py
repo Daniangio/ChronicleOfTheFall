@@ -9,7 +9,24 @@ from typing import Any
 MANA_TAGS = {"labor", "wealth", "influence"}
 PROJECT_LIMIT = 3
 PLAYER_COUNT = 4
+INITIAL_HAND_SIZE = 3
 EVENT_QUEUE_LIMIT = 3
+
+
+class Deck:
+    def __init__(self, card_ids: list[str]) -> None:
+        self._card_ids = list(card_ids)
+
+    def shuffle(self, seed: str) -> None:
+        random.Random(seed).shuffle(self._card_ids)
+
+    def draw(self, amount: int = 1) -> list[str]:
+        drawn = self._card_ids[:amount]
+        del self._card_ids[:amount]
+        return drawn
+
+    def to_list(self) -> list[str]:
+        return list(self._card_ids)
 
 
 def public_catalog_entry(entry) -> dict[str, Any]:
@@ -31,26 +48,31 @@ def build_goldfishing_state(
     tag_entries: list[dict[str, Any]],
     card_deck_ids: list[str],
     event_deck_ids: list[str],
+    common_pool_ids: list[str] | None = None,
     card_deck_id: str,
     event_deck_id: str,
+    common_pool_deck_id: str = "",
     event_entries: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     card_by_id = {entry["id"]: entry for entry in card_entries}
-    draw_deck = [
+    draw_deck = Deck([
         card_id
         for card_id in card_deck_ids
         if card_id in card_by_id and card_id != "capital-foundation"
+    ])
+    common_pool = [
+        card_id
+        for card_id in (common_pool_ids or [])
+        if card_id in card_by_id and card_id != "capital-foundation"
     ]
-    random.Random(room_id).shuffle(draw_deck)
+    draw_deck.shuffle(room_id)
     players = []
     for index in range(PLAYER_COUNT):
-        hand = draw_deck[:4]
-        draw_deck = draw_deck[4:]
         players.append(
             {
                 "id": f"player-{index + 1}",
                 "name": f"Player {index + 1}",
-                "hand": hand,
+                "hand": draw_deck.draw(INITIAL_HAND_SIZE),
                 "mana": {},
                 "passed": False,
                 "turn_exhaust_used": False,
@@ -63,6 +85,7 @@ def build_goldfishing_state(
         "phase": "administration",
         "active_player_id": "player-1",
         "players": players,
+        "common_pool": common_pool,
         "projects": [],
         "cities": [
             {
@@ -73,7 +96,7 @@ def build_goldfishing_state(
                 "exhausted_card_ids": [],
             }
         ],
-        "draw_deck": draw_deck,
+        "draw_deck": draw_deck.to_list(),
         "event_deck": event_deck_ids,
         "event_queue": [],
         "catalog": {
@@ -84,8 +107,9 @@ def build_goldfishing_state(
         "decks": {
             "cards": card_deck_id,
             "events": event_deck_id,
+            "common_pool": common_pool_deck_id,
         },
-        "log": ["Goldfishing setup complete. Capital placed. Each player drew 4 cards."],
+        "log": [f"Goldfishing setup complete. Capital placed. Each player drew {INITIAL_HAND_SIZE} cards."],
     })
 
 
@@ -141,8 +165,9 @@ def propose_project(state: dict[str, Any], *, player_id: str, card_id: str) -> d
     active = get_active_player(state)
     if active["id"] != player_id:
         raise ValueError("It is not this player's turn.")
-    if card_id not in active.get("hand", []):
-        raise ValueError("Card is not in this player's hand.")
+    source = "hand" if card_id in active.get("hand", []) else "common_pool" if card_id in state.get("common_pool", []) else ""
+    if not source:
+        raise ValueError("Card is not available to propose.")
     if len(state.get("projects", [])) >= PROJECT_LIMIT:
         discarded = state["projects"].pop(0)
         try:
@@ -150,12 +175,37 @@ def propose_project(state: dict[str, Any], *, player_id: str, card_id: str) -> d
             state.setdefault("log", []).append(f"{discarded_card['name']} was discarded from the full project queue.")
         except ValueError:
             state.setdefault("log", []).append("The oldest project was discarded from the full project queue.")
-    active["hand"].remove(card_id)
+    if source == "hand":
+        active["hand"].remove(card_id)
+    else:
+        state["common_pool"].remove(card_id)
     state.setdefault("projects", []).append(
         {"id": f"project-{uuid.uuid4().hex[:8]}", "card_id": card_id, "contributions": {}}
     )
     active["passed"] = False
-    state.setdefault("log", []).append(f"{active['name']} proposed {card_by_id(state, card_id)['name']}.")
+    source_label = "common pool" if source == "common_pool" else "hand"
+    state.setdefault("log", []).append(f"{active['name']} proposed {card_by_id(state, card_id)['name']} from {source_label}.")
+    active["mana"] = {}
+    return _prepare_state(advance_turn(state))
+
+
+def build_project(state: dict[str, Any], *, player_id: str, project_id: str, city_id: str) -> dict[str, Any]:
+    state = deepcopy(state)
+    _require_phase(state, "administration")
+    active = get_active_player(state)
+    if active["id"] != player_id:
+        raise ValueError("It is not this player's turn.")
+    project = _project(state, project_id)
+    city = _city(state, city_id)
+    card = card_by_id(state, project.get("card_id", ""))
+    if not _project_complete(card, project):
+        raise ValueError("Project is not complete.")
+    if not _card_can_be_built_in_city(state, card, city):
+        raise ValueError("Project requirements are not satisfied in this city.")
+    city.setdefault("cards", []).append(card["id"])
+    state["projects"] = [entry for entry in state.get("projects", []) if entry.get("id") != project_id]
+    active["passed"] = False
+    state.setdefault("log", []).append(f"{active['name']} built {card['name']} in {city['name']}.")
     return _prepare_state(state)
 
 
@@ -272,6 +322,7 @@ def _ensure_state_defaults(state: dict[str, Any]) -> None:
     state.setdefault("phase", "administration")
     state.setdefault("event_queue", [])
     state.setdefault("event_deck", [])
+    state.setdefault("common_pool", [])
     state.setdefault("possible_actions", [])
     state.setdefault("catalog", {}).setdefault("events", [])
     for player in state.get("players", []):
@@ -320,12 +371,24 @@ def _possible_actions_for_active_player(state: dict[str, Any]) -> list[dict[str,
                 if node and _preconditions_met(state, node, city=city, card_id=card_id, player=active):
                     actions.append({"type": "exhaust_card", "player_id": active["id"], "city_id": city["id"], "card_id": card_id})
     for card_id in active.get("hand", []):
-        actions.append({"type": "propose_project", "player_id": active["id"], "card_id": card_id})
+        actions.append({"type": "propose_project", "player_id": active["id"], "card_id": card_id, "source": "hand"})
+    for card_id in state.get("common_pool", []):
+        actions.append({"type": "propose_project", "player_id": active["id"], "card_id": card_id, "source": "common_pool"})
     for project in state.get("projects", []):
         try:
             card = card_by_id(state, project.get("card_id", ""))
         except ValueError:
             continue
+        if _project_complete(card, project):
+            for city in state.get("cities", []):
+                if _card_can_be_built_in_city(state, card, city):
+                    actions.append({
+                        "type": "build_project",
+                        "player_id": active["id"],
+                        "project_id": project["id"],
+                        "card_id": card["id"],
+                        "city_id": city["id"],
+                    })
         cost = card.get("data", {}).get("cost") or {}
         contributions = project.get("contributions") or {}
         for tag_id, required in cost.items():
@@ -363,7 +426,6 @@ def _reveal_event(state: dict[str, Any]) -> None:
 
 
 def _decay_phase(state: dict[str, Any]) -> None:
-    city = _city(state, "capital")
     remaining_projects = []
     for project in state.get("projects", []):
         try:
@@ -371,8 +433,7 @@ def _decay_phase(state: dict[str, Any]) -> None:
         except ValueError:
             continue
         if _project_complete(card, project):
-            city.setdefault("cards", []).append(card["id"])
-            state.setdefault("log", []).append(f"{card['name']} was built in {city['name']} during Decay.")
+            remaining_projects.append(project)
         else:
             project["contributions"] = {}
             remaining_projects.append(project)
@@ -389,6 +450,33 @@ def _project_complete(card: dict[str, Any], project: dict[str, Any]) -> bool:
         return True
     contributions = project.get("contributions") or {}
     return all(int(contributions.get(tag_id, 0)) >= int(amount) for tag_id, amount in cost.items())
+
+
+def _card_can_be_built_in_city(state: dict[str, Any], card: dict[str, Any], city: dict[str, Any]) -> bool:
+    placement = str((card.get("data", {}) or {}).get("placement") or "city")
+    if placement not in {"", "city", "local"}:
+        return False
+    return all(_build_requirement_met(state, requirement, city) for requirement in (card.get("data", {}).get("requirements") or []))
+
+
+def _build_requirement_met(state: dict[str, Any], requirement: dict[str, Any], city: dict[str, Any]) -> bool:
+    requirement_type = requirement.get("type")
+    if requirement_type == "not_condition":
+        tag_id = str(requirement.get("tag_id") or "")
+        return bool(tag_id) and _count_city_token(state, city, tag_id) <= 0
+    if requirement_type == "has_card":
+        card_id = str(requirement.get("card_id") or "")
+        scope = str(requirement.get("scope") or "city")
+        if not card_id:
+            return False
+        if scope in {"global", "empire"}:
+            return any(_city_has_card(entry, card_id) for entry in state.get("cities", []))
+        return _city_has_card(city, card_id)
+    return False
+
+
+def _city_has_card(city: dict[str, Any], card_id: str) -> bool:
+    return city.get("foundation_card_id") == card_id or card_id in (city.get("cards") or [])
 
 
 def _manual_action_node(card: dict[str, Any]) -> dict[str, Any] | None:

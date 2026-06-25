@@ -143,6 +143,22 @@ const ProjectCard = ({ project, card, tagLookup, focusedPlayer, onAssign, canAss
   );
 };
 
+const BuildOptionCard = ({ card, cityName, onBuild, disabled = false }) => (
+  <button
+    className="flex min-h-[10rem] flex-col rounded-lg border border-dashed border-teal-400/70 bg-teal-400/10 p-3 text-left opacity-70 transition hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-35"
+    disabled={disabled}
+    onClick={onBuild}
+    type="button"
+  >
+    <span className="text-[0.65rem] font-semibold uppercase tracking-normal text-teal-200">Build Option</span>
+    <span className="mt-3 text-sm font-semibold text-white">{card?.name || "Completed Project"}</span>
+    <span className="mt-1 text-xs text-slate-400">{card?.category || "project"}</span>
+    <span className="mt-auto rounded-md border border-teal-500/70 px-2 py-1 text-center text-xs font-semibold text-teal-100">
+      Build in {cityName}
+    </span>
+  </button>
+);
+
 const GameRoomPage = () => {
   const { roomId } = useParams();
   const { token } = useStore();
@@ -188,21 +204,25 @@ const GameRoomPage = () => {
   const players = gameState?.players || [];
   const activePlayer = players.find((player) => player.id === gameState?.active_player_id);
   const focusedPlayer = players.find((player) => player.id === focusedPlayerId) || players[0];
-  const city = gameState?.cities?.[0];
+  const cities = gameState?.cities || [];
+  const city = cities[0];
   const eventLookup = useMemo(() => buildLookup(gameState?.catalog?.events || []), [gameState]);
   const possibleActions = gameState?.possible_actions || [];
   const phase = gameState?.phase || "administration";
-  const cityCards = city?.cards || [];
-  const exhaustedIds = city?.exhausted_card_ids || [];
-  const groupedCityCards = useMemo(() => {
+  const buildActions = possibleActions.filter((entry) => entry.type === "build_project");
+  const citiesWithGroups = useMemo(() => cities.map((cityEntry) => {
     const groups = {};
-    for (const cardId of cityCards) {
+    for (const cardId of cityEntry.cards || []) {
       const card = cardLookup[normalize(cardId)];
       const category = card?.category || "uncategorized";
       groups[category] = [...(groups[category] || []), cardId];
     }
-    return Object.entries(groups).sort(([left], [right]) => left.localeCompare(right));
-  }, [cardLookup, cityCards]);
+    return {
+      city: cityEntry,
+      buildActions: buildActions.filter((entry) => entry.city_id === cityEntry.id),
+      groups: Object.entries(groups).sort(([left], [right]) => left.localeCompare(right)),
+    };
+  }), [buildActions, cardLookup, cities]);
 
   const action = async (path, payload) => {
     if (!token || busy) return;
@@ -356,46 +376,71 @@ const GameRoomPage = () => {
                 </div>
               </section>
 
-              <section className="rounded-lg border border-slate-800 bg-slate-900 p-4">
-                <div className="flex items-center gap-2">
-                  <Landmark className="h-5 w-5 text-teal-300" aria-hidden="true" />
-                  <div>
-                    <h1 className="text-xl font-semibold text-white">{city?.name || "Capital"}</h1>
-                    <p className="text-xs text-slate-500">Active player: {activePlayer?.name || "None"}</p>
-                  </div>
-                </div>
-                <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                  <CardMini
-                    card={cardLookup[normalize(city?.foundation_card_id)]}
-                    tagLookup={tagLookup}
-                    exhausted={exhaustedIds.includes(city?.foundation_card_id)}
-                    canExhaust={hasAction("exhaust_card", (entry) => entry.card_id === city?.foundation_card_id && entry.city_id === city?.id)}
-                    onExhaust={() => action("/actions/exhaust", {
-                      player_id: activePlayer.id,
-                      city_id: city.id,
-                      card_id: city.foundation_card_id,
-                    })}
-                  />
-                </div>
-              </section>
+              {citiesWithGroups.map(({ city: cityEntry, buildActions: cityBuildActions, groups }) => {
+                const exhaustedIds = cityEntry.exhausted_card_ids || [];
+                return (
+                  <section key={cityEntry.id} className="rounded-lg border border-slate-800 bg-slate-900 p-4">
+                    <div className="flex items-center gap-2">
+                      <Landmark className="h-5 w-5 text-teal-300" aria-hidden="true" />
+                      <div>
+                        <h1 className="text-xl font-semibold text-white">{cityEntry.name || "City"}</h1>
+                        <p className="text-xs text-slate-500">Active player: {activePlayer?.name || "None"}</p>
+                      </div>
+                    </div>
+                    <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                      {cityEntry.foundation_card_id ? (
+                        <CardMini
+                          card={cardLookup[normalize(cityEntry.foundation_card_id)]}
+                          tagLookup={tagLookup}
+                          exhausted={exhaustedIds.includes(cityEntry.foundation_card_id)}
+                          canExhaust={hasAction("exhaust_card", (entry) => entry.card_id === cityEntry.foundation_card_id && entry.city_id === cityEntry.id)}
+                          onExhaust={() => action("/actions/exhaust", {
+                            player_id: activePlayer.id,
+                            city_id: cityEntry.id,
+                            card_id: cityEntry.foundation_card_id,
+                          })}
+                        />
+                      ) : null}
+                      {cityBuildActions.map((entry) => (
+                        <BuildOptionCard
+                          key={`${entry.project_id}-${entry.city_id}`}
+                          card={cardLookup[normalize(entry.card_id)]}
+                          cityName={cityEntry.name || "city"}
+                          disabled={busy}
+                          onBuild={() => action("/actions/build-project", {
+                            player_id: activePlayer.id,
+                            project_id: entry.project_id,
+                            city_id: entry.city_id,
+                          })}
+                        />
+                      ))}
+                    </div>
 
-              {groupedCityCards.map(([category, cardIds]) => (
-                <section key={category} className="space-y-3">
-                  <h2 className="border-b border-slate-800 pb-2 text-sm font-semibold uppercase tracking-normal text-slate-400">{category}</h2>
-                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                    {cardIds.map((cardId, index) => (
-                      <CardMini
-                        key={`${cardId}-${index}`}
-                        card={cardLookup[normalize(cardId)]}
-                        tagLookup={tagLookup}
-                        exhausted={exhaustedIds.includes(cardId)}
-                        canExhaust={hasAction("exhaust_card", (entry) => entry.card_id === cardId && entry.city_id === city.id)}
-                        onExhaust={() => action("/actions/exhaust", { player_id: activePlayer.id, city_id: city.id, card_id: cardId })}
-                      />
+                    {groups.map(([category, cardIds]) => (
+                      <div key={category} className="mt-5 space-y-3">
+                        <h2 className="border-b border-slate-800 pb-2 text-sm font-semibold uppercase tracking-normal text-slate-400">{category}</h2>
+                        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                          {cardIds.map((cardId, index) => (
+                            <CardMini
+                              key={`${cardId}-${index}`}
+                              card={cardLookup[normalize(cardId)]}
+                              tagLookup={tagLookup}
+                              exhausted={exhaustedIds.includes(cardId)}
+                              canExhaust={hasAction("exhaust_card", (entry) => entry.card_id === cardId && entry.city_id === cityEntry.id)}
+                              onExhaust={() => action("/actions/exhaust", { player_id: activePlayer.id, city_id: cityEntry.id, card_id: cardId })}
+                            />
+                          ))}
+                        </div>
+                      </div>
                     ))}
-                  </div>
+                  </section>
+                );
+              })}
+              {citiesWithGroups.length === 0 ? (
+                <section className="rounded-lg border border-slate-800 bg-slate-900 p-6 text-sm text-slate-500">
+                  No city zones available.
                 </section>
-              ))}
+              ) : null}
             </div>
 
             <aside className="rounded-lg border border-slate-800 bg-slate-900 p-4">
@@ -455,19 +500,41 @@ const GameRoomPage = () => {
                 </button>
               ) : null}
             </div>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              {(focusedPlayer?.hand || []).map((cardId, index) => (
-                <CardMini
-                  key={`${cardId}-${index}`}
-                  card={cardLookup[normalize(cardId)]}
-                  tagLookup={tagLookup}
-                  canPropose={hasAction("propose_project", (entry) => entry.card_id === cardId && entry.player_id === focusedPlayer?.id)}
-                  onPropose={() => action("/actions/propose", { player_id: focusedPlayer.id, card_id: cardId })}
-                />
-              ))}
-              {(focusedPlayer?.hand || []).length === 0 ? (
-                <p className="rounded-lg border border-slate-800 bg-slate-950 p-5 text-sm text-slate-500">Hand is empty.</p>
-              ) : null}
+            <div className="mt-4 grid gap-5 xl:grid-cols-2">
+              <section>
+                <h3 className="mb-2 text-sm font-semibold uppercase tracking-normal text-slate-500">Hand</h3>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {(focusedPlayer?.hand || []).map((cardId, index) => (
+                    <CardMini
+                      key={`${cardId}-${index}`}
+                      card={cardLookup[normalize(cardId)]}
+                      tagLookup={tagLookup}
+                      canPropose={hasAction("propose_project", (entry) => entry.card_id === cardId && entry.player_id === focusedPlayer?.id && entry.source === "hand")}
+                      onPropose={() => action("/actions/propose", { player_id: focusedPlayer.id, card_id: cardId })}
+                    />
+                  ))}
+                  {(focusedPlayer?.hand || []).length === 0 ? (
+                    <p className="rounded-lg border border-slate-800 bg-slate-950 p-5 text-sm text-slate-500">Hand is empty.</p>
+                  ) : null}
+                </div>
+              </section>
+              <section>
+                <h3 className="mb-2 text-sm font-semibold uppercase tracking-normal text-slate-500">Common Pool</h3>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {(gameState.common_pool || []).map((cardId, index) => (
+                    <CardMini
+                      key={`${cardId}-${index}`}
+                      card={cardLookup[normalize(cardId)]}
+                      tagLookup={tagLookup}
+                      canPropose={hasAction("propose_project", (entry) => entry.card_id === cardId && entry.player_id === focusedPlayer?.id && entry.source === "common_pool")}
+                      onPropose={() => action("/actions/propose", { player_id: focusedPlayer.id, card_id: cardId })}
+                    />
+                  ))}
+                  {(gameState.common_pool || []).length === 0 ? (
+                    <p className="rounded-lg border border-slate-800 bg-slate-950 p-5 text-sm text-slate-500">Common pool is empty.</p>
+                  ) : null}
+                </div>
+              </section>
             </div>
           </section>
         </section>

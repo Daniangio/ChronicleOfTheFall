@@ -14,7 +14,6 @@ from .config import settings
 from .firebase_auth import initialize_firebase_admin
 from .redis_client import close_redis, init_redis
 from .account_bootstrap import bootstrap_all_registered_users
-from .empire_catalog import seed_catalog_entries
 from .game_room_service import GameRoomService, GameWorker
 from .presence_service import PresenceService
 from .websocket_session_router import WebSocketSessionRouter
@@ -87,7 +86,6 @@ async def startup_event():
     db = SessionLocal()
     try:
         bootstrap_all_registered_users(db)
-        seed_catalog_entries(db)
     finally:
         db.close()
 

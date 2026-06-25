@@ -27,7 +27,6 @@ from backend.app.admin_router import (
     require_admin,
 )
 from backend.app.database import Base, _build_engine
-from backend.app.empire_catalog import seed_catalog_entries
 from backend.app.schemas import (
     AdminCatalogEntryCreate,
     AdminCatalogEntryUpdate,
@@ -101,7 +100,7 @@ def test_non_admin_is_rejected(tmp_path):
     assert exc_info.value.status_code == 403
 
 
-def test_admin_can_list_echoes_catalog(tmp_path):
+def test_new_database_catalog_starts_empty(tmp_path):
     session_factory = build_test_session(f"sqlite:///{tmp_path / 'catalog.db'}")
     with session_factory() as db:
         admin = ensure_user_bootstrap(
@@ -109,17 +108,16 @@ def test_admin_can_list_echoes_catalog(tmp_path):
             create_registered_user(db, "admin@test.local", "verysecurepassword"),
             force_admin=True,
         )
-        seed_catalog_entries(db)
 
         summary = asyncio.run(admin_catalog_summary(_admin=admin, db=db))
-        assert summary.tags >= 1
-        assert summary.cards >= 1
-        assert summary.roles >= 1
-        assert summary.agendas >= 1
-        assert summary.events >= 1
-        assert summary.groups >= 1
-        assert summary.card_categories >= 1
-        assert summary.decks >= 1
+        assert summary.tags == 0
+        assert summary.cards == 0
+        assert summary.roles == 0
+        assert summary.agendas == 0
+        assert summary.events == 0
+        assert summary.groups == 0
+        assert summary.card_categories == 0
+        assert summary.decks == 0
 
         tags = asyncio.run(admin_list_tags(_admin=admin, db=db))
         cards = asyncio.run(admin_list_cards(_admin=admin, db=db))
@@ -130,14 +128,14 @@ def test_admin_can_list_echoes_catalog(tmp_path):
         card_categories = asyncio.run(admin_list_card_categories(_admin=admin, db=db))
         decks = asyncio.run(admin_list_decks(_admin=admin, db=db))
 
-        assert {entry.kind for entry in tags} == {"tags"}
-        assert any(entry.id == "lumber-camp" for entry in cards)
-        assert any(entry.id == "minister-state" for entry in roles)
-        assert any(entry.id == "merchant-syndicate" for entry in agendas)
-        assert any(entry.id == "shattered-crown" for entry in events)
-        assert any(entry.id == "government-form" for entry in groups)
-        assert any(entry.id == "institution" for entry in card_categories)
-        assert any(entry.id == "default-card-deck" for entry in decks)
+        assert tags == []
+        assert cards == []
+        assert roles == []
+        assert agendas == []
+        assert events == []
+        assert groups == []
+        assert card_categories == []
+        assert decks == []
 
 
 def test_admin_can_create_update_and_delete_catalog_entries(tmp_path):
@@ -203,11 +201,10 @@ def test_admin_can_export_and_import_catalog_entries(tmp_path):
             create_registered_user(db, "admin@test.local", "verysecurepassword"),
             force_admin=True,
         )
-        seed_catalog_entries(db)
 
         exported = asyncio.run(admin_export_catalog(kind="tags", _admin=admin, db=db))
         assert exported["kind"] == "tags"
-        assert any(entry["id"] == "labor" for entry in exported["entries"])
+        assert exported["entries"] == []
 
         result = asyncio.run(
             admin_import_catalog(
@@ -239,8 +236,8 @@ def test_admin_can_export_and_import_catalog_entries(tmp_path):
             )
         )
 
-        assert result.created == 1
-        assert result.updated == 1
+        assert result.created == 2
+        assert result.updated == 0
         tags = asyncio.run(admin_list_tags(_admin=admin, db=db))
         assert any(entry.id == "stone" for entry in tags)
         assert next(entry for entry in tags if entry.id == "labor").name == "Labor Pool"

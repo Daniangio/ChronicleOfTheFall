@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 
 from .server_models import User
-from .goldfishing_engine import assign_mana, continue_phase, exhaust_card, pass_turn, propose_project
+from .goldfishing_engine import assign_mana, build_project, continue_phase, exhaust_card, pass_turn, propose_project
 
 
 ROOM_STATE_IN_GAME = "IN_GAME"
@@ -134,6 +134,13 @@ class GameRoomService:
                 project_id=str(payload.get("project_id") or ""),
                 tag_id=str(payload.get("tag_id") or ""),
                 amount=int(payload.get("amount") or 1),
+                city_id=str(payload.get("city_id") or "capital"),
+            )
+        elif action == "build_project":
+            state = build_project(
+                state,
+                player_id=str(payload.get("player_id") or ""),
+                project_id=str(payload.get("project_id") or ""),
                 city_id=str(payload.get("city_id") or "capital"),
             )
         elif action == "pass_turn":

@@ -13,6 +13,7 @@ from .schemas import (
     GameRoomCreateRequest,
     GameRoomResponse,
     GoldfishingAssignManaRequest,
+    GoldfishingBuildProjectRequest,
     GoldfishingExhaustRequest,
     GoldfishingPassRequest,
     GoldfishingProposeRequest,
@@ -45,6 +46,7 @@ async def create_game_room(
         deck_records = list_catalog_records(db, "decks")
         card_deck = _latest_deck(deck_records, "cards")
         event_deck = _latest_deck(deck_records, "events")
+        common_pool_deck = _latest_deck(deck_records, "common-pool")
         room_id = service.new_room_id()
         game_state = build_goldfishing_state(
             room_id=room_id,
@@ -52,8 +54,10 @@ async def create_game_room(
             tag_entries=tags,
             card_deck_ids=_deck_item_ids(card_deck) or _fallback_card_ids(cards),
             event_deck_ids=_deck_item_ids(event_deck) or [event["id"] for event in events],
+            common_pool_ids=_deck_item_ids(common_pool_deck),
             card_deck_id=str(getattr(card_deck, "id", "") or ""),
             event_deck_id=str(getattr(event_deck, "id", "") or ""),
+            common_pool_deck_id=str(getattr(common_pool_deck, "id", "") or ""),
             event_entries=events,
         )
         return await service.create_room(
@@ -115,6 +119,15 @@ async def assign_game_mana(
     current_user: User = Depends(get_current_user),
 ):
     return await _apply_action(room_id, current_user, "assign_mana", payload.model_dump())
+
+
+@router.post("/game/rooms/{room_id}/actions/build-project")
+async def build_game_project(
+    room_id: str,
+    payload: GoldfishingBuildProjectRequest,
+    current_user: User = Depends(get_current_user),
+):
+    return await _apply_action(room_id, current_user, "build_project", payload.model_dump())
 
 
 @router.post("/game/rooms/{room_id}/actions/pass")
