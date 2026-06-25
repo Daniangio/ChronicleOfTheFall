@@ -17,7 +17,7 @@ Version 0 intentionally excludes roles, jurisdiction checks, event resolution, h
 5. Each player draws four cards from the selected card deck.
 6. Player 1 becomes the active player.
 
-Events are loaded into an event deck but do not resolve yet.
+Events are loaded into an event deck. The first epoch starts directly in Administration; later epochs reveal one event before Administration.
 
 ## Board Zones
 
@@ -40,21 +40,33 @@ Requirements currently support display only. Enforcement will be added as the en
 
 ## Turn Actions
 
-During a player's turn, they may take any number of free actions, then exactly one turn-ending action.
+Each epoch moves through explicit phases tracked by the backend and shown by the UI:
+
+1. Event: reveal one event from the event deck into the event queue. The first epoch skips this phase. If the event deck is empty, no event is revealed.
+2. Event Resolution: resolve active events. In v0, event cards are visual only and have no effects.
+3. Administration: players act in turn order.
+4. Decay: completed projects build, unfinished contributions are wiped, and exhausted cards refresh.
+
+## Turn Actions
+
+During a player's Administration turn, the backend returns every legal action for the UI to render.
+
+Limited action:
+
+- Exhaust a ready card in the capital city to execute a `manual_action` logic node. In v0 this usually marks the card exhausted and adds volatile mana to the active player's pool. This can be performed at most once per player turn and does not end the turn.
 
 Free actions:
 
-- Exhaust a ready card in the capital city to execute a `manual_action` logic node. In v0 this usually marks the card exhausted and adds volatile mana to the active player's pool.
 - Assign volatile mana from the active player's pool onto a project.
-
-Turn-ending actions:
-
 - Propose a project by moving one card from hand into the project zone. If the project zone is full, the oldest project is discarded.
+
+Turn-ending action:
+
 - Pass.
 
-After proposing or passing, the active player's volatile mana pool is emptied and active player advances to the next non-passed player in turn order.
+Only Pass ends the current player's turn. When a player passes, their volatile mana pool is emptied and active player advances to the next non-passed player in turn order.
 
-The Administration phase ends when all players consecutively pass.
+If the backend calculates that a player has no legal action except Pass, that player is auto-passed. The Administration phase ends when all players pass across the round robin.
 
 ## Mana And Projects
 

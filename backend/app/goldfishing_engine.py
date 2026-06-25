@@ -9,6 +9,7 @@ from typing import Any
 MANA_TAGS = {"labor", "wealth", "influence"}
 PROJECT_LIMIT = 3
 PLAYER_COUNT = 4
+EVENT_QUEUE_LIMIT = 3
 
 
 def public_catalog_entry(entry) -> dict[str, Any]:
@@ -32,6 +33,7 @@ def build_goldfishing_state(
     event_deck_ids: list[str],
     card_deck_id: str,
     event_deck_id: str,
+    event_entries: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     card_by_id = {entry["id"]: entry for entry in card_entries}
     draw_deck = [
@@ -51,12 +53,14 @@ def build_goldfishing_state(
                 "hand": hand,
                 "mana": {},
                 "passed": False,
+                "turn_exhaust_used": False,
             }
         )
-    return {
+    return _prepare_state({
         "mode": "goldfishing",
         "room_id": room_id,
         "epoch": 1,
+        "phase": "administration",
         "active_player_id": "player-1",
         "players": players,
         "projects": [],
@@ -75,13 +79,14 @@ def build_goldfishing_state(
         "catalog": {
             "cards": card_entries,
             "tags": tag_entries,
+            "events": event_entries or [],
         },
         "decks": {
             "cards": card_deck_id,
             "events": event_deck_id,
         },
         "log": ["Goldfishing setup complete. Capital placed. Each player drew 4 cards."],
-    }
+    })
 
 
 def get_active_player(state: dict[str, Any]) -> dict[str, Any]:
@@ -99,16 +104,21 @@ def card_by_id(state: dict[str, Any], card_id: str) -> dict[str, Any]:
     raise ValueError("Card not found.")
 
 
+def event_by_id(state: dict[str, Any], event_id: str) -> dict[str, Any]:
+    for event in state.get("catalog", {}).get("events", []):
+        if event.get("id") == event_id:
+            return event
+    raise ValueError("Event not found.")
+
+
 def advance_turn(state: dict[str, Any]) -> dict[str, Any]:
     players = state.get("players", [])
     if not players:
         return state
     if all(player.get("passed") for player in players):
         _decay_phase(state)
-        for player in players:
-            player["passed"] = False
-        state["active_player_id"] = players[0]["id"]
-        state.setdefault("log", []).append("All players passed. Decay resolved and Administration refreshed.")
+        state["phase"] = "decay"
+        state.setdefault("log", []).append("All players passed. Decay resolved.")
         return state
     current_index = next(
         (index for index, player in enumerate(players) if player.get("id") == state.get("active_player_id")),
@@ -118,13 +128,16 @@ def advance_turn(state: dict[str, Any]) -> dict[str, Any]:
         candidate = players[(current_index + offset) % len(players)]
         if not candidate.get("passed"):
             state["active_player_id"] = candidate["id"]
+            _start_player_turn(candidate)
             return state
     state["active_player_id"] = players[0]["id"]
+    _start_player_turn(players[0])
     return state
 
 
 def propose_project(state: dict[str, Any], *, player_id: str, card_id: str) -> dict[str, Any]:
     state = deepcopy(state)
+    _require_phase(state, "administration")
     active = get_active_player(state)
     if active["id"] != player_id:
         raise ValueError("It is not this player's turn.")
@@ -142,16 +155,18 @@ def propose_project(state: dict[str, Any], *, player_id: str, card_id: str) -> d
         {"id": f"project-{uuid.uuid4().hex[:8]}", "card_id": card_id, "contributions": {}}
     )
     active["passed"] = False
-    active["mana"] = {}
     state.setdefault("log", []).append(f"{active['name']} proposed {card_by_id(state, card_id)['name']}.")
-    return advance_turn(state)
+    return _prepare_state(state)
 
 
 def exhaust_card(state: dict[str, Any], *, player_id: str, city_id: str, card_id: str) -> dict[str, Any]:
     state = deepcopy(state)
+    _require_phase(state, "administration")
     active = get_active_player(state)
     if active["id"] != player_id:
         raise ValueError("It is not this player's turn.")
+    if active.get("turn_exhaust_used"):
+        raise ValueError("This player has already exhausted a card this turn.")
     city = _city(state, city_id)
     in_city = card_id == city.get("foundation_card_id") or card_id in city.get("cards", [])
     if not in_city:
@@ -165,12 +180,13 @@ def exhaust_card(state: dict[str, Any], *, player_id: str, city_id: str, card_id
     if not _preconditions_met(state, node, city=city, card_id=card_id, player=active):
         raise ValueError("Card action preconditions are not met.")
     _execute_effects(state, node.get("effects") or [], city=city, card_id=card_id, player=active)
+    active["turn_exhaust_used"] = True
     active["passed"] = False
     state.setdefault("log", []).append(f"{active['name']} exhausted {card['name']}.")
     if bool(node.get("ends_turn")):
         active["mana"] = {}
-        return advance_turn(state)
-    return state
+        return _prepare_state(advance_turn(state))
+    return _prepare_state(state)
 
 
 def assign_mana(
@@ -183,6 +199,7 @@ def assign_mana(
     city_id: str = "capital",
 ) -> dict[str, Any]:
     state = deepcopy(state)
+    _require_phase(state, "administration")
     active = get_active_player(state)
     if active["id"] != player_id:
         raise ValueError("It is not this player's turn.")
@@ -203,18 +220,146 @@ def assign_mana(
         del player["mana"][tag_id]
     project.setdefault("contributions", {})[tag_id] = current + assignable
     state.setdefault("log", []).append(f"{player['name']} assigned {assignable} {tag_id}.")
-    return state
+    return _prepare_state(state)
 
 
 def pass_turn(state: dict[str, Any], *, player_id: str) -> dict[str, Any]:
     state = deepcopy(state)
+    _require_phase(state, "administration")
     active = get_active_player(state)
     if active["id"] != player_id:
         raise ValueError("It is not this player's turn.")
     active["passed"] = True
     active["mana"] = {}
     state.setdefault("log", []).append(f"{active['name']} passed.")
-    return advance_turn(state)
+    return _prepare_state(advance_turn(state))
+
+
+def continue_phase(state: dict[str, Any]) -> dict[str, Any]:
+    state = deepcopy(state)
+    phase = state.get("phase") or "administration"
+    if phase == "decay":
+        state["epoch"] = int(state.get("epoch") or 1) + 1
+        state["phase"] = "event"
+        _reveal_event(state)
+    elif phase == "event":
+        state["phase"] = "event_resolution"
+        state.setdefault("log", []).append("Events resolved. No event effects are wired in v0.")
+    elif phase == "event_resolution":
+        state["phase"] = "administration"
+        players = state.get("players", [])
+        for player in players:
+            player["passed"] = False
+            player["mana"] = {}
+            _start_player_turn(player)
+        if players:
+            state["active_player_id"] = players[0]["id"]
+        state.setdefault("log", []).append("Administration phase began.")
+    else:
+        raise ValueError("Current phase cannot be advanced manually.")
+    return _prepare_state(state)
+
+
+def _prepare_state(state: dict[str, Any]) -> dict[str, Any]:
+    _ensure_state_defaults(state)
+    if state.get("phase") == "administration":
+        _auto_pass_unactionable_players(state)
+    state["possible_actions"] = _possible_actions(state)
+    return state
+
+
+def _ensure_state_defaults(state: dict[str, Any]) -> None:
+    state.setdefault("phase", "administration")
+    state.setdefault("event_queue", [])
+    state.setdefault("event_deck", [])
+    state.setdefault("possible_actions", [])
+    state.setdefault("catalog", {}).setdefault("events", [])
+    for player in state.get("players", []):
+        player.setdefault("mana", {})
+        player.setdefault("passed", False)
+        player.setdefault("turn_exhaust_used", False)
+
+
+def _auto_pass_unactionable_players(state: dict[str, Any]) -> None:
+    players = state.get("players", [])
+    guard = 0
+    while players and state.get("phase") == "administration" and guard < len(players):
+        actions = _possible_actions_for_active_player(state)
+        if any(action.get("type") != "pass" for action in actions):
+            break
+        active = get_active_player(state)
+        active["passed"] = True
+        active["mana"] = {}
+        state.setdefault("log", []).append(f"{active['name']} auto-passed.")
+        advance_turn(state)
+        guard += 1
+
+
+def _possible_actions(state: dict[str, Any]) -> list[dict[str, Any]]:
+    phase = state.get("phase") or "administration"
+    if phase in {"decay", "event", "event_resolution"}:
+        return [{"type": "continue_phase"}]
+    if phase != "administration":
+        return []
+    return _possible_actions_for_active_player(state)
+
+
+def _possible_actions_for_active_player(state: dict[str, Any]) -> list[dict[str, Any]]:
+    active = get_active_player(state)
+    actions: list[dict[str, Any]] = []
+    if not active.get("turn_exhaust_used"):
+        for city in state.get("cities", []):
+            for card_id in [city.get("foundation_card_id"), *city.get("cards", [])]:
+                if not card_id or card_id in city.get("exhausted_card_ids", []):
+                    continue
+                try:
+                    card = card_by_id(state, card_id)
+                except ValueError:
+                    continue
+                node = _manual_action_node(card) or _legacy_exhaust_node(card)
+                if node and _preconditions_met(state, node, city=city, card_id=card_id, player=active):
+                    actions.append({"type": "exhaust_card", "player_id": active["id"], "city_id": city["id"], "card_id": card_id})
+    for card_id in active.get("hand", []):
+        actions.append({"type": "propose_project", "player_id": active["id"], "card_id": card_id})
+    for project in state.get("projects", []):
+        try:
+            card = card_by_id(state, project.get("card_id", ""))
+        except ValueError:
+            continue
+        cost = card.get("data", {}).get("cost") or {}
+        contributions = project.get("contributions") or {}
+        for tag_id, required in cost.items():
+            available = int(active.get("mana", {}).get(tag_id, 0))
+            if available > 0 and int(contributions.get(tag_id, 0)) < int(required):
+                actions.append({"type": "assign_mana", "player_id": active["id"], "project_id": project["id"], "tag_id": tag_id, "amount": 1})
+    actions.append({"type": "pass", "player_id": active["id"]})
+    return actions
+
+
+def _start_player_turn(player: dict[str, Any]) -> None:
+    player["turn_exhaust_used"] = False
+
+
+def _require_phase(state: dict[str, Any], phase: str) -> None:
+    if (state.get("phase") or "administration") != phase:
+        raise ValueError(f"Action is only available during the {phase} phase.")
+
+
+def _reveal_event(state: dict[str, Any]) -> None:
+    event_deck = state.setdefault("event_deck", [])
+    if not event_deck:
+        state.setdefault("log", []).append("Event phase began. Event deck is empty.")
+        return
+    event_id = event_deck.pop(0)
+    queue = state.setdefault("event_queue", [])
+    if len(queue) >= EVENT_QUEUE_LIMIT:
+        queue.pop(0)
+    queue.append(event_id)
+    try:
+        event = event_by_id(state, event_id)
+        state.setdefault("log", []).append(f"Event revealed: {event['name']}.")
+    except ValueError:
+        state.setdefault("log", []).append(f"Event revealed: {event_id}.")
 
 
 def _decay_phase(state: dict[str, Any]) -> None:

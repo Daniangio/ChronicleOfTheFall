@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 
 from .server_models import User
-from .goldfishing_engine import assign_mana, exhaust_card, pass_turn, propose_project
+from .goldfishing_engine import assign_mana, continue_phase, exhaust_card, pass_turn, propose_project
 
 
 ROOM_STATE_IN_GAME = "IN_GAME"
@@ -138,6 +138,8 @@ class GameRoomService:
             )
         elif action == "pass_turn":
             state = pass_turn(state, player_id=str(payload.get("player_id") or ""))
+        elif action == "continue_phase":
+            state = continue_phase(state)
         else:
             raise ValueError("Unknown game action.")
         room["game_state"] = json.dumps(state)

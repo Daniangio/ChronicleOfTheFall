@@ -1,0 +1,546 @@
+{
+  "version": 1,
+  "kind": "all",
+  "entries": [
+    {
+      "id": "merchant-syndicate",
+      "name": "The Merchant Syndicate",
+      "kind": "agendas",
+      "category": "hidden-agenda",
+      "summary": "Commerce tags must outnumber Unrest tokens at the end of the game.",
+      "color": null,
+      "data": {
+        "checks": [
+          "commerce_gt_unrest"
+        ]
+      }
+    },
+    {
+      "id": "old-blood",
+      "name": "The Old Blood",
+      "kind": "agendas",
+      "category": "hidden-agenda",
+      "summary": "The capital must consolidate tier 3 institutions while frontier cities collapse.",
+      "color": null,
+      "data": {
+        "checks": [
+          "capital_two_tier3",
+          "two_frontiers_collapsed"
+        ]
+      }
+    },
+    {
+      "id": "zealots",
+      "name": "The Zealots",
+      "kind": "agendas",
+      "category": "hidden-agenda",
+      "summary": "Every city must contain either Religion or Unrest.",
+      "color": null,
+      "data": {
+        "checks": [
+          "each_city_religion_or_unrest"
+        ]
+      }
+    },
+    {
+      "id": "foundation",
+      "name": "Foundation",
+      "kind": "card-categories",
+      "category": "card-category",
+      "summary": "City anchor cards that define map nodes.",
+      "color": null,
+      "data": {}
+    },
+    {
+      "id": "institution",
+      "name": "Institution",
+      "kind": "card-categories",
+      "category": "card-category",
+      "summary": "Cards played onto a city or empire zone to provide tags and effects.",
+      "color": null,
+      "data": {}
+    },
+    {
+      "id": "route",
+      "name": "Route",
+      "kind": "card-categories",
+      "category": "card-category",
+      "summary": "Cards that connect cities or define topological constraints.",
+      "color": null,
+      "data": {}
+    },
+    {
+      "id": "capital-foundation",
+      "name": "Capital Foundation",
+      "kind": "cards",
+      "category": "foundation",
+      "summary": "Starting city anchor for the empire map.",
+      "color": null,
+      "data": {
+        "placement": "setup",
+        "is_capital": true,
+        "exhaust": {
+          "labor": 1
+        }
+      }
+    },
+    {
+      "id": "grand-basilica",
+      "name": "Grand Basilica",
+      "kind": "cards",
+      "category": "institution",
+      "summary": "Tier 2 global Religion institution gated by stable city conditions.",
+      "color": null,
+      "data": {
+        "tier": 2,
+        "cost": {
+          "labor": 2,
+          "wealth": 1
+        },
+        "tags": [
+          "religion"
+        ],
+        "scope": "global",
+        "requires": [
+          "no_unrest"
+        ],
+        "exhaust": {
+          "influence": 2
+        },
+        "placement": "empire",
+        "requirements": [
+          {
+            "type": "not_condition",
+            "tag_id": "unrest"
+          }
+        ]
+      }
+    },
+    {
+      "id": "lumber-camp",
+      "name": "Lumber Camp",
+      "kind": "cards",
+      "category": "institution",
+      "summary": "Tier 1 local Agrarian institution that generates Labor.",
+      "color": null,
+      "data": {
+        "tier": 1,
+        "cost": {
+          "labor": 1
+        },
+        "tags": [
+          "agrarian"
+        ],
+        "exhaust": {
+          "labor": 1
+        },
+        "placement": "city"
+      }
+    },
+    {
+      "id": "market-hub",
+      "name": "Market Hub",
+      "kind": "cards",
+      "category": "institution",
+      "summary": "Tier 2 local Commerce institution that requires road access.",
+      "color": null,
+      "data": {
+        "tier": 2,
+        "cost": {
+          "labor": 1,
+          "influence": 1
+        },
+        "tags": [
+          "commerce"
+        ],
+        "requires": [
+          "connected_to_paved_road"
+        ],
+        "exhaust": {
+          "wealth": 2
+        },
+        "placement": "city",
+        "requirements": [
+          {
+            "type": "has_card",
+            "card_id": "paved-road",
+            "scope": "city"
+          }
+        ]
+      }
+    },
+    {
+      "id": "militia-garrison",
+      "name": "Militia Garrison",
+      "kind": "cards",
+      "category": "institution",
+      "summary": "Tier 1 local Military institution that generates Influence.",
+      "color": null,
+      "data": {
+        "tier": 1,
+        "cost": {
+          "wealth": 1
+        },
+        "tags": [
+          "military"
+        ],
+        "exhaust": {
+          "influence": 1
+        },
+        "placement": "city"
+      }
+    },
+    {
+      "id": "iron-citadel",
+      "name": "The Iron Citadel",
+      "kind": "cards",
+      "category": "institution",
+      "summary": "Tier 3 Military upgrade that suppresses unrest near the capital.",
+      "color": null,
+      "data": {
+        "tier": 3,
+        "cost": {
+          "labor": 2,
+          "wealth": 2
+        },
+        "tags": [
+          "military"
+        ],
+        "scope": "global",
+        "replaces": [
+          "militia-garrison"
+        ],
+        "exhaust": {
+          "influence": 3
+        },
+        "placement": "empire"
+      }
+    },
+    {
+      "id": "monarchy",
+      "name": "Monarchy",
+      "kind": "cards",
+      "category": "politics",
+      "summary": "",
+      "color": null,
+      "data": {
+        "placement": "empire",
+        "requirements": [
+          {
+            "type": "has_card",
+            "tag_id": "",
+            "card_id": "iron-citadel",
+            "scope": "global"
+          }
+        ],
+        "mutually_exclusive_group": "government-form",
+        "replacement_effects": [
+          {
+            "type": "add_condition",
+            "tag_id": "unrest",
+            "scope": "empire",
+            "amount": 1
+          }
+        ],
+        "cost": {
+          "influence": 3,
+          "wealth": 2,
+          "military": 2,
+          "agrarian": 2
+        },
+        "exhaust": {
+          "influence": 2
+        },
+        "tags": [
+          "military"
+        ]
+      }
+    },
+    {
+      "id": "mountain-pass",
+      "name": "Mountain Pass",
+      "kind": "cards",
+      "category": "route",
+      "summary": "Route that blocks condition propagation from event text.",
+      "color": null,
+      "data": {
+        "cost": {
+          "labor": 2
+        },
+        "tags": [
+          "chokepoint"
+        ],
+        "effect": "block_condition_spread",
+        "placement": "city"
+      }
+    },
+    {
+      "id": "paved-road",
+      "name": "Paved Road",
+      "kind": "cards",
+      "category": "route",
+      "summary": "Route that lets connected cities share Commerce tags.",
+      "color": null,
+      "data": {
+        "cost": {
+          "labor": 1
+        },
+        "tags": [
+          "fast-travel"
+        ],
+        "effect": "share_commerce",
+        "placement": "city"
+      }
+    },
+    {
+      "id": "default-card-deck",
+      "name": "Default Card Deck",
+      "kind": "decks",
+      "category": "cards",
+      "summary": "Starter deck for goldfishing card draws.",
+      "color": null,
+      "data": {
+        "deck_type": "cards",
+        "item_ids": [
+          "lumber-camp",
+          "militia-garrison",
+          "paved-road",
+          "market-hub",
+          "lumber-camp",
+          "militia-garrison",
+          "mountain-pass",
+          "grand-basilica",
+          "lumber-camp",
+          "militia-garrison",
+          "paved-road",
+          "iron-citadel",
+          "lumber-camp",
+          "militia-garrison",
+          "market-hub",
+          "mountain-pass",
+          "paved-road",
+          "grand-basilica",
+          "iron-citadel",
+          "market-hub",
+          "monarchy"
+        ]
+      }
+    },
+    {
+      "id": "default-event-deck",
+      "name": "Default Event Deck",
+      "kind": "decks",
+      "category": "events",
+      "summary": "Starter event deck placeholder for goldfishing setup.",
+      "color": null,
+      "data": {
+        "deck_type": "events",
+        "item_ids": [
+          "black-year",
+          "barbarian-incursion",
+          "shattered-crown"
+        ]
+      }
+    },
+    {
+      "id": "black-year",
+      "name": "The Black Year",
+      "kind": "events",
+      "category": "civil",
+      "summary": "Famine targets the highest-capacity city and may add Unrest.",
+      "color": null,
+      "data": {
+        "mitigation": {
+          "wealth": 2
+        }
+      }
+    },
+    {
+      "id": "barbarian-incursion",
+      "name": "Barbarian Incursion",
+      "kind": "events",
+      "category": "conflict",
+      "summary": "Pressure hits the city furthest from the capital and spreads Unrest.",
+      "color": null,
+      "data": {
+        "mitigation": {
+          "influence": 1,
+          "wealth": 2
+        }
+      }
+    },
+    {
+      "id": "shattered-crown",
+      "name": "The Shattered Crown",
+      "kind": "events",
+      "category": "final-epoch",
+      "summary": "Final Epoch collapse that removes Bureaucracy and punishes undefended cities.",
+      "color": null,
+      "data": {
+        "ends_game": true
+      }
+    },
+    {
+      "id": "government-form",
+      "name": "Government Form",
+      "kind": "groups",
+      "category": "mutually-exclusive",
+      "summary": "Only one government-form card can exist in the same target zone.",
+      "color": null,
+      "data": {
+        "type": "mutually_exclusive"
+      }
+    },
+    {
+      "id": "minister-coin",
+      "name": "Minister of Coin",
+      "kind": "roles",
+      "category": "minister",
+      "summary": "Resolves Economy Events and can convert Commerce contributions into Influence.",
+      "color": null,
+      "data": {
+        "jurisdiction": "economy",
+        "exhaust_tags": [
+          "commerce"
+        ],
+        "default_jurisdiction": "commerce"
+      }
+    },
+    {
+      "id": "minister-state",
+      "name": "Minister of State",
+      "kind": "roles",
+      "category": "minister",
+      "summary": "Resolves State Events and sets Administration turn order.",
+      "color": null,
+      "data": {
+        "jurisdiction": "state"
+      }
+    },
+    {
+      "id": "minister-war",
+      "name": "Minister of War",
+      "kind": "roles",
+      "category": "minister",
+      "summary": "Resolves Conflict Events and controls Military institution contributions.",
+      "color": null,
+      "data": {
+        "jurisdiction": "conflict",
+        "exhaust_tags": [
+          "military"
+        ],
+        "default_jurisdiction": "military"
+      }
+    },
+    {
+      "id": "minister-interior",
+      "name": "Minister of the Interior",
+      "kind": "roles",
+      "category": "minister",
+      "summary": "Resolves Civil Events and can move one condition token each Administration phase.",
+      "color": null,
+      "data": {
+        "jurisdiction": "civil",
+        "default_jurisdiction": "unrest"
+      }
+    },
+    {
+      "id": "famine",
+      "name": "Famine",
+      "kind": "tags",
+      "category": "condition",
+      "summary": "Negative city condition representing food collapse.",
+      "color": "#a16207",
+      "data": {}
+    },
+    {
+      "id": "infected",
+      "name": "Infected",
+      "kind": "tags",
+      "category": "condition",
+      "summary": "Negative city condition representing disease.",
+      "color": "#65a30d",
+      "data": {}
+    },
+    {
+      "id": "unrest",
+      "name": "Unrest",
+      "kind": "tags",
+      "category": "condition",
+      "summary": "Negative city condition placed by crises and overextension.",
+      "color": "#be123c",
+      "data": {}
+    },
+    {
+      "id": "influence",
+      "name": "Influence",
+      "kind": "tags",
+      "category": "mana",
+      "summary": "Transient political, religious, and cultural resource.",
+      "color": "#7c3aed",
+      "data": {}
+    },
+    {
+      "id": "labor",
+      "name": "Labor",
+      "kind": "tags",
+      "category": "mana",
+      "summary": "Transient construction and workforce resource.",
+      "color": "#b45309",
+      "data": {}
+    },
+    {
+      "id": "wealth",
+      "name": "Wealth",
+      "kind": "tags",
+      "category": "mana",
+      "summary": "Transient capital, trade goods, and bribery resource.",
+      "color": "#ca8a04",
+      "data": {}
+    },
+    {
+      "id": "agrarian",
+      "name": "Agrarian",
+      "kind": "tags",
+      "category": "state",
+      "summary": "Persistent food production and land-use identity.",
+      "color": "#16a34a",
+      "data": {
+        "scope": "local"
+      }
+    },
+    {
+      "id": "commerce",
+      "name": "Commerce",
+      "kind": "tags",
+      "category": "state",
+      "summary": "Persistent trade and market identity.",
+      "color": "#0d9488",
+      "data": {
+        "scope": "local"
+      }
+    },
+    {
+      "id": "military",
+      "name": "Military",
+      "kind": "tags",
+      "category": "state",
+      "summary": "Persistent defensive and coercive state identity.",
+      "color": "#dc2626",
+      "data": {
+        "scope": "local_or_global"
+      }
+    },
+    {
+      "id": "religion",
+      "name": "Religion",
+      "kind": "tags",
+      "category": "state",
+      "summary": "Persistent spiritual and cultural legitimacy identity.",
+      "color": "#f59e0b",
+      "data": {
+        "scope": "global"
+      }
+    }
+  ]
+}

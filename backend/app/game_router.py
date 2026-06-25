@@ -54,6 +54,7 @@ async def create_game_room(
             event_deck_ids=_deck_item_ids(event_deck) or [event["id"] for event in events],
             card_deck_id=str(getattr(card_deck, "id", "") or ""),
             event_deck_id=str(getattr(event_deck, "id", "") or ""),
+            event_entries=events,
         )
         return await service.create_room(
             user=current_user,
@@ -123,6 +124,11 @@ async def pass_game_turn(
     current_user: User = Depends(get_current_user),
 ):
     return await _apply_action(room_id, current_user, "pass_turn", payload.model_dump())
+
+
+@router.post("/game/rooms/{room_id}/actions/continue-phase")
+async def continue_game_phase(room_id: str, current_user: User = Depends(get_current_user)):
+    return await _apply_action(room_id, current_user, "continue_phase", {})
 
 
 @router.get("/game/results/{room_id}", response_model=GameResultResponse)

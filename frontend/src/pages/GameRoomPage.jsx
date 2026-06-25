@@ -107,7 +107,7 @@ const CardMini = ({ card, tagLookup, exhausted = false, onExhaust, canExhaust = 
   );
 };
 
-const ProjectCard = ({ project, card, tagLookup, focusedPlayer, onAssign }) => {
+const ProjectCard = ({ project, card, tagLookup, focusedPlayer, onAssign, canAssign = () => false }) => {
   const cost = card?.data?.cost || {};
   const contributions = project.contributions || {};
   return (
@@ -129,7 +129,7 @@ const ProjectCard = ({ project, card, tagLookup, focusedPlayer, onAssign }) => {
               <TagIcon tag={tagLookup[normalize(tagId)]} label={tagId} count={`${current}/${required}`} />
               <button
                 className="rounded bg-slate-800 px-1.5 py-0.5 text-[0.65rem] font-semibold text-slate-200 hover:bg-slate-700 disabled:opacity-35"
-                disabled={complete || available <= 0}
+                disabled={complete || available <= 0 || !canAssign(project.id, tagId)}
                 onClick={() => onAssign(project.id, tagId)}
                 type="button"
               >
@@ -189,6 +189,9 @@ const GameRoomPage = () => {
   const activePlayer = players.find((player) => player.id === gameState?.active_player_id);
   const focusedPlayer = players.find((player) => player.id === focusedPlayerId) || players[0];
   const city = gameState?.cities?.[0];
+  const eventLookup = useMemo(() => buildLookup(gameState?.catalog?.events || []), [gameState]);
+  const possibleActions = gameState?.possible_actions || [];
+  const phase = gameState?.phase || "administration";
   const cityCards = city?.cards || [];
   const exhaustedIds = city?.exhausted_card_ids || [];
   const groupedCityCards = useMemo(() => {
@@ -225,6 +228,12 @@ const GameRoomPage = () => {
     }
   };
 
+  const hasAction = (type, matcher = () => true) =>
+    possibleActions.some((entry) => entry.type === type && matcher(entry));
+
+  const canContinuePhase = hasAction("continue_phase");
+  const canPass = activePlayer && hasAction("pass", (entry) => entry.player_id === activePlayer.id);
+
   const endGame = async () => {
     if (!token || !roomId || ending) return;
     setEnding(true);
@@ -258,6 +267,8 @@ const GameRoomPage = () => {
           <div className="flex items-center justify-between gap-2 lg:block">
             <div>
               <p className="text-xs uppercase tracking-normal text-slate-500">Goldfishing</p>
+              <p className="mt-1 text-sm font-semibold capitalize text-white">{phase.replace(/_/g, " ")}</p>
+              <p className="mt-1 text-xs text-slate-500">Epoch {gameState.epoch || 1}</p>
               <p className="mt-1 break-all text-xs text-slate-500">{room?.id || roomId}</p>
             </div>
             <button
@@ -297,8 +308,54 @@ const GameRoomPage = () => {
         <section className="flex min-h-screen flex-col">
           {error ? <p className="m-4 rounded-md bg-rose-950/70 px-3 py-2 text-sm text-rose-200">{error}</p> : null}
 
+          {phase !== "administration" ? (
+            <div className="mx-4 mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-800 bg-slate-900 p-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-normal text-slate-500">Current Phase</p>
+                <h1 className="mt-1 text-xl font-semibold capitalize text-white">{phase.replace(/_/g, " ")}</h1>
+              </div>
+              {canContinuePhase ? (
+                <button
+                  className="rounded-md bg-teal-400 px-3 py-2 text-sm font-semibold text-slate-950 hover:bg-teal-300 disabled:opacity-60"
+                  disabled={busy}
+                  onClick={() => action("/actions/continue-phase", {})}
+                  type="button"
+                >
+                  Continue
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+
           <div className="grid flex-1 gap-4 p-4 xl:grid-cols-[minmax(0,1fr)_20rem]">
             <div className="space-y-4">
+              <section className="rounded-lg border border-slate-800 bg-slate-900 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h2 className="font-semibold text-white">Events</h2>
+                    <p className="text-xs text-slate-500">Visual only in v0</p>
+                  </div>
+                  <span className="rounded bg-slate-800 px-2 py-1 text-xs text-slate-300">
+                    Deck {gameState.event_deck?.length || 0}
+                  </span>
+                </div>
+                <div className="mt-3 grid gap-3 md:grid-cols-3">
+                  {(gameState.event_queue || []).map((eventId, index) => {
+                    const event = eventLookup[normalize(eventId)];
+                    return (
+                      <article key={`${eventId}-${index}`} className="rounded-lg border border-slate-800 bg-slate-950 p-3">
+                        <p className="text-sm font-semibold text-white">{event?.name || eventId}</p>
+                        <p className="mt-1 text-xs uppercase text-slate-500">{event?.category || "event"}</p>
+                        <p className="mt-3 text-xs leading-5 text-slate-400">{event?.summary || "No event text."}</p>
+                      </article>
+                    );
+                  })}
+                  {(gameState.event_queue || []).length === 0 ? (
+                    <p className="rounded-lg border border-dashed border-slate-800 p-4 text-sm text-slate-600">No active events.</p>
+                  ) : null}
+                </div>
+              </section>
+
               <section className="rounded-lg border border-slate-800 bg-slate-900 p-4">
                 <div className="flex items-center gap-2">
                   <Landmark className="h-5 w-5 text-teal-300" aria-hidden="true" />
@@ -312,7 +369,7 @@ const GameRoomPage = () => {
                     card={cardLookup[normalize(city?.foundation_card_id)]}
                     tagLookup={tagLookup}
                     exhausted={exhaustedIds.includes(city?.foundation_card_id)}
-                    canExhaust={Boolean(activePlayer)}
+                    canExhaust={hasAction("exhaust_card", (entry) => entry.card_id === city?.foundation_card_id && entry.city_id === city?.id)}
                     onExhaust={() => action("/actions/exhaust", {
                       player_id: activePlayer.id,
                       city_id: city.id,
@@ -332,7 +389,7 @@ const GameRoomPage = () => {
                         card={cardLookup[normalize(cardId)]}
                         tagLookup={tagLookup}
                         exhausted={exhaustedIds.includes(cardId)}
-                        canExhaust={Boolean(activePlayer)}
+                        canExhaust={hasAction("exhaust_card", (entry) => entry.card_id === cardId && entry.city_id === city.id)}
                         onExhaust={() => action("/actions/exhaust", { player_id: activePlayer.id, city_id: city.id, card_id: cardId })}
                       />
                     ))}
@@ -358,6 +415,7 @@ const GameRoomPage = () => {
                       amount: 1,
                       city_id: city?.id || "capital",
                     })}
+                    canAssign={(projectId, tagId) => hasAction("assign_mana", (entry) => entry.project_id === projectId && entry.tag_id === tagId)}
                   />
                 ))}
                 {Array.from({ length: Math.max(0, 3 - (gameState.projects?.length || 0)) }).map((_, index) => (
@@ -385,7 +443,7 @@ const GameRoomPage = () => {
                   {Object.keys(focusedPlayer?.mana || {}).length === 0 ? <span className="text-xs text-slate-600">No mana</span> : null}
                 </div>
               </div>
-              {focusedPlayer?.id === activePlayer?.id ? (
+              {focusedPlayer?.id === activePlayer?.id && canPass ? (
                 <button
                   className="inline-flex items-center gap-2 rounded-md border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800 disabled:opacity-60"
                   disabled={busy}
@@ -403,7 +461,7 @@ const GameRoomPage = () => {
                   key={`${cardId}-${index}`}
                   card={cardLookup[normalize(cardId)]}
                   tagLookup={tagLookup}
-                  canPropose={focusedPlayer?.id === activePlayer?.id && (gameState.projects?.length || 0) < 3}
+                  canPropose={hasAction("propose_project", (entry) => entry.card_id === cardId && entry.player_id === focusedPlayer?.id)}
                   onPropose={() => action("/actions/propose", { player_id: focusedPlayer.id, card_id: cardId })}
                 />
               ))}
