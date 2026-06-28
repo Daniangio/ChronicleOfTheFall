@@ -1,3 +1,4 @@
+import { RotateCcw, ScrollText, Zap } from "lucide-react";
 import TagIcon from "./TagIcon.jsx";
 
 const fallbackColor = "#64748b";
@@ -115,7 +116,89 @@ const ReplacementEffectsValue = ({ value, tagLookup }) => {
   );
 };
 
+const countRepeatedTags = (value) => {
+  if (Array.isArray(value)) {
+    return value.reduce((counts, tagId) => {
+      if (!tagId) return counts;
+      return { ...counts, [tagId]: Number(counts[tagId] || 0) + 1 };
+    }, {});
+  }
+  return value || {};
+};
+
+const LogicIconPill = ({ children, title, tone = "slate" }) => {
+  const toneClass = tone === "amber"
+    ? "border-amber-700 text-amber-200"
+    : tone === "teal"
+      ? "border-teal-700 text-teal-200"
+      : "border-slate-700 text-slate-300";
+  return (
+    <span className={`inline-flex h-8 min-w-8 items-center justify-center rounded-md border px-2 text-xs font-semibold ${toneClass}`} title={title}>
+      {children}
+    </span>
+  );
+};
+
+const LogicNodeValue = ({ value, tagLookup }) => {
+  const nodes = Array.isArray(value) ? value : [];
+  if (!nodes.length) return <span className="text-slate-600">None</span>;
+  return (
+    <div className="space-y-2">
+      {nodes.map((node, nodeIndex) => {
+        const preconditions = node.preconditions || {};
+        const preconditionTags = countRepeatedTags(preconditions.empire_tags || preconditions.required_empire_tags);
+        return (
+          <div key={nodeIndex} className="flex flex-wrap items-center gap-2 rounded-md border border-slate-800 bg-slate-950/60 p-2">
+            <div className="flex flex-wrap items-center gap-1.5">
+              {Object.entries(preconditionTags).map(([tagId, count]) => (
+                <TagIcon key={tagId} tag={tagLookup[normalizeTagId(tagId)]} label={tagId} count={count} />
+              ))}
+              {preconditions.exhaust ? (
+                <LogicIconPill title="Exhaust" tone="amber">
+                  <Zap className="h-4 w-4" aria-hidden="true" />
+                </LogicIconPill>
+              ) : null}
+              {!Object.keys(preconditionTags).length && !preconditions.exhaust ? (
+                <span className="text-xs text-slate-600">None</span>
+              ) : null}
+            </div>
+            <span className="text-sm font-semibold text-slate-500">:</span>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {(node.effects || []).map((effect, effectIndex) => {
+                if (effect.effect_type === "add_resources") {
+                  return Object.entries(countRepeatedTags(effect.payload?.resources || effect.payload?.mana)).map(([tagId, count]) => (
+                    <TagIcon key={`${effectIndex}-${tagId}`} tag={tagLookup[normalizeTagId(tagId)]} label={tagId} count={count} />
+                  ));
+                }
+                if (effect.effect_type === "draw_card") {
+                  return (
+                    <LogicIconPill key={effectIndex} title={`Draw ${Number(effect.payload?.amount || 1)} card(s)`}>
+                      <ScrollText className="h-4 w-4" aria-hidden="true" />
+                      {Number(effect.payload?.amount || 1) > 1 ? <span className="ml-1">{Number(effect.payload?.amount || 1)}</span> : null}
+                    </LogicIconPill>
+                  );
+                }
+                if (effect.effect_type === "ready_building") {
+                  return (
+                    <LogicIconPill key={effectIndex} title="Ready a building" tone="teal">
+                      <RotateCcw className="h-4 w-4" aria-hidden="true" />
+                    </LogicIconPill>
+                  );
+                }
+                return null;
+              })}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
 const DataValue = ({ itemKey, value, tagLookup, cardLookup, groupLookup }) => {
+  if (itemKey === "logic_nodes") {
+    return <LogicNodeValue value={value} tagLookup={tagLookup} />;
+  }
   if (itemKey === "requirements") {
     return <RequirementValue value={value} tagLookup={tagLookup} cardLookup={cardLookup} />;
   }

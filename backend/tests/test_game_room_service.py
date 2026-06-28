@@ -9,16 +9,8 @@ def manual_mana_node(tag_id: str, amount: int) -> dict:
         "name": "Manual Action",
         "trigger": "manual_action",
         "ends_turn": False,
-        "preconditions": {
-            "logic_gate": "AND",
-            "conditions": [
-                {"target": "this_card", "variable": "is_exhausted", "operator": "==", "value": False}
-            ],
-        },
-        "effects": [
-            {"effect_type": "set_state", "payload": {"variable": "is_exhausted", "value": True}},
-            {"effect_type": "modify_mana", "payload": {"mana_type": tag_id, "amount": amount}},
-        ],
+        "preconditions": {"exhaust": True, "empire_tags": []},
+        "effects": [{"effect_type": "add_resources", "payload": {"resources": [tag_id] * amount}}],
     }
 
 
@@ -514,7 +506,7 @@ class TestGameRoomService(unittest.IsolatedAsyncioTestCase):
                         "category": "ministry",
                         "summary": "",
                         "color": None,
-                        "data": {"infrastructure_resources": {"labor": 1, "wealth": 1}},
+                        "data": {"infrastructure_resources": ["labor", "wealth"]},
                     }
                 ],
             },

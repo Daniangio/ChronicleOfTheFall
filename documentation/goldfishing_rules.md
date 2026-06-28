@@ -55,7 +55,7 @@ During a player's Administration turn, the backend returns every legal action fo
 
 Limited action:
 
-- Exhaust a ready card in the capital city to execute a `manual_action` logic node. In v0 this usually marks the card exhausted and adds volatile mana to the active player's pool. This can be performed at most once per player turn and does not end the turn.
+- Exhaust a ready card in the capital city to execute a manual logic node whose preconditions include `exhaust`. Exhausting is a built-in cost, not an explicit effect. This can be performed at most once per player turn and does not end the turn.
 
 Free actions:
 
@@ -92,27 +92,26 @@ Cards can define dynamic behavior with `logic_nodes`, using the Trigger-Precondi
 
 Supported v0 triggers:
 
-- `manual_action`
-- `on_event_phase_start`
-- `on_epoch_end`
+- `manual_action`: a player-triggered action.
+- `persistent`: a passive effect marker. Persistent effects are stored in catalog data but are not yet resolved by v0 runtime logic.
 
-Supported v0 precondition condition shape:
+Supported v0 preconditions:
+
+- `exhaust`: if true, the card must be ready and becomes exhausted as the action cost.
+- `empire_tags`: a repeated list of permanent tag ids required across the empire. Multiple copies mean multiple required instances.
 
 ```json
 {
-  "target": "this_card",
-  "variable": "is_exhausted",
-  "operator": "==",
-  "value": false
+  "exhaust": true,
+  "empire_tags": ["industry", "industry", "food"]
 }
 ```
 
 Supported v0 effect types:
 
-- `set_state`, currently used for `{"variable": "is_exhausted", "value": true}`.
-- `modify_mana`, used for adding or removing volatile mana from the active player's pool.
 - `draw_card`, used for drawing from the Empire deck into the active player's hand.
-- `modify_token` and `move_card` are part of the schema and will be wired incrementally.
+- `add_resources`, used for adding volatile resources to the active player's pool. Resources are stored as a repeated list of resource tag ids.
+- `ready_building`, which removes exhaustion from the acting building.
 
 Cards must define manual actions with `logic_nodes`; shortcut `exhaust` metadata is not supported in the clean catalog schema.
 
@@ -153,4 +152,4 @@ The admin console exposes deck creation, modification, deletion, export, and imp
 
 Tags can be marked as permanent tags or volatile resources. Cards can be configured with counted permanent tags, volatile costs, required city tags, pitch tags, and `logic_nodes` from the guided card editor.
 
-Ministries are catalog entries with configurable event-type jurisdictions. The Minister of Infrastructure-style resource list is admin-editable through `infrastructure_resources`; project finalization and Politics/Economy proposal permissions are also ministry metadata.
+Ministries are catalog entries with configurable event-type jurisdictions. The Minister of Infrastructure-style resource list is admin-editable through `infrastructure_resources`, stored as a list of volatile resource tag ids; project finalization and Politics/Economy proposal permissions are also ministry metadata.

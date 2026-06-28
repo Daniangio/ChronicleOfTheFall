@@ -95,18 +95,13 @@ const placementOptions = [
 
 const emptyRequirement = { type: "not_condition", tag_id: "", card_id: "", scope: "city" };
 const emptyReplacementEffect = { type: "add_condition", tag_id: "", scope: "target", amount: 1 };
-const emptyCondition = { target: "this_card", variable: "is_exhausted", operator: "==", value: false };
-const emptyEffect = { effect_type: "modify_mana", payload: { mana_type: "", amount: 1 } };
-const emptyDrawEffect = { effect_type: "draw_card", payload: { amount: 1 } };
+const emptyEffect = { effect_type: "add_resources", payload: { resources: [] } };
 const defaultManualNode = {
   name: "Manual Action",
   trigger: "manual_action",
   ends_turn: false,
-  preconditions: { logic_gate: "AND", conditions: [emptyCondition] },
-  effects: [
-    { effect_type: "set_state", payload: { variable: "is_exhausted", value: true } },
-    emptyEffect,
-  ],
+  preconditions: { exhaust: true, empire_tags: [] },
+  effects: [emptyEffect],
 };
 
 const groupedTags = (tags) =>
@@ -492,32 +487,30 @@ const SelectField = ({ label, value, options, onChange }) => (
   </label>
 );
 
-const parseConditionValue = (value) => {
-  const raw = String(value ?? "").trim();
-  if (raw === "true") return true;
-  if (raw === "false") return false;
-  if (raw !== "" && !Number.isNaN(Number(raw))) return Number(raw);
-  return raw;
+const repeatedListToCounts = (items) => {
+  if (!Array.isArray(items)) {
+    return Object.fromEntries(
+      Object.entries(items || {})
+        .map(([tagId, count]) => [tagId, Number(count || 0)])
+        .filter(([, count]) => count > 0)
+    );
+  }
+  return items.reduce((counts, tagId) => {
+    if (!tagId) return counts;
+    return { ...counts, [tagId]: Number(counts[tagId] || 0) + 1 };
+  }, {});
 };
+
+const countsToRepeatedList = (counts) =>
+  Object.entries(counts || {}).flatMap(([tagId, count]) =>
+    Array.from({ length: Math.max(0, Number(count || 0)) }, () => tagId)
+  );
 
 const LogicNodeEditor = ({ logicNodes, setLogicNodes, tagEntries }) => {
   const updateNode = (index, patch) => {
     const next = [...logicNodes];
     next[index] = { ...next[index], ...patch };
     setLogicNodes(next);
-  };
-
-  const updatePreconditions = (index, patch) => {
-    const node = logicNodes[index];
-    updateNode(index, { preconditions: { ...(node.preconditions || {}), ...patch } });
-  };
-
-  const updateCondition = (nodeIndex, conditionIndex, patch) => {
-    const node = logicNodes[nodeIndex];
-    const preconditions = node.preconditions || { logic_gate: "AND", conditions: [] };
-    const conditions = [...(preconditions.conditions || [])];
-    conditions[conditionIndex] = { ...conditions[conditionIndex], ...patch };
-    updatePreconditions(nodeIndex, { conditions });
   };
 
   const updateEffect = (nodeIndex, effectIndex, patch) => {
@@ -532,6 +525,7 @@ const LogicNodeEditor = ({ logicNodes, setLogicNodes, tagEntries }) => {
     updateEffect(nodeIndex, effectIndex, { payload: { ...(effect.payload || {}), ...patch } });
   };
   const resourceTags = volatileResourceTags(tagEntries);
+  const permanentTags = permanentOnlyTags(tagEntries);
 
   return (
     <div className="space-y-3">
@@ -546,8 +540,8 @@ const LogicNodeEditor = ({ logicNodes, setLogicNodes, tagEntries }) => {
         </button>
       </div>
       {logicNodes.map((node, nodeIndex) => {
-        const preconditions = node.preconditions || { logic_gate: "AND", conditions: [] };
-        const conditions = preconditions.conditions || [];
+        const preconditions = node.preconditions || {};
+        const empireTagCounts = repeatedListToCounts(preconditions.empire_tags || preconditions.required_empire_tags || {});
         const effects = node.effects || [];
         return (
           <div key={nodeIndex} className="space-y-4 rounded-md border border-slate-800 bg-slate-950 p-3">
@@ -564,9 +558,8 @@ const LogicNodeEditor = ({ logicNodes, setLogicNodes, tagEntries }) => {
                 label="Trigger"
                 value={node.trigger || "manual_action"}
                 options={[
-                  { value: "manual_action", label: "Manual action" },
-                  { value: "on_event_phase_start", label: "Event phase" },
-                  { value: "on_epoch_end", label: "Epoch end" },
+                  { value: "manual_action", label: "Manual" },
+                  { value: "persistent", label: "Persistent effect" },
                 ]}
                 onChange={(value) => updateNode(nodeIndex, { trigger: value })}
               />
@@ -581,69 +574,28 @@ const LogicNodeEditor = ({ logicNodes, setLogicNodes, tagEntries }) => {
             </div>
 
             <div className="space-y-2">
-              <div className="flex items-center justify-between gap-3">
-                <SelectField
-                  label="Precondition Gate"
-                  value={preconditions.logic_gate || "AND"}
-                  options={[
-                    { value: "AND", label: "AND" },
-                    { value: "OR", label: "OR" },
-                  ]}
-                  onChange={(value) => updatePreconditions(nodeIndex, { logic_gate: value })}
+              <h5 className="text-sm font-semibold text-slate-300">Preconditions</h5>
+              <label className="flex items-center gap-2 text-sm font-medium text-slate-300">
+                <input
+                  checked={Boolean(preconditions.exhaust)}
+                  onChange={(event) => updateNode(nodeIndex, { preconditions: { ...preconditions, exhaust: event.target.checked } })}
+                  type="checkbox"
                 />
-                <button
-                  className="mt-7 rounded-md border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800"
-                  onClick={() => updatePreconditions(nodeIndex, { conditions: [...conditions, emptyCondition] })}
-                  type="button"
-                >
-                  Add condition
-                </button>
-              </div>
-              {conditions.map((condition, conditionIndex) => (
-                <div key={conditionIndex} className="grid gap-2 sm:grid-cols-[8rem_1fr_6rem_8rem_auto]">
-                  <SelectField
-                    label="Target"
-                    value={condition.target || "this_card"}
-                    options={[
-                      { value: "this_card", label: "This card" },
-                      { value: "local_city", label: "Local city" },
-                      { value: "global", label: "Global" },
-                      { value: "player", label: "Player" },
-                    ]}
-                    onChange={(value) => updateCondition(nodeIndex, conditionIndex, { target: value })}
-                  />
-                  <label className="block">
-                    <span className="text-sm font-medium text-slate-300">Variable</span>
-                    <input
-                      list="logic-token-options"
-                      value={condition.variable || ""}
-                      onChange={(event) => updateCondition(nodeIndex, conditionIndex, { variable: event.target.value })}
-                      className="mt-2 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none focus:border-teal-400"
-                    />
-                  </label>
-                  <SelectField
-                    label="Op"
-                    value={condition.operator || "=="}
-                    options={["==", "!=", ">=", "<=", ">", "<"].map((operator) => ({ value: operator, label: operator }))}
-                    onChange={(value) => updateCondition(nodeIndex, conditionIndex, { operator: value })}
-                  />
-                  <label className="block">
-                    <span className="text-sm font-medium text-slate-300">Value</span>
-                    <input
-                      value={String(condition.value ?? "")}
-                      onChange={(event) => updateCondition(nodeIndex, conditionIndex, { value: parseConditionValue(event.target.value) })}
-                      className="mt-2 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none focus:border-teal-400"
-                    />
-                  </label>
-                  <button
-                    className="mt-7 text-xs font-semibold text-rose-300 hover:text-rose-200"
-                    onClick={() => updatePreconditions(nodeIndex, { conditions: conditions.filter((_, index) => index !== conditionIndex) })}
-                    type="button"
-                  >
-                    Remove
-                  </button>
-                </div>
-              ))}
+                Exhaust this card if it is ready
+              </label>
+              <TagCounterGroup
+                label="Required Empire Tags"
+                tags={permanentTags}
+                values={empireTagCounts}
+                onChange={(tagId, count) => {
+                  const nextCounts = { ...empireTagCounts };
+                  if (count <= 0) delete nextCounts[tagId];
+                  else nextCounts[tagId] = count;
+                  updateNode(nodeIndex, {
+                    preconditions: { ...preconditions, empire_tags: countsToRepeatedList(nextCounts) },
+                  });
+                }}
+              />
             </div>
 
             <div className="space-y-2">
@@ -661,36 +613,33 @@ const LogicNodeEditor = ({ logicNodes, setLogicNodes, tagEntries }) => {
                 <div key={effectIndex} className="grid gap-2 sm:grid-cols-[11rem_1fr_7rem_auto]">
                   <SelectField
                     label="Type"
-                    value={effect.effect_type || "modify_mana"}
+                    value={effect.effect_type || "add_resources"}
                     options={[
-                      { value: "modify_mana", label: "Modify mana" },
-                      { value: "set_state", label: "Set state" },
-                      { value: "modify_token", label: "Modify token" },
-                      { value: "move_card", label: "Move card" },
-                      { value: "draw_card", label: "Draw card" },
+                      { value: "draw_card", label: "Draw from empire deck" },
+                      { value: "add_resources", label: "Add resources" },
+                      { value: "ready_building", label: "Ready a building" },
                     ]}
-                    onChange={(value) => updateEffect(nodeIndex, effectIndex, { effect_type: value, payload: {} })}
+                    onChange={(value) => updateEffect(nodeIndex, effectIndex, {
+                      effect_type: value,
+                      payload: value === "draw_card" ? { amount: 1 } : value === "ready_building" ? {} : { resources: [] },
+                    })}
                   />
-                  {effect.effect_type === "modify_mana" ? (
+                  {(effect.effect_type || "add_resources") === "add_resources" ? (
                     <>
-                      <SelectField
-                        label="Mana"
-                        value={effect.payload?.mana_type || ""}
-                        options={[
-                          { value: "", label: "Select mana" },
-                          ...resourceTags.map((tag) => ({ value: tag.id, label: tag.name })),
-                        ]}
-                        onChange={(value) => updateEffectPayload(nodeIndex, effectIndex, { mana_type: value })}
-                      />
-                      <label className="block">
-                        <span className="text-sm font-medium text-slate-300">Amount</span>
-                        <input
-                          type="number"
-                          value={Number(effect.payload?.amount || 0)}
-                          onChange={(event) => updateEffectPayload(nodeIndex, effectIndex, { amount: Number(event.target.value || 0) })}
-                          className="mt-2 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none focus:border-teal-400"
+                      <div className="sm:col-span-2">
+                        <TagCounterGroup
+                          label="Resources"
+                          tags={resourceTags}
+                          values={repeatedListToCounts(effect.payload?.resources || effect.payload?.mana || {})}
+                          onChange={(tagId, count) => {
+                            const currentCounts = repeatedListToCounts(effect.payload?.resources || effect.payload?.mana || {});
+                            if (count <= 0) delete currentCounts[tagId];
+                            else currentCounts[tagId] = count;
+                            updateEffectPayload(nodeIndex, effectIndex, { resources: countsToRepeatedList(currentCounts) });
+                          }}
                         />
-                      </label>
+                      </div>
+                      <span />
                     </>
                   ) : effect.effect_type === "draw_card" ? (
                     <>
@@ -706,23 +655,8 @@ const LogicNodeEditor = ({ logicNodes, setLogicNodes, tagEntries }) => {
                         />
                       </label>
                     </>
-                  ) : effect.effect_type === "set_state" ? (
-                    <>
-                      <SelectField
-                        label="Variable"
-                        value={effect.payload?.variable || "is_exhausted"}
-                        options={[{ value: "is_exhausted", label: "Is exhausted" }]}
-                        onChange={(value) => updateEffectPayload(nodeIndex, effectIndex, { variable: value })}
-                      />
-                      <label className="flex items-end gap-2 pb-2 text-sm font-medium text-slate-300">
-                        <input
-                          checked={Boolean(effect.payload?.value)}
-                          onChange={(event) => updateEffectPayload(nodeIndex, effectIndex, { value: event.target.checked })}
-                          type="checkbox"
-                        />
-                        True
-                      </label>
-                    </>
+                  ) : effect.effect_type === "ready_building" ? (
+                    <p className="self-end pb-2 text-sm text-slate-400 sm:col-span-2">Readies one exhausted building.</p>
                   ) : (
                     <label className="block sm:col-span-2">
                       <span className="text-sm font-medium text-slate-300">Payload JSON</span>
@@ -760,10 +694,6 @@ const LogicNodeEditor = ({ logicNodes, setLogicNodes, tagEntries }) => {
           </div>
         );
       })}
-      <datalist id="logic-token-options">
-        <option value="is_exhausted" />
-        {tagEntries.map((tag) => <option key={tag.id} value={tag.id} />)}
-      </datalist>
     </div>
   );
 };
@@ -1082,6 +1012,9 @@ const DeckGuidedFields = ({ data, setField, cardEntries, eventEntries }) => {
 const MinistryGuidedFields = ({ data, setField, eventTypeEntries, tagEntries, imageEntries }) => {
   const administeredEventTypes = Array.isArray(data.administered_event_types) ? data.administered_event_types : [];
   const resourceTags = volatileResourceTags(tagEntries);
+  const infrastructureResources = Array.isArray(data.infrastructure_resources)
+    ? data.infrastructure_resources
+    : Object.keys(data.infrastructure_resources || {});
 
   const toggleEventType = (eventTypeId) => {
     setField(
@@ -1169,17 +1102,17 @@ const MinistryGuidedFields = ({ data, setField, eventTypeEntries, tagEntries, im
         </div>
       </div>
 
-      <TagCounterGroup
+      <TagToggleGroup
         label="Infrastructure Resources"
         tags={resourceTags}
-        values={data.infrastructure_resources || {}}
-        onChange={(tagId, count) => {
-          const current = data.infrastructure_resources && typeof data.infrastructure_resources === "object" && !Array.isArray(data.infrastructure_resources)
-            ? { ...data.infrastructure_resources }
-            : {};
-          if (count <= 0) delete current[tagId];
-          else current[tagId] = count;
-          setField("infrastructure_resources", current);
+        selectedIds={infrastructureResources}
+        onToggle={(tagId) => {
+          setField(
+            "infrastructure_resources",
+            infrastructureResources.includes(tagId)
+              ? infrastructureResources.filter((item) => item !== tagId)
+              : [...infrastructureResources, tagId]
+          );
         }}
       />
     </>

@@ -244,6 +244,8 @@ def exhaust_card(state: dict[str, Any], *, player_id: str, city_id: str, card_id
         raise ValueError("Card does not have a manual action.")
     if not _preconditions_met(state, node, city=city, card_id=card_id, player=active):
         raise ValueError("Card action preconditions are not met.")
+    if _node_requires_exhaust(node) and card_id not in city.setdefault("exhausted_card_ids", []):
+        city["exhausted_card_ids"].append(card_id)
     _execute_effects(state, node.get("effects") or [], city=city, card_id=card_id, player=active)
     active["turn_exhaust_used"] = True
     active["passed"] = False
@@ -295,13 +297,13 @@ def use_ministry_resource(state: dict[str, Any], *, player_id: str, tag_id: str)
     if active["id"] != player_id:
         raise ValueError("It is not this player's turn.")
     ministry = _active_ministry(state, active)
-    resources = (ministry.get("data", {}) or {}).get("infrastructure_resources") or {}
-    if int(resources.get(tag_id, 0)) <= 0:
+    resources = _ministry_infrastructure_resources(ministry)
+    if tag_id not in resources:
         raise ValueError("This ministry cannot produce that resource.")
     used_key = f"ministry_resource:{ministry.get('id', '')}"
     if used_key in active.setdefault("once_per_year_used", []):
         raise ValueError("This ministry resource has already been used this year.")
-    active.setdefault("mana", {})[tag_id] = int(active.get("mana", {}).get(tag_id, 0)) + int(resources.get(tag_id, 1))
+    active.setdefault("mana", {})[tag_id] = int(active.get("mana", {}).get(tag_id, 0)) + int(resources[tag_id])
     active["once_per_year_used"].append(used_key)
     active["passed"] = False
     state.setdefault("log", []).append(f"{active['name']} used {ministry.get('name', 'ministry')} to produce {tag_id}.")
@@ -409,7 +411,7 @@ def _possible_actions_for_active_player(state: dict[str, Any]) -> list[dict[str,
     active = get_active_player(state)
     actions: list[dict[str, Any]] = []
     ministry = _active_ministry(state, active)
-    ministry_resources = (ministry.get("data", {}) or {}).get("infrastructure_resources") or {}
+    ministry_resources = _ministry_infrastructure_resources(ministry)
     used_key = f"ministry_resource:{ministry.get('id', '')}"
     if ministry_resources and used_key not in active.get("once_per_year_used", []):
         for tag_id, amount in ministry_resources.items():
@@ -602,6 +604,19 @@ def _active_ministry(state: dict[str, Any], player: dict[str, Any]) -> dict[str,
     return {}
 
 
+def _ministry_infrastructure_resources(ministry: dict[str, Any]) -> dict[str, int]:
+    raw_resources = (ministry.get("data", {}) or {}).get("infrastructure_resources") or []
+    if isinstance(raw_resources, list):
+        return {str(tag_id): 1 for tag_id in raw_resources if str(tag_id or "").strip()}
+    if isinstance(raw_resources, dict):
+        return {
+            str(tag_id): int(amount)
+            for tag_id, amount in raw_resources.items()
+            if str(tag_id or "").strip() and int(amount) > 0
+        }
+    return {}
+
+
 def _build_requirement_met(state: dict[str, Any], requirement: dict[str, Any], city: dict[str, Any]) -> bool:
     requirement_type = requirement.get("type")
     if requirement_type == "not_condition":
@@ -624,9 +639,14 @@ def _city_has_card(city: dict[str, Any], card_id: str) -> bool:
 
 def _manual_action_node(card: dict[str, Any]) -> dict[str, Any] | None:
     for node in card.get("data", {}).get("logic_nodes") or []:
-        if node.get("trigger") == "manual_action":
+        if node.get("trigger") in {"manual", "manual_action"}:
             return node
     return None
+
+
+def _node_requires_exhaust(node: dict[str, Any]) -> bool:
+    preconditions = node.get("preconditions") or {}
+    return bool(preconditions.get("exhaust"))
 
 
 def _preconditions_met(
@@ -638,6 +658,9 @@ def _preconditions_met(
     player: dict[str, Any],
 ) -> bool:
     preconditions = node.get("preconditions") or {}
+    for tag_id, required in _tag_counts(preconditions.get("empire_tags") or preconditions.get("required_empire_tags")).items():
+        if _count_global_token(state, tag_id) < required:
+            return False
     conditions = preconditions.get("conditions") or []
     if not conditions:
         return True
@@ -729,6 +752,9 @@ def _execute_effects(
             player.setdefault("mana", {})[mana_type] = int(player.get("mana", {}).get(mana_type, 0)) + amount
             if player["mana"][mana_type] <= 0:
                 del player["mana"][mana_type]
+        elif effect_type == "add_resources":
+            for tag_id, amount in _tag_counts(payload.get("resources") or payload.get("mana")).items():
+                player.setdefault("mana", {})[tag_id] = int(player.get("mana", {}).get(tag_id, 0)) + amount
         elif effect_type == "modify_token":
             _modify_token(state, payload, city=city, card_id=card_id)
         elif effect_type == "draw_card":
@@ -736,6 +762,25 @@ def _execute_effects(
             deck = Deck(state.get("draw_deck", []))
             player.setdefault("hand", []).extend(deck.draw(amount))
             state["draw_deck"] = deck.to_list()
+        elif effect_type == "ready_building":
+            city["exhausted_card_ids"] = [entry for entry in city.get("exhausted_card_ids", []) if entry != card_id]
+
+
+def _tag_counts(value: Any) -> dict[str, int]:
+    if isinstance(value, dict):
+        return {
+            str(tag_id): int(amount)
+            for tag_id, amount in value.items()
+            if str(tag_id or "").strip() and int(amount) > 0
+        }
+    if isinstance(value, list):
+        counts: dict[str, int] = {}
+        for tag_id in value:
+            normalized = str(tag_id or "").strip()
+            if normalized:
+                counts[normalized] = counts.get(normalized, 0) + 1
+        return counts
+    return {}
 
 
 def _modify_token(state: dict[str, Any], payload: dict[str, Any], *, city: dict[str, Any], card_id: str) -> None:

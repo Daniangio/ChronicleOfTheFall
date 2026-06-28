@@ -159,11 +159,11 @@
         "domain_id": "infrastructure",
         "domain_symbol": "INF",
         "can_finalize_projects": true,
-        "infrastructure_resources": {
-          "labor": 1,
-          "material": 1,
-          "wealth": 1
-        },
+        "infrastructure_resources": [
+          "labor",
+          "material",
+          "wealth"
+        ],
         "abilities": [
           "finalize_projects",
           "once_per_year_generate_configured_resource",
@@ -272,29 +272,16 @@
             "trigger": "manual_action",
             "ends_turn": false,
             "preconditions": {
-              "logic_gate": "AND",
-              "conditions": [
-                {
-                  "target": "this_card",
-                  "variable": "is_exhausted",
-                  "operator": "==",
-                  "value": false
-                }
-              ]
+              "exhaust": true,
+              "empire_tags": []
             },
             "effects": [
               {
-                "effect_type": "set_state",
+                "effect_type": "add_resources",
                 "payload": {
-                  "variable": "is_exhausted",
-                  "value": true
-                }
-              },
-              {
-                "effect_type": "modify_mana",
-                "payload": {
-                  "mana_type": "labor",
-                  "amount": 1
+                  "resources": [
+                    "labor"
+                  ]
                 }
               }
             ]
@@ -327,29 +314,17 @@
             "trigger": "manual_action",
             "ends_turn": false,
             "preconditions": {
-              "logic_gate": "AND",
-              "conditions": [
-                {
-                  "target": "this_card",
-                  "variable": "is_exhausted",
-                  "operator": "==",
-                  "value": false
-                }
-              ]
+              "exhaust": true,
+              "empire_tags": []
             },
             "effects": [
               {
-                "effect_type": "set_state",
+                "effect_type": "add_resources",
                 "payload": {
-                  "variable": "is_exhausted",
-                  "value": true
-                }
-              },
-              {
-                "effect_type": "modify_mana",
-                "payload": {
-                  "mana_type": "material",
-                  "amount": 2
+                  "resources": [
+                    "material",
+                    "material"
+                  ]
                 }
               }
             ]
@@ -383,24 +358,10 @@
             "trigger": "manual_action",
             "ends_turn": false,
             "preconditions": {
-              "logic_gate": "AND",
-              "conditions": [
-                {
-                  "target": "this_card",
-                  "variable": "is_exhausted",
-                  "operator": "==",
-                  "value": false
-                }
-              ]
+              "exhaust": true,
+              "empire_tags": []
             },
             "effects": [
-              {
-                "effect_type": "set_state",
-                "payload": {
-                  "variable": "is_exhausted",
-                  "value": true
-                }
-              },
               {
                 "effect_type": "draw_card",
                 "payload": {
@@ -437,29 +398,16 @@
             "trigger": "manual_action",
             "ends_turn": false,
             "preconditions": {
-              "logic_gate": "AND",
-              "conditions": [
-                {
-                  "target": "this_card",
-                  "variable": "is_exhausted",
-                  "operator": "==",
-                  "value": false
-                }
-              ]
+              "exhaust": true,
+              "empire_tags": []
             },
             "effects": [
               {
-                "effect_type": "set_state",
+                "effect_type": "add_resources",
                 "payload": {
-                  "variable": "is_exhausted",
-                  "value": true
-                }
-              },
-              {
-                "effect_type": "modify_mana",
-                "payload": {
-                  "mana_type": "wealth",
-                  "amount": 1
+                  "resources": [
+                    "wealth"
+                  ]
                 }
               }
             ]

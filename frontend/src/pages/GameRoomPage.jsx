@@ -1,4 +1,4 @@
-import { Check, Hand, Hourglass, Landmark, LogOut, Zap } from "lucide-react";
+import { Check, Hand, Hourglass, Landmark, LogOut, RotateCcw, ScrollText, Zap } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import TagIcon from "../components/TagIcon.jsx";
@@ -15,36 +15,104 @@ const tagEntries = (value) => {
 };
 
 const manualActionMana = (data = {}) => {
-  const node = (data.logic_nodes || []).find((entry) => entry?.trigger === "manual_action");
+  const node = (data.logic_nodes || []).find((entry) => ["manual", "manual_action"].includes(entry?.trigger));
   if (!node) return {};
   return (node.effects || []).reduce((mana, effect) => {
-    if (effect?.effect_type !== "modify_mana") return mana;
     const payload = effect.payload || {};
-    const manaType = payload.mana_type || payload.tag_id;
-    if (!manaType) return mana;
-    return { ...mana, [manaType]: Number(mana[manaType] || 0) + Number(payload.amount || 0) };
+    if (effect?.effect_type === "modify_mana") {
+      const manaType = payload.mana_type || payload.tag_id;
+      if (!manaType) return mana;
+      return { ...mana, [manaType]: Number(mana[manaType] || 0) + Number(payload.amount || 0) };
+    }
+    if (effect?.effect_type === "add_resources") {
+      return (payload.resources || payload.mana || []).reduce((nextMana, tagId) => ({
+        ...nextMana,
+        [tagId]: Number(nextMana[tagId] || 0) + 1,
+      }), mana);
+    }
+    return mana;
   }, {});
+};
+
+const manualActionEffects = (data = {}) => {
+  const node = (data.logic_nodes || []).find((entry) => ["manual", "manual_action"].includes(entry?.trigger));
+  if (!node) return [];
+  return node.effects || [];
+};
+
+const manualActionNode = (data = {}) => (data.logic_nodes || []).find((entry) => ["manual", "manual_action"].includes(entry?.trigger));
+
+const countRepeatedTags = (value) => {
+  if (Array.isArray(value)) {
+    return value.reduce((counts, tagId) => {
+      if (!tagId) return counts;
+      return { ...counts, [tagId]: Number(counts[tagId] || 0) + 1 };
+    }, {});
+  }
+  return value || {};
+};
+
+const IconPill = ({ children, title, tone = "slate" }) => {
+  const toneClass = tone === "amber"
+    ? "border-amber-700 text-amber-200"
+    : tone === "teal"
+      ? "border-teal-700 text-teal-200"
+      : "border-slate-700 text-slate-300";
+  return (
+    <span className={`inline-flex h-7 min-w-7 items-center justify-center rounded-md border px-2 text-[0.65rem] font-semibold ${toneClass}`} title={title}>
+      {children}
+    </span>
+  );
 };
 
 const CardMini = ({ card, tagLookup, exhausted = false, onExhaust, canExhaust = false, onPropose, canPropose = false }) => {
   const data = card?.data || {};
   const cost = data.cost || {};
   const exhaust = manualActionMana(data);
+  const manualEffects = manualActionEffects(data);
+  const manualNode = manualActionNode(data);
+  const preconditions = manualNode?.preconditions || {};
+  const preconditionTags = countRepeatedTags(preconditions.empire_tags || preconditions.required_empire_tags);
   const tags = data.tags || {};
   const requirements = Array.isArray(data.requirements) ? data.requirements : [];
-  const hasExhaust = Object.keys(exhaust).length > 0;
-  const exhaustStripClass = "mt-3 flex w-full flex-wrap items-center gap-1.5 border-t border-slate-800 pt-3 text-left";
+  const hasExhaust = manualEffects.length > 0;
+  const exhaustStripClass = "mt-3 flex w-full flex-wrap items-center gap-2 border-t border-slate-800 pt-3 text-left";
   const exhaustContents = (
     <>
-      <span className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[0.65rem] font-semibold ${
-        exhausted ? "border-slate-700 text-slate-500" : "border-amber-700 text-amber-200"
-      }`}>
-        <Zap className="h-3 w-3" aria-hidden="true" />
-        {exhausted ? "Exhausted" : "Exhaust"}
-      </span>
-      {Object.entries(exhaust).map(([tagId, count]) => (
-        <TagIcon key={tagId} tag={tagLookup[normalize(tagId)]} label={tagId} count={count} />
-      ))}
+      <div className="flex flex-wrap items-center gap-1.5">
+        {Object.entries(preconditionTags).map(([tagId, count]) => (
+          <TagIcon key={tagId} tag={tagLookup[normalize(tagId)]} label={tagId} count={count} />
+        ))}
+        {preconditions.exhaust ? (
+          <IconPill title={exhausted ? "Exhausted" : "Exhaust"} tone="amber">
+            <Zap className="h-3.5 w-3.5" aria-hidden="true" />
+          </IconPill>
+        ) : null}
+      </div>
+      <span className="text-sm font-semibold text-slate-500">:</span>
+      <div className="flex flex-wrap items-center gap-1.5">
+        {Object.entries(exhaust).map(([tagId, count]) => (
+          <TagIcon key={tagId} tag={tagLookup[normalize(tagId)]} label={tagId} count={count} />
+        ))}
+        {manualEffects.map((effect, index) => {
+          if (effect.effect_type === "draw_card") {
+            return (
+              <IconPill key={index} title={`Draw ${Number(effect.payload?.amount || 1)} card(s)`}>
+                <ScrollText className="h-3.5 w-3.5" aria-hidden="true" />
+                {Number(effect.payload?.amount || 1) > 1 ? <span className="ml-1">{Number(effect.payload?.amount || 1)}</span> : null}
+              </IconPill>
+            );
+          }
+          if (effect.effect_type === "ready_building") {
+            return (
+              <IconPill key={index} title="Ready a building" tone="teal">
+                <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+              </IconPill>
+            );
+          }
+          return null;
+        })}
+      </div>
     </>
   );
 

@@ -29,7 +29,7 @@ const TagIcon = ({ tag, label, count = null, className = "" }) => {
     return (
       <span className={`group relative inline-flex items-center gap-0.5 ${className}`}>
         {Array.from({ length: iconCount }).map((_, index) => (
-          <img key={index} alt="" className="h-6 w-6 shrink-0 object-contain" src={icon} />
+          <img key={index} alt="" className="h-12 w-12 shrink-0 object-contain" src={icon} />
         ))}
         <span className="sr-only">{[text, countLabel].filter(Boolean).join(" ")}</span>
         <span
