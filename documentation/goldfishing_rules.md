@@ -114,7 +114,7 @@ Supported v0 effect types:
 - `draw_card`, used for drawing from the Empire deck into the active player's hand.
 - `modify_token` and `move_card` are part of the schema and will be wired incrementally.
 
-Legacy `exhaust` metadata remains supported as a shortcut. If a card has no matching `manual_action` logic node, the backend builds an equivalent exhaust action from `exhaust`.
+Cards must define manual actions with `logic_nodes`; shortcut `exhaust` metadata is not supported in the clean catalog schema.
 
 ## Admin Catalog
 

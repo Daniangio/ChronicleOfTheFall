@@ -3,326 +3,754 @@
   "kind": "all",
   "entries": [
     {
-      "id": "merchant-syndicate",
-      "name": "The Merchant Syndicate",
-      "kind": "agendas",
-      "category": "hidden-agenda",
-      "summary": "Commerce tags must outnumber Unrest tokens at the end of the game.",
-      "color": null,
+      "id": "labor",
+      "name": "Labor",
+      "kind": "tags",
+      "category": "volatile-resource",
+      "summary": "Temporary workforce and construction effort.",
+      "color": "#b45309",
       "data": {
-        "checks": [
-          "commerce_gt_unrest"
-        ]
+        "resource_type": "volatile",
+        "is_volatile_resource": true
       }
     },
     {
-      "id": "old-blood",
-      "name": "The Old Blood",
-      "kind": "agendas",
-      "category": "hidden-agenda",
-      "summary": "The capital must consolidate tier 3 institutions while frontier cities collapse.",
-      "color": null,
+      "id": "material",
+      "name": "Material",
+      "kind": "tags",
+      "category": "volatile-resource",
+      "summary": "Temporary stone, timber, tools, and supply throughput.",
+      "color": "#78716c",
       "data": {
-        "checks": [
-          "capital_two_tier3",
-          "two_frontiers_collapsed"
-        ]
+        "resource_type": "volatile",
+        "is_volatile_resource": true
       }
     },
     {
-      "id": "zealots",
-      "name": "The Zealots",
-      "kind": "agendas",
-      "category": "hidden-agenda",
-      "summary": "Every city must contain either Religion or Unrest.",
-      "color": null,
+      "id": "wealth",
+      "name": "Wealth",
+      "kind": "tags",
+      "category": "volatile-resource",
+      "summary": "Temporary coin, credit, and trade goods.",
+      "color": "#ca8a04",
       "data": {
-        "checks": [
-          "each_city_religion_or_unrest"
-        ]
+        "resource_type": "volatile",
+        "is_volatile_resource": true
       }
     },
     {
-      "id": "foundation",
-      "name": "Foundation",
+      "id": "military",
+      "name": "Military",
+      "kind": "tags",
+      "category": "permanent-tag",
+      "summary": "Permanent defensive and coercive capacity.",
+      "color": "#dc2626",
+      "data": {
+        "resource_type": "permanent_tag"
+      }
+    },
+    {
+      "id": "sanitary",
+      "name": "Sanitary",
+      "kind": "tags",
+      "category": "permanent-tag",
+      "summary": "Permanent public health and urban resilience.",
+      "color": "#65a30d",
+      "data": {
+        "resource_type": "permanent_tag"
+      }
+    },
+    {
+      "id": "diplomacy",
+      "name": "Diplomacy",
+      "kind": "tags",
+      "category": "permanent-tag",
+      "summary": "Permanent diplomatic leverage and intelligence.",
+      "color": "#7c3aed",
+      "data": {
+        "resource_type": "permanent_tag"
+      }
+    },
+    {
+      "id": "food",
+      "name": "Food",
+      "kind": "tags",
+      "category": "permanent-tag",
+      "summary": "Permanent agricultural and provisioning capacity.",
+      "color": "#16a34a",
+      "data": {
+        "resource_type": "permanent_tag"
+      }
+    },
+    {
+      "id": "industry",
+      "name": "Industry",
+      "kind": "tags",
+      "category": "permanent-tag",
+      "summary": "Permanent workshops, quarries, and production base.",
+      "color": "#475569",
+      "data": {
+        "resource_type": "permanent_tag"
+      }
+    },
+    {
+      "id": "unrest",
+      "name": "Unrest",
+      "kind": "tags",
+      "category": "permanent-tag",
+      "summary": "Commitment and crisis tag used for sabotage thresholds.",
+      "color": "#be123c",
+      "data": {
+        "resource_type": "permanent_tag"
+      }
+    },
+    {
+      "id": "building",
+      "name": "Building",
       "kind": "card-categories",
       "category": "card-category",
-      "summary": "City anchor cards that define map nodes.",
+      "summary": "Constructed city infrastructure that remains on the board.",
       "color": null,
       "data": {}
     },
     {
-      "id": "institution",
-      "name": "Institution",
+      "id": "politics",
+      "name": "Politics",
       "kind": "card-categories",
       "category": "card-category",
-      "summary": "Cards played onto a city or empire zone to provide tags and effects.",
+      "summary": "Instant political resolutions proposed by the Minister of State.",
       "color": null,
       "data": {}
     },
     {
-      "id": "route",
-      "name": "Route",
+      "id": "economy",
+      "name": "Economy",
       "kind": "card-categories",
       "category": "card-category",
-      "summary": "Cards that connect cities or define topological constraints.",
+      "summary": "Instant economic resolutions proposed by the Minister of State.",
       "color": null,
       "data": {}
+    },
+    {
+      "id": "minister-of-the-empire",
+      "name": "Minister of the Empire",
+      "kind": "ministries",
+      "category": "ministry",
+      "summary": "The sovereign. Acts first, blocks one player during Council, and decides unassigned edicts.",
+      "color": null,
+      "data": {
+        "domain_id": "sovereign",
+        "domain_symbol": "EMP",
+        "is_minister_of_empire": true,
+        "can_finalize_projects": true,
+        "abilities": [
+          "select_blocked_player",
+          "administration_first_turn",
+          "finalize_projects",
+          "fallback_event_decider"
+        ]
+      }
+    },
+    {
+      "id": "minister-of-infrastructure",
+      "name": "Minister of Infrastructure",
+      "kind": "ministries",
+      "category": "ministry",
+      "summary": "The builder. Finalizes projects and decides which building is destroyed by infrastructure damage.",
+      "color": null,
+      "data": {
+        "domain_id": "infrastructure",
+        "domain_symbol": "INF",
+        "can_finalize_projects": true,
+        "infrastructure_resources": {
+          "labor": 1,
+          "material": 1,
+          "wealth": 1
+        },
+        "abilities": [
+          "finalize_projects",
+          "once_per_year_generate_configured_resource",
+          "decide_destroyed_building"
+        ]
+      }
+    },
+    {
+      "id": "minister-of-war",
+      "name": "Minister of War",
+      "kind": "ministries",
+      "category": "ministry",
+      "summary": "The defender. Controls military event edicts and reconnaissance.",
+      "color": null,
+      "data": {
+        "domain_id": "military",
+        "domain_symbol": "WAR",
+        "abilities": [
+          "military_event_edicts",
+          "peek_event_queue"
+        ]
+      }
+    },
+    {
+      "id": "minister-of-health-and-harvest",
+      "name": "Minister of Health and Harvest",
+      "kind": "ministries",
+      "category": "ministry",
+      "summary": "The provider. Controls provisioning and public health events.",
+      "color": null,
+      "data": {
+        "domain_id": "provision",
+        "domain_symbol": "HLT",
+        "abilities": [
+          "provision_event_edicts"
+        ]
+      }
+    },
+    {
+      "id": "minister-of-state",
+      "name": "Minister of State",
+      "kind": "ministries",
+      "category": "ministry",
+      "summary": "The diplomat. Controls diplomacy events and may propose Politics or Economy cards.",
+      "color": null,
+      "data": {
+        "domain_id": "diplomacy",
+        "domain_symbol": "DIP",
+        "can_propose_politics_economy": true,
+        "abilities": [
+          "diplomacy_event_edicts",
+          "propose_politics_and_economy"
+        ]
+      }
+    },
+    {
+      "id": "military-domain",
+      "name": "Military",
+      "kind": "event-types",
+      "category": "event-domain",
+      "summary": "Events decided by the Minister of War.",
+      "color": null,
+      "data": {
+        "domain_id": "military"
+      }
+    },
+    {
+      "id": "provision-domain",
+      "name": "Provision",
+      "kind": "event-types",
+      "category": "event-domain",
+      "summary": "Events decided by the Minister of Health and Harvest.",
+      "color": null,
+      "data": {
+        "domain_id": "provision"
+      }
+    },
+    {
+      "id": "diplomacy-domain",
+      "name": "Diplomacy",
+      "kind": "event-types",
+      "category": "event-domain",
+      "summary": "Events decided by the Minister of State.",
+      "color": null,
+      "data": {
+        "domain_id": "diplomacy"
+      }
     },
     {
       "id": "capital-foundation",
       "name": "Capital Foundation",
       "kind": "cards",
-      "category": "foundation",
+      "category": "building",
       "summary": "Starting city anchor for the empire map.",
       "color": null,
       "data": {
+        "card_type": "building",
         "placement": "setup",
         "is_capital": true,
-        "exhaust": {
+        "tags": {
+          "food": 1
+        },
+        "logic_nodes": [
+          {
+            "name": "Mobilize Citizens",
+            "trigger": "manual_action",
+            "ends_turn": false,
+            "preconditions": {
+              "logic_gate": "AND",
+              "conditions": [
+                {
+                  "target": "this_card",
+                  "variable": "is_exhausted",
+                  "operator": "==",
+                  "value": false
+                }
+              ]
+            },
+            "effects": [
+              {
+                "effect_type": "set_state",
+                "payload": {
+                  "variable": "is_exhausted",
+                  "value": true
+                }
+              },
+              {
+                "effect_type": "modify_mana",
+                "payload": {
+                  "mana_type": "labor",
+                  "amount": 1
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "stone-quarry",
+      "name": "Stone Quarry",
+      "kind": "cards",
+      "category": "building",
+      "summary": "Basic industrial building that produces Material.",
+      "color": null,
+      "data": {
+        "card_type": "building",
+        "placement": "city",
+        "cost": {
+          "labor": 2
+        },
+        "tags": {
+          "industry": 1
+        },
+        "pitches": {
+          "industry": 1
+        },
+        "logic_nodes": [
+          {
+            "name": "Cut Stone",
+            "trigger": "manual_action",
+            "ends_turn": false,
+            "preconditions": {
+              "logic_gate": "AND",
+              "conditions": [
+                {
+                  "target": "this_card",
+                  "variable": "is_exhausted",
+                  "operator": "==",
+                  "value": false
+                }
+              ]
+            },
+            "effects": [
+              {
+                "effect_type": "set_state",
+                "payload": {
+                  "variable": "is_exhausted",
+                  "value": true
+                }
+              },
+              {
+                "effect_type": "modify_mana",
+                "payload": {
+                  "mana_type": "material",
+                  "amount": 2
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "grand-garrison",
+      "name": "Grand Garrison",
+      "kind": "cards",
+      "category": "building",
+      "summary": "Military building that draws a card when exhausted.",
+      "color": null,
+      "data": {
+        "card_type": "building",
+        "placement": "city",
+        "cost": {
+          "material": 3,
+          "wealth": 2
+        },
+        "tags": {
+          "military": 2
+        },
+        "pitches": {
+          "military": 2
+        },
+        "logic_nodes": [
+          {
+            "name": "Review Patrols",
+            "trigger": "manual_action",
+            "ends_turn": false,
+            "preconditions": {
+              "logic_gate": "AND",
+              "conditions": [
+                {
+                  "target": "this_card",
+                  "variable": "is_exhausted",
+                  "operator": "==",
+                  "value": false
+                }
+              ]
+            },
+            "effects": [
+              {
+                "effect_type": "set_state",
+                "payload": {
+                  "variable": "is_exhausted",
+                  "value": true
+                }
+              },
+              {
+                "effect_type": "draw_card",
+                "payload": {
+                  "amount": 1
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "spymasters-guild",
+      "name": "Spymaster's Guild",
+      "kind": "cards",
+      "category": "building",
+      "summary": "Diplomatic building with an Unrest pitch.",
+      "color": null,
+      "data": {
+        "card_type": "building",
+        "placement": "city",
+        "cost": {
+          "wealth": 3
+        },
+        "tags": {
+          "diplomacy": 1
+        },
+        "pitches": {
+          "unrest": 1
+        },
+        "logic_nodes": [
+          {
+            "name": "Collect Secrets",
+            "trigger": "manual_action",
+            "ends_turn": false,
+            "preconditions": {
+              "logic_gate": "AND",
+              "conditions": [
+                {
+                  "target": "this_card",
+                  "variable": "is_exhausted",
+                  "operator": "==",
+                  "value": false
+                }
+              ]
+            },
+            "effects": [
+              {
+                "effect_type": "set_state",
+                "payload": {
+                  "variable": "is_exhausted",
+                  "value": true
+                }
+              },
+              {
+                "effect_type": "modify_mana",
+                "payload": {
+                  "mana_type": "wealth",
+                  "amount": 1
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "basic-farm",
+      "name": "Basic Farm",
+      "kind": "cards",
+      "category": "building",
+      "summary": "Common project that adds Food.",
+      "color": null,
+      "data": {
+        "card_type": "building",
+        "placement": "city",
+        "cost": {
           "labor": 1
+        },
+        "tags": {
+          "food": 1
+        },
+        "pitches": {
+          "food": 1
         }
       }
     },
     {
-      "id": "grand-basilica",
-      "name": "Grand Basilica",
+      "id": "war-bonds",
+      "name": "War Bonds",
       "kind": "cards",
-      "category": "institution",
-      "summary": "Tier 2 global Religion institution gated by stable city conditions.",
+      "category": "economy",
+      "summary": "Instant resolution: +2 Treasury, -1 Morale, -1 Stability.",
       "color": null,
       "data": {
-        "tier": 2,
-        "cost": {
-          "labor": 2,
+        "card_type": "economy",
+        "placement": "empire",
+        "required_city_tags": {
+          "military": 2
+        },
+        "pitches": {
           "wealth": 1
         },
-        "tags": [
-          "religion"
-        ],
-        "scope": "global",
-        "requires": [
-          "no_unrest"
-        ],
-        "exhaust": {
-          "influence": 2
-        },
-        "placement": "empire",
-        "requirements": [
+        "effects": [
           {
-            "type": "not_condition",
-            "tag_id": "unrest"
+            "effect_type": "modify_pillar",
+            "payload": {
+              "pillar": "treasury",
+              "amount": 2
+            }
+          },
+          {
+            "effect_type": "modify_pillar",
+            "payload": {
+              "pillar": "morale",
+              "amount": -1
+            }
+          },
+          {
+            "effect_type": "modify_pillar",
+            "payload": {
+              "pillar": "stability",
+              "amount": -1
+            }
           }
         ]
       }
     },
     {
-      "id": "lumber-camp",
-      "name": "Lumber Camp",
-      "kind": "cards",
-      "category": "institution",
-      "summary": "Tier 1 local Agrarian institution that generates Labor.",
+      "id": "barbarian-horde",
+      "name": "The Barbarian Horde",
+      "kind": "events",
+      "category": "crisis",
+      "summary": "A military invasion tests the Empire's permanent defenses.",
       "color": null,
       "data": {
-        "tier": 1,
-        "cost": {
-          "labor": 1
+        "domain_id": "military",
+        "defense_requirement": {
+          "military": 5
         },
-        "tags": [
-          "agrarian"
-        ],
-        "exhaust": {
-          "labor": 1
-        },
-        "placement": "city"
-      }
-    },
-    {
-      "id": "market-hub",
-      "name": "Market Hub",
-      "kind": "cards",
-      "category": "institution",
-      "summary": "Tier 2 local Commerce institution that requires road access.",
-      "color": null,
-      "data": {
-        "tier": 2,
-        "cost": {
-          "labor": 1,
-          "influence": 1
-        },
-        "tags": [
-          "commerce"
-        ],
-        "requires": [
-          "connected_to_paved_road"
-        ],
-        "exhaust": {
-          "wealth": 2
-        },
-        "placement": "city",
-        "requirements": [
+        "success_effects": [
           {
-            "type": "has_card",
-            "card_id": "paved-road",
-            "scope": "city"
-          }
-        ]
-      }
-    },
-    {
-      "id": "militia-garrison",
-      "name": "Militia Garrison",
-      "kind": "cards",
-      "category": "institution",
-      "summary": "Tier 1 local Military institution that generates Influence.",
-      "color": null,
-      "data": {
-        "tier": 1,
-        "cost": {
-          "wealth": 1
-        },
-        "tags": [
-          "military"
-        ],
-        "exhaust": {
-          "influence": 1
-        },
-        "placement": "city"
-      }
-    },
-    {
-      "id": "iron-citadel",
-      "name": "The Iron Citadel",
-      "kind": "cards",
-      "category": "institution",
-      "summary": "Tier 3 Military upgrade that suppresses unrest near the capital.",
-      "color": null,
-      "data": {
-        "tier": 3,
-        "cost": {
-          "labor": 2,
-          "wealth": 2
-        },
-        "tags": [
-          "military"
-        ],
-        "scope": "global",
-        "replaces": [
-          "militia-garrison"
-        ],
-        "exhaust": {
-          "influence": 3
-        },
-        "placement": "empire"
-      }
-    },
-    {
-      "id": "monarchy",
-      "name": "Monarchy",
-      "kind": "cards",
-      "category": "politics",
-      "summary": "",
-      "color": null,
-      "data": {
-        "placement": "empire",
-        "requirements": [
-          {
-            "type": "has_card",
-            "tag_id": "",
-            "card_id": "iron-citadel",
-            "scope": "global"
+            "effect_type": "generate_resource",
+            "payload": {
+              "target": "domain_minister",
+              "resource_id": "labor",
+              "amount": 3
+            }
           }
         ],
-        "mutually_exclusive_group": "government-form",
-        "replacement_effects": [
+        "failure_effects": [
           {
-            "type": "add_condition",
+            "effect_type": "modify_pillar",
+            "payload": {
+              "pillar": "stability",
+              "amount": -2
+            }
+          },
+          {
+            "effect_type": "modify_pillar",
+            "payload": {
+              "pillar": "morale",
+              "amount": -1
+            }
+          }
+        ],
+        "thresholds": [
+          {
             "tag_id": "unrest",
-            "scope": "empire",
-            "amount": 1
+            "amount": 1,
+            "effects": [
+              {
+                "effect_type": "destroy_building_with_tag",
+                "payload": {
+                  "tag_id": "industry",
+                  "amount": 1,
+                  "decider": "minister-of-infrastructure"
+                }
+              }
+            ]
+          },
+          {
+            "tag_id": "unrest",
+            "amount": 2,
+            "effects": [
+              {
+                "effect_type": "block_minister_next_year",
+                "payload": {
+                  "ministry_id": "minister-of-war",
+                  "duration": "next_year"
+                }
+              }
+            ]
           }
-        ],
-        "cost": {
-          "influence": 3,
-          "wealth": 2,
-          "military": 2,
-          "agrarian": 2
-        },
-        "exhaust": {
-          "influence": 2
-        },
-        "tags": [
-          "military"
         ]
       }
     },
     {
-      "id": "mountain-pass",
-      "name": "Mountain Pass",
-      "kind": "cards",
-      "category": "route",
-      "summary": "Route that blocks condition propagation from event text.",
+      "id": "crimson-plague",
+      "name": "The Crimson Plague",
+      "kind": "events",
+      "category": "crisis",
+      "summary": "Disease punishes weak public health and low food reserves.",
       "color": null,
       "data": {
-        "cost": {
-          "labor": 2
+        "domain_id": "provision",
+        "defense_requirement": {
+          "sanitary": 4,
+          "food": 2
         },
-        "tags": [
-          "chokepoint"
+        "success_effects": [
+          {
+            "effect_type": "modify_pillar",
+            "payload": {
+              "pillar": "morale",
+              "amount": 1
+            }
+          }
         ],
-        "effect": "block_condition_spread",
-        "placement": "city"
+        "failure_effects": [
+          {
+            "effect_type": "modify_pillar",
+            "payload": {
+              "pillar": "stability",
+              "amount": -3
+            }
+          },
+          {
+            "effect_type": "discard_card",
+            "payload": {
+              "target": "all_players",
+              "amount": 1
+            }
+          }
+        ],
+        "thresholds": [
+          {
+            "tag_id": "unrest",
+            "amount": 1,
+            "effects": [
+              {
+                "effect_type": "modify_pillar",
+                "payload": {
+                  "pillar": "morale",
+                  "amount": -1
+                }
+              }
+            ]
+          },
+          {
+            "tag_id": "unrest",
+            "amount": 2,
+            "effects": [
+              {
+                "effect_type": "modify_pillar",
+                "payload": {
+                  "pillar": "morale",
+                  "amount": -1
+                }
+              }
+            ]
+          }
+        ]
       }
     },
     {
-      "id": "paved-road",
-      "name": "Paved Road",
-      "kind": "cards",
-      "category": "route",
-      "summary": "Route that lets connected cities share Commerce tags.",
+      "id": "trade-embargo",
+      "name": "Trade Embargo",
+      "kind": "events",
+      "category": "crisis",
+      "summary": "Diplomatic isolation freezes commercial production.",
       "color": null,
       "data": {
-        "cost": {
-          "labor": 1
+        "domain_id": "diplomacy",
+        "defense_requirement": {
+          "diplomacy": 4
         },
-        "tags": [
-          "fast-travel"
+        "success_effects": [
+          {
+            "effect_type": "modify_pillar",
+            "payload": {
+              "pillar": "treasury",
+              "amount": 1
+            }
+          }
         ],
-        "effect": "share_commerce",
-        "placement": "city"
+        "failure_effects": [
+          {
+            "effect_type": "modify_pillar",
+            "payload": {
+              "pillar": "treasury",
+              "amount": -3
+            }
+          }
+        ],
+        "thresholds": [
+          {
+            "tag_id": "unrest",
+            "amount": 1,
+            "effects": [
+              {
+                "effect_type": "freeze_resource_generation",
+                "payload": {
+                  "resource_id": "wealth",
+                  "duration": "next_year"
+                }
+              }
+            ]
+          },
+          {
+            "tag_id": "unrest",
+            "amount": 2,
+            "effects": [
+              {
+                "effect_type": "modify_pillar",
+                "payload": {
+                  "pillar": "treasury",
+                  "amount": -2
+                }
+              }
+            ]
+          }
+        ]
       }
     },
     {
-      "id": "default-card-deck",
-      "name": "Default Card Deck",
+      "id": "default-empire-deck",
+      "name": "Default Empire Deck",
       "kind": "decks",
-      "category": "cards",
-      "summary": "Starter deck for goldfishing card draws.",
+      "category": "empire",
+      "summary": "Starter Empire deck for player hands.",
       "color": null,
       "data": {
-        "deck_type": "cards",
+        "deck_type": "empire",
         "item_ids": [
-          "lumber-camp",
-          "militia-garrison",
-          "paved-road",
-          "market-hub",
-          "lumber-camp",
-          "militia-garrison",
-          "mountain-pass",
-          "grand-basilica",
-          "lumber-camp",
-          "militia-garrison",
-          "paved-road",
-          "iron-citadel",
-          "lumber-camp",
-          "militia-garrison",
-          "market-hub",
-          "mountain-pass",
-          "paved-road",
-          "grand-basilica",
-          "iron-citadel",
-          "market-hub",
-          "monarchy"
+          "stone-quarry",
+          "grand-garrison",
+          "spymasters-guild",
+          "war-bonds",
+          "stone-quarry",
+          "grand-garrison",
+          "basic-farm",
+          "stone-quarry",
+          "spymasters-guild",
+          "basic-farm",
+          "war-bonds",
+          "grand-garrison"
         ]
       }
     },
@@ -331,14 +759,14 @@
       "name": "Default Event Deck",
       "kind": "decks",
       "category": "events",
-      "summary": "Starter event deck placeholder for goldfishing setup.",
+      "summary": "Starter Event deck.",
       "color": null,
       "data": {
         "deck_type": "events",
         "item_ids": [
-          "black-year",
-          "barbarian-incursion",
-          "shattered-crown"
+          "barbarian-horde",
+          "crimson-plague",
+          "trade-embargo"
         ]
       }
     },
@@ -347,217 +775,15 @@
       "name": "Default Common Pool",
       "kind": "decks",
       "category": "common-pool",
-      "summary": "Starter shared card pool for project proposals.",
+      "summary": "Starter shared project pool.",
       "color": null,
       "data": {
         "deck_type": "common-pool",
         "item_ids": [
-          "lumber-camp",
-          "militia-garrison",
-          "paved-road",
-          "market-hub",
-          "mountain-pass"
+          "basic-farm",
+          "stone-quarry",
+          "grand-garrison"
         ]
-      }
-    },
-    {
-      "id": "black-year",
-      "name": "The Black Year",
-      "kind": "events",
-      "category": "civil",
-      "summary": "Famine targets the highest-capacity city and may add Unrest.",
-      "color": null,
-      "data": {
-        "mitigation": {
-          "wealth": 2
-        }
-      }
-    },
-    {
-      "id": "barbarian-incursion",
-      "name": "Barbarian Incursion",
-      "kind": "events",
-      "category": "conflict",
-      "summary": "Pressure hits the city furthest from the capital and spreads Unrest.",
-      "color": null,
-      "data": {
-        "mitigation": {
-          "influence": 1,
-          "wealth": 2
-        }
-      }
-    },
-    {
-      "id": "shattered-crown",
-      "name": "The Shattered Crown",
-      "kind": "events",
-      "category": "final-epoch",
-      "summary": "Final Epoch collapse that removes Bureaucracy and punishes undefended cities.",
-      "color": null,
-      "data": {
-        "ends_game": true
-      }
-    },
-    {
-      "id": "government-form",
-      "name": "Government Form",
-      "kind": "groups",
-      "category": "mutually-exclusive",
-      "summary": "Only one government-form card can exist in the same target zone.",
-      "color": null,
-      "data": {
-        "type": "mutually_exclusive"
-      }
-    },
-    {
-      "id": "minister-coin",
-      "name": "Minister of Coin",
-      "kind": "roles",
-      "category": "minister",
-      "summary": "Resolves Economy Events and can convert Commerce contributions into Influence.",
-      "color": null,
-      "data": {
-        "jurisdiction": "economy",
-        "exhaust_tags": [
-          "commerce"
-        ],
-        "default_jurisdiction": "commerce"
-      }
-    },
-    {
-      "id": "minister-state",
-      "name": "Minister of State",
-      "kind": "roles",
-      "category": "minister",
-      "summary": "Resolves State Events and sets Administration turn order.",
-      "color": null,
-      "data": {
-        "jurisdiction": "state"
-      }
-    },
-    {
-      "id": "minister-war",
-      "name": "Minister of War",
-      "kind": "roles",
-      "category": "minister",
-      "summary": "Resolves Conflict Events and controls Military institution contributions.",
-      "color": null,
-      "data": {
-        "jurisdiction": "conflict",
-        "exhaust_tags": [
-          "military"
-        ],
-        "default_jurisdiction": "military"
-      }
-    },
-    {
-      "id": "minister-interior",
-      "name": "Minister of the Interior",
-      "kind": "roles",
-      "category": "minister",
-      "summary": "Resolves Civil Events and can move one condition token each Administration phase.",
-      "color": null,
-      "data": {
-        "jurisdiction": "civil",
-        "default_jurisdiction": "unrest"
-      }
-    },
-    {
-      "id": "famine",
-      "name": "Famine",
-      "kind": "tags",
-      "category": "condition",
-      "summary": "Negative city condition representing food collapse.",
-      "color": "#a16207",
-      "data": {}
-    },
-    {
-      "id": "infected",
-      "name": "Infected",
-      "kind": "tags",
-      "category": "condition",
-      "summary": "Negative city condition representing disease.",
-      "color": "#65a30d",
-      "data": {}
-    },
-    {
-      "id": "unrest",
-      "name": "Unrest",
-      "kind": "tags",
-      "category": "condition",
-      "summary": "Negative city condition placed by crises and overextension.",
-      "color": "#be123c",
-      "data": {}
-    },
-    {
-      "id": "influence",
-      "name": "Influence",
-      "kind": "tags",
-      "category": "mana",
-      "summary": "Transient political, religious, and cultural resource.",
-      "color": "#7c3aed",
-      "data": {}
-    },
-    {
-      "id": "labor",
-      "name": "Labor",
-      "kind": "tags",
-      "category": "mana",
-      "summary": "Transient construction and workforce resource.",
-      "color": "#b45309",
-      "data": {}
-    },
-    {
-      "id": "wealth",
-      "name": "Wealth",
-      "kind": "tags",
-      "category": "mana",
-      "summary": "Transient capital, trade goods, and bribery resource.",
-      "color": "#ca8a04",
-      "data": {}
-    },
-    {
-      "id": "agrarian",
-      "name": "Agrarian",
-      "kind": "tags",
-      "category": "state",
-      "summary": "Persistent food production and land-use identity.",
-      "color": "#16a34a",
-      "data": {
-        "scope": "local"
-      }
-    },
-    {
-      "id": "commerce",
-      "name": "Commerce",
-      "kind": "tags",
-      "category": "state",
-      "summary": "Persistent trade and market identity.",
-      "color": "#0d9488",
-      "data": {
-        "scope": "local"
-      }
-    },
-    {
-      "id": "military",
-      "name": "Military",
-      "kind": "tags",
-      "category": "state",
-      "summary": "Persistent defensive and coercive state identity.",
-      "color": "#dc2626",
-      "data": {
-        "scope": "local_or_global"
-      }
-    },
-    {
-      "id": "religion",
-      "name": "Religion",
-      "kind": "tags",
-      "category": "state",
-      "summary": "Persistent spiritual and cultural legitimacy identity.",
-      "color": "#f59e0b",
-      "data": {
-        "scope": "global"
       }
     }
   ]

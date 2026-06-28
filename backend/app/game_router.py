@@ -47,7 +47,7 @@ async def create_game_room(
         ministries = [public_catalog_entry(entry) for entry in list_catalog_records(db, "ministries")]
         event_types = [public_catalog_entry(entry) for entry in list_catalog_records(db, "event-types")]
         deck_records = list_catalog_records(db, "decks")
-        card_deck = _deck_by_id(deck_records, payload.empire_deck_id) or _latest_deck(deck_records, "empire") or _latest_deck(deck_records, "cards")
+        card_deck = _deck_by_id(deck_records, payload.empire_deck_id) or _latest_deck(deck_records, "empire")
         event_deck = _deck_by_id(deck_records, payload.event_deck_id) or _latest_deck(deck_records, "events")
         common_pool_deck = _latest_deck(deck_records, "common-pool")
         room_id = service.new_room_id()

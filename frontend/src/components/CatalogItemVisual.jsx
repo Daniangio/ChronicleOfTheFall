@@ -4,20 +4,14 @@ const fallbackColor = "#64748b";
 const tagKeyNames = new Set([
   "tags",
   "cost",
-  "exhaust",
   "required_city_tags",
   "pitches",
-  "mitigation",
   "infrastructure_resources",
   "administered_event_types",
-  "exhaust_tags",
-  "condition_tags",
   "local_tags",
   "global_tags",
-  "default_jurisdiction",
-  "jurisdiction_tags",
-  "event_domain",
   "replacement_effects",
+  "defense_requirement",
 ]);
 
 const normalizeTagId = (value) =>
@@ -149,11 +143,12 @@ const DataValue = ({ itemKey, value, tagLookup, cardLookup, groupLookup }) => {
   return <span className="text-slate-300">{primitiveText(value)}</span>;
 };
 
-const CatalogItemVisual = ({ entry, tags = [], cards = [], groups = [], actions = null }) => {
+const CatalogItemVisual = ({ entry, tags = [], cards = [], groups = [], ministries = [], actions = null }) => {
   const color = entry?.color || fallbackColor;
   const tagLookup = buildTagLookup(tags);
   const cardLookup = Object.fromEntries((cards || []).map((card) => [normalizeTagId(card.id || card.name), card]));
   const groupLookup = Object.fromEntries((groups || []).map((group) => [normalizeTagId(group.id || group.name), group]));
+  const domainMinistry = (ministries || []).find((ministry) => ministry.data?.domain_id && ministry.data.domain_id === entry?.data?.domain_id);
   const dataEntries = Object.entries(entry?.data || {}).slice(0, 6);
 
   return (
@@ -166,6 +161,15 @@ const CatalogItemVisual = ({ entry, tags = [], cards = [], groups = [], actions 
               <h3 className="truncate text-base font-semibold text-white">{entry.name}</h3>
               {entry.kind === "tags" ? (
                 <TagIcon tag={entry} />
+              ) : entry.kind === "events" && domainMinistry ? (
+                <span className="inline-flex items-center gap-1 rounded bg-slate-800 px-2 py-1 text-xs font-medium text-slate-300">
+                  {domainMinistry.data?.domain_icon ? (
+                    <img alt="" className="h-4 w-4 rounded object-cover" src={domainMinistry.data.domain_icon} />
+                  ) : (
+                    <span className="font-semibold">{String(domainMinistry.data?.domain_symbol || domainMinistry.data?.domain_id || "").slice(0, 3).toUpperCase()}</span>
+                  )}
+                  {domainMinistry.name}
+                </span>
               ) : (
                 <span className="rounded bg-slate-800 px-2 py-1 text-xs font-medium text-slate-300">
                   {entry.category || "uncategorized"}

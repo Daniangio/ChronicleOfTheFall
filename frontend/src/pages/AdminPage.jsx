@@ -14,7 +14,6 @@ const sections = [
   { key: "cards", label: "Cards", to: "/admin/cards" },
   { key: "ministries", label: "Ministries", to: "/admin/ministries" },
   { key: "event-types", label: "Event Types", to: "/admin/event-types" },
-  { key: "roles", label: "Roles", to: "/admin/roles" },
   { key: "agendas", label: "Agendas", to: "/admin/agendas" },
   { key: "events", label: "Events", to: "/admin/events" },
   { key: "groups", label: "Groups", to: "/admin/groups" },
@@ -24,7 +23,6 @@ const sections = [
 const catalogSections = new Set([
   "tags",
   "cards",
-  "roles",
   "ministries",
   "event-types",
   "agendas",
@@ -69,26 +67,23 @@ const stringifyData = (data) => JSON.stringify(data || {}, null, 2);
 
 const tagListFieldsBySection = {
   cards: [],
-  roles: ["exhaust_tags", "jurisdiction_tags"],
   ministries: [],
   agendas: [],
-  events: ["tags", "condition_tags"],
+  events: [],
 };
 
 const tagCountFieldsBySection = {
   cards: [],
-  roles: [],
   ministries: [],
   agendas: [],
-  events: ["mitigation"],
+  events: [],
 };
 
 const tagSingleFieldsBySection = {
   cards: [],
-  roles: ["default_jurisdiction"],
   ministries: [],
   agendas: [],
-  events: ["event_domain"],
+  events: [],
 };
 
 const placementOptions = [
@@ -768,7 +763,7 @@ const CardGuidedFields = ({ data, setField, tagEntries, cardEntries, groupEntrie
 };
 
 const DeckGuidedFields = ({ data, setField, cardEntries, eventEntries }) => {
-  const deckType = ["empire", "events", "common-pool", "cards"].includes(data.deck_type) ? data.deck_type : "empire";
+  const deckType = ["empire", "events", "common-pool"].includes(data.deck_type) ? data.deck_type : "empire";
   const items = deckType === "events" ? eventEntries : cardEntries.filter((entry) => entry.id !== "capital-foundation");
   const selectedIds = Array.isArray(data.item_ids) ? data.item_ids : [];
   const copyCounts = selectedIds.reduce((counts, itemId) => {
@@ -790,7 +785,6 @@ const DeckGuidedFields = ({ data, setField, cardEntries, eventEntries }) => {
           { value: "empire", label: "Empire Deck" },
           { value: "common-pool", label: "Common Pool" },
           { value: "events", label: "Events" },
-          { value: "cards", label: "Legacy Cards" },
         ]}
         onChange={(value) => {
           setField("deck_type", value);
@@ -868,6 +862,50 @@ const MinistryGuidedFields = ({ data, setField, eventTypeEntries, tagEntries }) 
 
   return (
     <>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="block">
+          <span className="text-sm font-medium text-slate-300">Domain Id</span>
+          <input
+            value={data.domain_id || ""}
+            onChange={(event) => setField("domain_id", event.target.value)}
+            className="mt-2 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none focus:border-teal-400"
+            placeholder="military"
+          />
+        </label>
+        <label className="block">
+          <span className="text-sm font-medium text-slate-300">Domain Icon</span>
+          <input
+            accept="image/*"
+            className="mt-2 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-300"
+            onChange={async (event) => {
+              const file = event.target.files?.[0];
+              if (!file) return;
+              const dataUrl = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(String(reader.result || ""));
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+              });
+              setField("domain_icon", dataUrl);
+              event.target.value = "";
+            }}
+            type="file"
+          />
+        </label>
+      </div>
+      {data.domain_icon ? (
+        <div className="flex items-center gap-3">
+          <img alt="" className="h-10 w-10 rounded-md border border-slate-700 object-cover" src={data.domain_icon} />
+          <button
+            className="text-xs font-semibold text-rose-300 hover:text-rose-200"
+            onClick={() => setField("domain_icon", "")}
+            type="button"
+          >
+            Remove icon
+          </button>
+        </div>
+      ) : null}
+
       <label className="flex items-center gap-2 text-sm font-medium text-slate-300">
         <input
           checked={Boolean(data.is_minister_of_empire)}
@@ -930,6 +968,236 @@ const MinistryGuidedFields = ({ data, setField, eventTypeEntries, tagEntries }) 
   );
 };
 
+const emptyEventEffect = { effect_type: "modify_pillar", payload: { pillar: "treasury", amount: -1 } };
+const emptyEventThreshold = { tag_id: "unrest", amount: 1, effects: [emptyEventEffect] };
+
+const EventEffectEditor = ({ effects, setEffects, resourceTags, allTags, ministryEntries }) => {
+  const updateEffect = (index, patch) => {
+    const next = [...effects];
+    next[index] = { ...next[index], ...patch };
+    setEffects(next);
+  };
+  const updatePayload = (index, patch) => {
+    const current = effects[index] || emptyEventEffect;
+    updateEffect(index, { payload: { ...(current.payload || {}), ...patch } });
+  };
+
+  return (
+    <div className="space-y-2">
+      {effects.map((effect, index) => (
+        <div key={index} className="grid gap-2 rounded-md border border-slate-800 bg-slate-950 p-3 sm:grid-cols-[12rem_1fr_7rem_auto]">
+          <SelectField
+            label="Effect"
+            value={effect.effect_type || "modify_pillar"}
+            options={[
+              { value: "generate_resource", label: "Generate resource" },
+              { value: "modify_pillar", label: "Modify pillar" },
+              { value: "destroy_building_with_tag", label: "Destroy building" },
+              { value: "discard_card", label: "Discard card" },
+              { value: "freeze_resource_generation", label: "Freeze resource" },
+              { value: "block_minister_next_year", label: "Block minister" },
+            ]}
+            onChange={(value) => updateEffect(index, { effect_type: value, payload: {} })}
+          />
+          {effect.effect_type === "generate_resource" ? (
+            <>
+              <SelectField
+                label="Resource"
+                value={effect.payload?.resource_id || ""}
+                options={[{ value: "", label: "Select resource" }, ...resourceTags.map((tag) => ({ value: tag.id, label: tag.name }))]}
+                onChange={(value) => updatePayload(index, { resource_id: value, target: "domain_minister" })}
+              />
+              <NumberField label="Amount" value={effect.payload?.amount || 1} onChange={(value) => updatePayload(index, { amount: value })} />
+            </>
+          ) : effect.effect_type === "modify_pillar" ? (
+            <>
+              <SelectField
+                label="Pillar"
+                value={effect.payload?.pillar || "treasury"}
+                options={["treasury", "stability", "morale"].map((pillar) => ({ value: pillar, label: tagLabel(pillar) }))}
+                onChange={(value) => updatePayload(index, { pillar: value })}
+              />
+              <NumberField label="Amount" value={effect.payload?.amount || -1} onChange={(value) => updatePayload(index, { amount: value })} />
+            </>
+          ) : effect.effect_type === "destroy_building_with_tag" ? (
+            <>
+              <SelectField
+                label="Tag"
+                value={effect.payload?.tag_id || ""}
+                options={[{ value: "", label: "Select tag" }, ...permanentOnlyTags(allTags).map((tag) => ({ value: tag.id, label: tag.name }))]}
+                onChange={(value) => updatePayload(index, { tag_id: value, decider: "minister-of-infrastructure" })}
+              />
+              <NumberField label="Amount" value={effect.payload?.amount || 1} onChange={(value) => updatePayload(index, { amount: value })} />
+            </>
+          ) : effect.effect_type === "discard_card" ? (
+            <>
+              <SelectField
+                label="Target"
+                value={effect.payload?.target || "all_players"}
+                options={[
+                  { value: "all_players", label: "All players" },
+                  { value: "domain_minister", label: "Domain minister" },
+                  ...ministryEntries.map((ministry) => ({ value: ministry.id, label: ministry.name })),
+                ]}
+                onChange={(value) => updatePayload(index, { target: value })}
+              />
+              <NumberField label="Cards" value={effect.payload?.amount || 1} onChange={(value) => updatePayload(index, { amount: value })} />
+            </>
+          ) : effect.effect_type === "freeze_resource_generation" ? (
+            <>
+              <SelectField
+                label="Resource"
+                value={effect.payload?.resource_id || ""}
+                options={[{ value: "", label: "Select resource" }, ...resourceTags.map((tag) => ({ value: tag.id, label: tag.name }))]}
+                onChange={(value) => updatePayload(index, { resource_id: value, duration: "next_year" })}
+              />
+              <span />
+            </>
+          ) : (
+            <>
+              <SelectField
+                label="Minister"
+                value={effect.payload?.ministry_id || ""}
+                options={[{ value: "", label: "Domain minister" }, ...ministryEntries.map((ministry) => ({ value: ministry.id, label: ministry.name }))]}
+                onChange={(value) => updatePayload(index, { ministry_id: value, duration: "next_year" })}
+              />
+              <span />
+            </>
+          )}
+          <button
+            className="mt-7 text-xs font-semibold text-rose-300 hover:text-rose-200"
+            onClick={() => setEffects(effects.filter((_, itemIndex) => itemIndex !== index))}
+            type="button"
+          >
+            Remove
+          </button>
+        </div>
+      ))}
+      <button
+        className="rounded-md border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800"
+        onClick={() => setEffects([...effects, emptyEventEffect])}
+        type="button"
+      >
+        Add effect
+      </button>
+    </div>
+  );
+};
+
+const NumberField = ({ label, value, onChange }) => (
+  <label className="block">
+    <span className="text-sm font-medium text-slate-300">{label}</span>
+    <input
+      type="number"
+      value={Number(value || 0)}
+      onChange={(event) => onChange(Number(event.target.value || 0))}
+      className="mt-2 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none focus:border-teal-400"
+    />
+  </label>
+);
+
+const EventGuidedFields = ({ data, setField, tagEntries, ministryEntries }) => {
+  const resourceTags = volatileResourceTags(tagEntries);
+  const defenseTags = permanentOnlyTags(tagEntries);
+  const domains = ministryEntries.filter((ministry) => ministry.data?.domain_id);
+  const thresholds = Array.isArray(data.thresholds) ? data.thresholds : [];
+
+  const updateCount = (field, tagId, count) => {
+    const current = data[field] && typeof data[field] === "object" && !Array.isArray(data[field]) ? { ...data[field] } : {};
+    if (count <= 0) delete current[tagId];
+    else current[tagId] = count;
+    setField(field, current);
+  };
+
+  return (
+    <>
+      <SelectField
+        label="Domain"
+        value={data.domain_id || ""}
+        options={[{ value: "", label: "Select domain" }, ...domains.map((ministry) => ({
+          value: ministry.data.domain_id,
+          label: `${ministry.name} (${ministry.data.domain_id})`,
+        }))]}
+        onChange={(value) => setField("domain_id", value)}
+      />
+      <TagCounterGroup
+        label="Defense Requirement"
+        tags={defenseTags}
+        values={data.defense_requirement || {}}
+        onChange={(tagId, count) => updateCount("defense_requirement", tagId, count)}
+      />
+
+      <div className="space-y-3">
+        <h4 className="text-sm font-semibold text-slate-300">Success Effects</h4>
+        <EventEffectEditor
+          effects={Array.isArray(data.success_effects) ? data.success_effects : []}
+          setEffects={(effects) => setField("success_effects", effects)}
+          resourceTags={resourceTags}
+          allTags={tagEntries}
+          ministryEntries={ministryEntries}
+        />
+      </div>
+      <div className="space-y-3">
+        <h4 className="text-sm font-semibold text-slate-300">Failure Effects</h4>
+        <EventEffectEditor
+          effects={Array.isArray(data.failure_effects) ? data.failure_effects : []}
+          setEffects={(effects) => setField("failure_effects", effects)}
+          resourceTags={resourceTags}
+          allTags={tagEntries}
+          ministryEntries={ministryEntries}
+        />
+      </div>
+
+      <div className="space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <h4 className="text-sm font-semibold text-slate-300">Threshold Effects</h4>
+          <button
+            className="rounded-md border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800"
+            onClick={() => setField("thresholds", [...thresholds, emptyEventThreshold])}
+            type="button"
+          >
+            Add threshold
+          </button>
+        </div>
+        {thresholds.map((threshold, index) => {
+          const updateThreshold = (patch) => {
+            const next = [...thresholds];
+            next[index] = { ...next[index], ...patch };
+            setField("thresholds", next);
+          };
+          return (
+            <div key={index} className="space-y-3 rounded-md border border-slate-800 bg-slate-950 p-3">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <SelectField
+                  label="Threshold Tag"
+                  value={threshold.tag_id || ""}
+                  options={[{ value: "", label: "Select tag" }, ...tagEntries.map((tag) => ({ value: tag.id, label: tag.name }))]}
+                  onChange={(value) => updateThreshold({ tag_id: value })}
+                />
+                <NumberField label="Amount" value={threshold.amount || 1} onChange={(value) => updateThreshold({ amount: value })} />
+              </div>
+              <EventEffectEditor
+                effects={Array.isArray(threshold.effects) ? threshold.effects : []}
+                setEffects={(effects) => updateThreshold({ effects })}
+                resourceTags={resourceTags}
+                allTags={tagEntries}
+                ministryEntries={ministryEntries}
+              />
+              <button
+                className="text-xs font-semibold text-rose-300 hover:text-rose-200"
+                onClick={() => setField("thresholds", thresholds.filter((_, itemIndex) => itemIndex !== index))}
+                type="button"
+              >
+                Remove threshold
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </>
+  );
+};
+
 const GuidedMetadataEditor = ({
   activeSection,
   catalogForm,
@@ -939,6 +1207,7 @@ const GuidedMetadataEditor = ({
   groupEntries,
   eventEntries,
   eventTypeEntries,
+  ministryEntries,
 }) => {
   const data = dataForForm(catalogForm);
   if (activeSection === "tags") {
@@ -966,7 +1235,8 @@ const GuidedMetadataEditor = ({
   const hasCardGuidance = activeSection === "cards";
   const hasDeckGuidance = activeSection === "decks";
   const hasMinistryGuidance = activeSection === "ministries";
-  if (!usefulFields.length && !hasCardGuidance && !hasDeckGuidance && !hasMinistryGuidance) return null;
+  const hasEventGuidance = activeSection === "events";
+  if (!usefulFields.length && !hasCardGuidance && !hasDeckGuidance && !hasMinistryGuidance && !hasEventGuidance) return null;
 
   const setField = (field, value) => {
     setCatalogForm((state) => {
@@ -1040,6 +1310,14 @@ const GuidedMetadataEditor = ({
           tagEntries={tagEntries}
         />
       ) : null}
+      {hasEventGuidance ? (
+        <EventGuidedFields
+          data={data}
+          setField={setField}
+          tagEntries={tagEntries}
+          ministryEntries={ministryEntries}
+        />
+      ) : null}
       {countFields.map((field) => (
         <TagCounterGroup
           key={field}
@@ -1083,6 +1361,7 @@ const AdminPage = () => {
   const [cardEntries, setCardEntries] = useState([]);
   const [eventEntries, setEventEntries] = useState([]);
   const [eventTypeEntries, setEventTypeEntries] = useState([]);
+  const [ministryEntries, setMinistryEntries] = useState([]);
   const [cardCategories, setCardCategories] = useState([]);
   const [groupEntries, setGroupEntries] = useState([]);
   const [catalogSummary, setCatalogSummary] = useState(null);
@@ -1155,6 +1434,9 @@ const AdminPage = () => {
       if (targetSection !== "event-types") {
         requests.push(request("/api/admin/event-types"));
       }
+      if (targetSection !== "ministries") {
+        requests.push(request("/api/admin/ministries"));
+      }
       if (targetSection !== "card-categories") {
         requests.push(request("/api/admin/card-categories"));
       }
@@ -1166,6 +1448,7 @@ const AdminPage = () => {
       const groups = targetSection === "groups" ? entries : results[resultIndex++];
       const events = targetSection === "events" ? entries : results[resultIndex++];
       const eventTypes = targetSection === "event-types" ? entries : results[resultIndex++];
+      const ministries = targetSection === "ministries" ? entries : results[resultIndex++];
       const categories = targetSection === "card-categories" ? entries : results[resultIndex++];
       setCatalogSummary(summary);
       setCatalogEntries(entries);
@@ -1174,6 +1457,7 @@ const AdminPage = () => {
       setGroupEntries(targetSection === "groups" ? entries : groups);
       setEventEntries(targetSection === "events" ? entries : events);
       setEventTypeEntries(targetSection === "event-types" ? entries : eventTypes);
+      setMinistryEntries(targetSection === "ministries" ? entries : ministries);
       setCardCategories(targetSection === "card-categories" ? entries : categories);
       setEditingEntry(null);
       setCatalogForm(emptyCatalogForm);
@@ -1295,14 +1579,14 @@ const AdminPage = () => {
             : activeCatalogKind === "card-categories"
               ? "card-category"
               : activeCatalogKind === "decks"
-                ? parsedData.deck_type || catalogForm.category || "cards"
+                ? parsedData.deck_type || catalogForm.category || "empire"
               : catalogForm.category,
         summary: catalogForm.summary,
         color: activeCatalogKind === "tags" ? catalogForm.color : null,
         data: activeCatalogKind === "groups"
           ? { ...parsedData, type: "mutually_exclusive" }
           : activeCatalogKind === "decks"
-            ? { ...parsedData, deck_type: parsedData.deck_type || "cards", item_ids: Array.isArray(parsedData.item_ids) ? parsedData.item_ids : [] }
+            ? { ...parsedData, deck_type: parsedData.deck_type || "empire", item_ids: Array.isArray(parsedData.item_ids) ? parsedData.item_ids : [] }
             : parsedData,
       };
       const path = editingEntry
@@ -1359,6 +1643,14 @@ const AdminPage = () => {
           );
         });
       }
+      if (activeCatalogKind === "ministries") {
+        setMinistryEntries((entries) => {
+          const withoutSaved = entries.filter((entry) => entry.id !== saved.id);
+          return [...withoutSaved, saved].sort((a, b) =>
+            `${a.category}:${a.name}:${a.id}`.localeCompare(`${b.category}:${b.name}:${b.id}`)
+          );
+        });
+      }
       if (activeCatalogKind === "card-categories") {
         setCardCategories((entries) => {
           const withoutSaved = entries.filter((entry) => entry.id !== saved.id);
@@ -1408,6 +1700,9 @@ const AdminPage = () => {
       }
       if (activeCatalogKind === "event-types") {
         setEventTypeEntries((entries) => entries.filter((candidate) => candidate.id !== entry.id));
+      }
+      if (activeCatalogKind === "ministries") {
+        setMinistryEntries((entries) => entries.filter((candidate) => candidate.id !== entry.id));
       }
       if (activeCatalogKind === "card-categories") {
         setCardCategories((entries) => entries.filter((candidate) => candidate.id !== entry.id));
@@ -1740,6 +2035,7 @@ const AdminPage = () => {
                       tags={tagEntries}
                       cards={cardEntries}
                       groups={groupEntries}
+                      ministries={ministryEntries}
                       actions={
                         <>
                           <button
@@ -1880,6 +2176,7 @@ const AdminPage = () => {
                 groupEntries={groupEntries}
                 eventEntries={eventEntries}
                 eventTypeEntries={eventTypeEntries}
+                ministryEntries={ministryEntries}
               />
 
               <label className="block">

@@ -239,7 +239,7 @@ def exhaust_card(state: dict[str, Any], *, player_id: str, city_id: str, card_id
     if card_id in city.get("exhausted_card_ids", []):
         raise ValueError("Card is already exhausted.")
     card = card_by_id(state, card_id)
-    node = _manual_action_node(card) or _legacy_exhaust_node(card)
+    node = _manual_action_node(card)
     if node is None:
         raise ValueError("Card does not have a manual action.")
     if not _preconditions_met(state, node, city=city, card_id=card_id, player=active):
@@ -424,7 +424,7 @@ def _possible_actions_for_active_player(state: dict[str, Any]) -> list[dict[str,
                     card = card_by_id(state, card_id)
                 except ValueError:
                     continue
-                node = _manual_action_node(card) or _legacy_exhaust_node(card)
+                node = _manual_action_node(card)
                 if node and _preconditions_met(state, node, city=city, card_id=card_id, player=active):
                     actions.append({"type": "exhaust_card", "player_id": active["id"], "city_id": city["id"], "card_id": card_id})
     for card_id in active.get("hand", []):
@@ -627,30 +627,6 @@ def _manual_action_node(card: dict[str, Any]) -> dict[str, Any] | None:
         if node.get("trigger") == "manual_action":
             return node
     return None
-
-
-def _legacy_exhaust_node(card: dict[str, Any]) -> dict[str, Any] | None:
-    exhaust = card.get("data", {}).get("exhaust") or {}
-    if not exhaust:
-        return None
-    return {
-        "name": "Exhaust",
-        "trigger": "manual_action",
-        "ends_turn": False,
-        "preconditions": {
-            "logic_gate": "AND",
-            "conditions": [
-                {"target": "this_card", "variable": "is_exhausted", "operator": "==", "value": False}
-            ],
-        },
-        "effects": [
-            {"effect_type": "set_state", "payload": {"variable": "is_exhausted", "value": True}},
-            *[
-                {"effect_type": "modify_mana", "payload": {"mana_type": tag_id, "amount": amount}}
-                for tag_id, amount in exhaust.items()
-            ],
-        ],
-    }
 
 
 def _preconditions_met(

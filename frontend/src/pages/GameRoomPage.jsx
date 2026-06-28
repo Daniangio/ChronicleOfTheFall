@@ -29,7 +29,7 @@ const manualActionMana = (data = {}) => {
 const CardMini = ({ card, tagLookup, exhausted = false, onExhaust, canExhaust = false, onPropose, canPropose = false }) => {
   const data = card?.data || {};
   const cost = data.cost || {};
-  const exhaust = Object.keys(data.exhaust || {}).length ? data.exhaust : manualActionMana(data);
+  const exhaust = manualActionMana(data);
   const tags = data.tags || {};
   const requirements = Array.isArray(data.requirements) ? data.requirements : [];
   const hasExhaust = Object.keys(exhaust).length > 0;
@@ -207,6 +207,7 @@ const GameRoomPage = () => {
   const cardLookup = useMemo(() => buildLookup(gameState?.catalog?.cards || []), [gameState]);
   const tagLookup = useMemo(() => buildLookup(gameState?.catalog?.tags || []), [gameState]);
   const ministryLookup = useMemo(() => buildLookup(gameState?.catalog?.ministries || []), [gameState]);
+  const ministries = gameState?.catalog?.ministries || [];
   const players = gameState?.players || [];
   const activePlayer = players.find((player) => player.id === gameState?.active_player_id);
   const focusedPlayer = players.find((player) => player.id === focusedPlayerId) || players[0];
@@ -377,9 +378,21 @@ const GameRoomPage = () => {
                 <div className="mt-3 grid gap-3 md:grid-cols-3">
                   {(gameState.event_queue || []).map((eventId, index) => {
                     const event = eventLookup[normalize(eventId)];
+                    const domainMinistry = ministries.find((ministry) => ministry.data?.domain_id && ministry.data.domain_id === event?.data?.domain_id);
                     return (
                       <article key={`${eventId}-${index}`} className="rounded-lg border border-slate-800 bg-slate-950 p-3">
-                        <p className="text-sm font-semibold text-white">{event?.name || eventId}</p>
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="text-sm font-semibold text-white">{event?.name || eventId}</p>
+                          {domainMinistry ? (
+                            <span className="inline-flex items-center gap-1 rounded border border-slate-700 px-2 py-1 text-[0.65rem] font-semibold text-slate-300">
+                              {domainMinistry.data?.domain_icon ? (
+                                <img alt="" className="h-4 w-4 rounded object-cover" src={domainMinistry.data.domain_icon} />
+                              ) : (
+                                <span>{String(domainMinistry.data?.domain_symbol || domainMinistry.data?.domain_id || "").slice(0, 3).toUpperCase()}</span>
+                              )}
+                            </span>
+                          ) : null}
+                        </div>
                         <p className="mt-1 text-xs uppercase text-slate-500">{event?.category || "event"}</p>
                         <p className="mt-3 text-xs leading-5 text-slate-400">{event?.summary || "No event text."}</p>
                       </article>

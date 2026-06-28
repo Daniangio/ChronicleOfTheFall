@@ -25,7 +25,7 @@ const SoloPlayPage = () => {
         const payload = await response.json().catch(() => []);
         if (!response.ok) throw new Error(payload.detail || "Failed to load decks.");
         setDecks(payload);
-        const empireDeck = payload.find((deck) => deck.deck_type === "empire") || payload.find((deck) => deck.deck_type === "cards");
+        const empireDeck = payload.find((deck) => deck.deck_type === "empire");
         const eventDeck = payload.find((deck) => deck.deck_type === "events");
         setEmpireDeckId((current) => current || empireDeck?.id || "");
         setEventDeckId((current) => current || eventDeck?.id || "");
@@ -36,7 +36,7 @@ const SoloPlayPage = () => {
     void loadDecks();
   }, [token]);
 
-  const empireDecks = useMemo(() => decks.filter((deck) => deck.deck_type === "empire" || deck.deck_type === "cards"), [decks]);
+  const empireDecks = useMemo(() => decks.filter((deck) => deck.deck_type === "empire"), [decks]);
   const eventDecks = useMemo(() => decks.filter((deck) => deck.deck_type === "events"), [decks]);
 
   const createChronicleRoom = async () => {

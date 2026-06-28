@@ -245,11 +245,27 @@ The Sabotage Check: Count the number of [Unrest] tags revealed in the pitch. Che
 
 If the Unrest count meets a threshold, resolve the sabotage penalty immediately (e.g., destroying a building or losing resources).
 
+Thresholds stack. If an Event has a 1 [Unrest] threshold and a 2+ [Unrest] threshold, revealing 2 [Unrest] resolves both thresholds in order. For example, if each threshold is -1 Morale, the Empire loses 2 Morale total.
+
 The Final Resolution: Sum the Public Defense Tags + the positive Commitment Strip Tags + any Edict modifiers.
 
 Success: If the total meets or exceeds the Event's Defense Requirement, the Event is defeated. Apply the Success Reward.
 
 Failure: If the total is less than the Defense Requirement, the Event breaches the defenses. Apply the Failure Drawback (typically losing Global Pillar points).
+
+Event Effect Types:
+
+Generate Volatile Resources: Place the listed volatile resources into the personal pool of the Minister who has jurisdiction over the Event domain. These resources survive until the end of that player's next Administration turn, giving the Minister one turn to allocate them.
+
+Modify Pillar: Increase or decrease Treasury, Stability, or Morale by the listed amount.
+
+Destroy Building With Tag: Destroy one built Building with the listed permanent tag. The Minister of Infrastructure chooses which matching Building is destroyed. If there is no Minister of Infrastructure this year or that Minister is blocked, the Minister of the Empire chooses.
+
+Discard Card: The target player discards the listed number of cards. The target can be all players or the player currently holding a specific Ministry.
+
+Freeze Resource Generation: For the next Year, the listed volatile resource cannot be produced. Buildings may still be exhausted for their other effects, but any frozen resource they would generate is not added to a pool.
+
+Block Minister Next Year: The player currently holding the listed Ministry is blocked from Council during the next Year. If that player would become Minister of the Empire, the sovereign role skips to the next eligible player and the blocked player remains a Citizen for that Year.
 
 Clean Up: Discard all cards pitched into the Crisis Pool. Slide the completed Event to the Event Discard Pile.
 
@@ -272,6 +288,8 @@ Council: Selects one player to be blocked from holding office for the Year.
 Minister of Infrastructure (The Builder)
 
 Jurisdiction: Oversees geographic and structural expansion. (flavor text, no effect here)
+
+Crisis Authority: Decides which matching Building is destroyed by any Event effect that destroys a Building with a specific tag. If the Minister of Infrastructure is missing or blocked, this decision passes to the Minister of the Empire.
 
 Free Action: May finalize fully funded Projects in the Queue.
 

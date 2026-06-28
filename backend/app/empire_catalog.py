@@ -12,7 +12,6 @@ from .db_models import GameCatalogEntryRecord, utc_now
 CatalogKind = Literal[
     "tags",
     "cards",
-    "roles",
     "ministries",
     "event-types",
     "agendas",
@@ -25,7 +24,6 @@ CatalogKind = Literal[
 CATALOG_KINDS: tuple[CatalogKind, ...] = (
     "tags",
     "cards",
-    "roles",
     "ministries",
     "event-types",
     "agendas",
@@ -106,6 +104,7 @@ def create_catalog_record(
     normalized_id = normalize_catalog_id(entry_id)
     if db.get(GameCatalogEntryRecord, normalized_id) is not None:
         raise ValueError("A catalog entry with this id already exists.")
+    _validate_catalog_data(db, kind=kind, entry_id=normalized_id, data=data or {})
     row = GameCatalogEntryRecord(
         id=normalized_id,
         kind=kind,
@@ -137,6 +136,7 @@ def update_catalog_record(
     row = get_catalog_record(db, kind=kind, entry_id=entry_id)
     if row is None:
         return None
+    _validate_catalog_data(db, kind=kind, entry_id=row.id, data=data or {})
     row.name = str(name or "").strip()
     row.category = str(category or "").strip()
     row.summary = str(summary or "").strip()
@@ -149,6 +149,19 @@ def update_catalog_record(
     db.commit()
     db.refresh(row)
     return row
+
+
+def _validate_catalog_data(db: Session, *, kind: CatalogKind, entry_id: str, data: dict[str, Any]) -> None:
+    if kind != "ministries":
+        return
+    domain_id = str((data or {}).get("domain_id") or "").strip()
+    if not domain_id:
+        return
+    for row in list_catalog_records(db, "ministries"):
+        if row.id == entry_id:
+            continue
+        if str((row.data or {}).get("domain_id") or "").strip() == domain_id:
+            raise ValueError("Ministry domain id must be unique.")
 
 
 def delete_catalog_record(db: Session, *, kind: CatalogKind, entry_id: str) -> bool:

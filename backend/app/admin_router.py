@@ -263,11 +263,6 @@ async def admin_list_cards(_admin: User = Depends(require_admin), db: Session = 
     return _catalog_response(db, "cards")
 
 
-@router.get("/admin/roles", response_model=list[AdminCatalogEntry])
-async def admin_list_roles(_admin: User = Depends(require_admin), db: Session = Depends(get_db)):
-    return _catalog_response(db, "roles")
-
-
 @router.get("/admin/ministries", response_model=list[AdminCatalogEntry])
 async def admin_list_ministries(_admin: User = Depends(require_admin), db: Session = Depends(get_db)):
     return _catalog_response(db, "ministries")

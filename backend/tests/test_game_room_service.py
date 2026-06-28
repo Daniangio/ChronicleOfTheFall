@@ -4,6 +4,24 @@ from backend.app.game_room_service import GameRoomService, ROOM_STATE_FINISHED, 
 from backend.app.server_models import User
 
 
+def manual_mana_node(tag_id: str, amount: int) -> dict:
+    return {
+        "name": "Manual Action",
+        "trigger": "manual_action",
+        "ends_turn": False,
+        "preconditions": {
+            "logic_gate": "AND",
+            "conditions": [
+                {"target": "this_card", "variable": "is_exhausted", "operator": "==", "value": False}
+            ],
+        },
+        "effects": [
+            {"effect_type": "set_state", "payload": {"variable": "is_exhausted", "value": True}},
+            {"effect_type": "modify_mana", "payload": {"mana_type": tag_id, "amount": amount}},
+        ],
+    }
+
+
 class TestGameRoomService(unittest.IsolatedAsyncioTestCase):
     async def test_memory_room_lifecycle_records_history(self):
         service = GameRoomService()
@@ -60,7 +78,7 @@ class TestGameRoomService(unittest.IsolatedAsyncioTestCase):
                         "category": "institution",
                         "summary": "",
                         "color": None,
-                        "data": {"cost": {"labor": 1}, "exhaust": {"labor": 1}},
+                        "data": {"cost": {"labor": 1}, "logic_nodes": [manual_mana_node("labor", 1)]},
                     }
                 ],
                 "tags": [],
@@ -148,7 +166,7 @@ class TestGameRoomService(unittest.IsolatedAsyncioTestCase):
                         "category": "foundation",
                         "summary": "",
                         "color": None,
-                        "data": {"exhaust": {"labor": 1}},
+                        "data": {"logic_nodes": [manual_mana_node("labor", 1)]},
                     },
                     {
                         "id": "lumber-camp",
