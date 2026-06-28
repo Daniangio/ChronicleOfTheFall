@@ -1,5 +1,5 @@
 import { Download, Edit3, Plus, Save, Search, Trash2, Upload, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, Navigate, NavLink, useParams } from "react-router-dom";
 import { PageSubnavigation } from "../components/AuthenticatedLayout.jsx";
 import CatalogItemVisual from "../components/CatalogItemVisual.jsx";
@@ -228,20 +228,172 @@ const TagSingleSelect = ({ label, tags, selectedId, onSelect }) => (
   </div>
 );
 
+const removeBackground = (image, crop, outputSize = 96) => {
+  const sourceCanvas = document.createElement("canvas");
+  sourceCanvas.width = outputSize;
+  sourceCanvas.height = outputSize;
+  const context = sourceCanvas.getContext("2d", { willReadFrequently: true });
+  context.clearRect(0, 0, outputSize, outputSize);
+  context.drawImage(image, crop.x, crop.y, crop.width, crop.height, 0, 0, outputSize, outputSize);
+  const imageData = context.getImageData(0, 0, outputSize, outputSize);
+  const data = imageData.data;
+  const background = [data[0], data[1], data[2]];
+  const tolerance = 48;
+  for (let index = 0; index < data.length; index += 4) {
+    const distance = Math.sqrt(
+      (data[index] - background[0]) ** 2 +
+      (data[index + 1] - background[1]) ** 2 +
+      (data[index + 2] - background[2]) ** 2
+    );
+    if (distance <= tolerance) data[index + 3] = 0;
+  }
+  context.putImageData(imageData, 0, 0);
+  return sourceCanvas.toDataURL("image/png");
+};
+
+const IconImageEditor = ({ label, value, onChange }) => {
+  const imageRef = useRef(null);
+  const [source, setSource] = useState("");
+  const [crop, setCrop] = useState({ x: 16, y: 16, width: 96, height: 96 });
+  const [dragStart, setDragStart] = useState(null);
+
+  const imageRect = () => imageRef.current?.getBoundingClientRect();
+  const pointFromEvent = (event) => {
+    const rect = imageRect();
+    if (!rect) return { x: 0, y: 0 };
+    return {
+      x: Math.max(0, Math.min(rect.width, event.clientX - rect.left)),
+      y: Math.max(0, Math.min(rect.height, event.clientY - rect.top)),
+    };
+  };
+
+  const beginCrop = (event) => {
+    const point = pointFromEvent(event);
+    setDragStart(point);
+    setCrop({ x: point.x, y: point.y, width: 1, height: 1 });
+  };
+
+  const updateCrop = (event) => {
+    if (!dragStart) return;
+    const point = pointFromEvent(event);
+    setCrop({
+      x: Math.min(dragStart.x, point.x),
+      y: Math.min(dragStart.y, point.y),
+      width: Math.max(1, Math.abs(point.x - dragStart.x)),
+      height: Math.max(1, Math.abs(point.y - dragStart.y)),
+    });
+  };
+
+  const saveCrop = () => {
+    const image = imageRef.current;
+    const rect = imageRect();
+    if (!image || !rect) return;
+    const naturalCrop = {
+      x: Math.round((crop.x / rect.width) * image.naturalWidth),
+      y: Math.round((crop.y / rect.height) * image.naturalHeight),
+      width: Math.max(1, Math.round((crop.width / rect.width) * image.naturalWidth)),
+      height: Math.max(1, Math.round((crop.height / rect.height) * image.naturalHeight)),
+    };
+    onChange(removeBackground(image, naturalCrop));
+    setSource("");
+    setDragStart(null);
+  };
+
+  return (
+    <div className="rounded-lg border border-slate-800 bg-slate-950 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h3 className="font-semibold text-white">{label}</h3>
+          <p className="mt-1 text-xs text-slate-500">Upload, crop, and remove the background from the crop's top-left color.</p>
+        </div>
+        {value ? <img alt="" className="h-10 w-10 rounded-md border border-slate-700 object-contain" src={value} /> : null}
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800">
+          <Upload className="h-4 w-4" aria-hidden="true" />
+          Upload image
+          <input
+            accept="image/*"
+            className="hidden"
+            onChange={async (event) => {
+              const file = event.target.files?.[0];
+              if (!file) return;
+              const dataUrl = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(String(reader.result || ""));
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+              });
+              setSource(dataUrl);
+              event.target.value = "";
+            }}
+            type="file"
+          />
+        </label>
+        {value ? (
+          <button
+            className="rounded-md border border-rose-900/80 px-3 py-2 text-sm text-rose-200 hover:bg-rose-950/70"
+            onClick={() => onChange("")}
+            type="button"
+          >
+            Remove icon
+          </button>
+        ) : null}
+      </div>
+      {source ? (
+        <div className="fixed inset-0 z-[1300] flex items-start justify-center overflow-y-auto bg-slate-950/85 px-4 py-8">
+          <div className="w-full max-w-3xl rounded-lg border border-slate-800 bg-slate-900 p-5 shadow-2xl">
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="font-semibold text-white">Crop Icon</h3>
+              <button className="rounded-md border border-slate-700 p-2 text-slate-300 hover:bg-slate-800" onClick={() => setSource("")} type="button">
+                <X className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </div>
+            <div
+              className="relative mt-4 inline-block max-w-full select-none overflow-hidden rounded-md border border-slate-700"
+              onMouseDown={beginCrop}
+              onMouseMove={updateCrop}
+              onMouseUp={() => setDragStart(null)}
+              onMouseLeave={() => setDragStart(null)}
+            >
+              <img ref={imageRef} alt="" className="max-h-[65vh] max-w-full" src={source} draggable={false} />
+              <div
+                className="pointer-events-none absolute border-2 border-teal-300 bg-teal-300/15"
+                style={{ left: crop.x, top: crop.y, width: crop.width, height: crop.height }}
+              />
+            </div>
+            <div className="mt-4 flex justify-end gap-2">
+              <button className="rounded-md border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800" onClick={() => setSource("")} type="button">
+                Cancel
+              </button>
+              <button className="rounded-md bg-teal-400 px-3 py-2 text-sm font-semibold text-slate-950 hover:bg-teal-300" onClick={saveCrop} type="button">
+                Save Icon
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+};
+
 const TagResourceFields = ({ data, setField }) => (
-  <div className="rounded-lg border border-slate-800 bg-slate-950 p-4">
-    <h3 className="font-semibold text-white">Tag Behavior</h3>
-    <label className="mt-3 flex items-center gap-2 text-sm font-medium text-slate-300">
-      <input
-        checked={Boolean(data.is_volatile_resource || data.resource_type === "volatile")}
-        onChange={(event) => {
-          setField("is_volatile_resource", event.target.checked);
-          setField("resource_type", event.target.checked ? "volatile" : "permanent_tag");
-        }}
-        type="checkbox"
-      />
-      Volatile resource
-    </label>
+  <div className="space-y-4">
+    <div className="rounded-lg border border-slate-800 bg-slate-950 p-4">
+      <h3 className="font-semibold text-white">Tag Behavior</h3>
+      <label className="mt-3 flex items-center gap-2 text-sm font-medium text-slate-300">
+        <input
+          checked={Boolean(data.is_volatile_resource || data.resource_type === "volatile")}
+          onChange={(event) => {
+            setField("is_volatile_resource", event.target.checked);
+            setField("resource_type", event.target.checked ? "volatile" : "permanent_tag");
+          }}
+          type="checkbox"
+        />
+        Volatile resource
+      </label>
+    </div>
+    <IconImageEditor label="Tag Icon" value={data.icon || ""} onChange={(icon) => setField("icon", icon)} />
   </div>
 );
 
@@ -873,38 +1025,16 @@ const MinistryGuidedFields = ({ data, setField, eventTypeEntries, tagEntries }) 
           />
         </label>
         <label className="block">
-          <span className="text-sm font-medium text-slate-300">Domain Icon</span>
+          <span className="text-sm font-medium text-slate-300">Domain Symbol</span>
           <input
-            accept="image/*"
-            className="mt-2 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-300"
-            onChange={async (event) => {
-              const file = event.target.files?.[0];
-              if (!file) return;
-              const dataUrl = await new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = () => resolve(String(reader.result || ""));
-                reader.onerror = reject;
-                reader.readAsDataURL(file);
-              });
-              setField("domain_icon", dataUrl);
-              event.target.value = "";
-            }}
-            type="file"
+            value={data.domain_symbol || ""}
+            onChange={(event) => setField("domain_symbol", event.target.value)}
+            className="mt-2 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none focus:border-teal-400"
+            placeholder="WAR"
           />
         </label>
       </div>
-      {data.domain_icon ? (
-        <div className="flex items-center gap-3">
-          <img alt="" className="h-10 w-10 rounded-md border border-slate-700 object-cover" src={data.domain_icon} />
-          <button
-            className="text-xs font-semibold text-rose-300 hover:text-rose-200"
-            onClick={() => setField("domain_icon", "")}
-            type="button"
-          >
-            Remove icon
-          </button>
-        </div>
-      ) : null}
+      <IconImageEditor label="Domain Icon" value={data.domain_icon || ""} onChange={(icon) => setField("domain_icon", icon)} />
 
       <label className="flex items-center gap-2 text-sm font-medium text-slate-300">
         <input

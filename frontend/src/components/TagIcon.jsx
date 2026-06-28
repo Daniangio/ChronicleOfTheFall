@@ -20,6 +20,7 @@ const TagIcon = ({ tag, label, count = null, className = "" }) => {
   const color = tag?.color || fallbackTagColor;
   const text = normalizeLabel(tag?.name || label || tag?.id);
   const Icon = categoryIcons[String(tag?.category || "").toLowerCase()] || Sparkles;
+  const icon = tag?.data?.icon || "";
 
   return (
     <span
@@ -27,7 +28,11 @@ const TagIcon = ({ tag, label, count = null, className = "" }) => {
       style={{ borderColor: color, color }}
       title={tag?.id || label || text}
     >
-      <Icon className="h-3 w-3 shrink-0" aria-hidden="true" />
+      {icon ? (
+        <img alt="" className="h-4 w-4 shrink-0 object-contain" src={icon} />
+      ) : (
+        <Icon className="h-3 w-3 shrink-0" aria-hidden="true" />
+      )}
       <span className="truncate">{text}</span>
       {count !== null && count !== undefined ? <span className="text-[0.68rem]">x{count}</span> : null}
     </span>
