@@ -63,6 +63,8 @@ class LobbyStateResponse(BaseModel):
 class GameRoomCreateRequest(BaseModel):
     mode: str = "solo"
     game_type: str = "chronicle_solo"
+    empire_deck_id: Optional[str] = None
+    event_deck_id: Optional[str] = None
 
 
 class GameRoomResponse(BaseModel):
@@ -117,6 +119,11 @@ class GoldfishingBuildProjectRequest(BaseModel):
     player_id: str
     project_id: str
     city_id: str = "capital"
+
+
+class GoldfishingMinistryResourceRequest(BaseModel):
+    player_id: str
+    tag_id: str
 
 
 class GoldfishingPassRequest(BaseModel):
@@ -221,6 +228,8 @@ class AdminCatalogSummary(BaseModel):
     tags: int = 0
     cards: int = 0
     roles: int = 0
+    ministries: int = 0
+    event_types: int = 0
     agendas: int = 0
     events: int = 0
     groups: int = 0

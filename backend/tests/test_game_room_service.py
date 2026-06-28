@@ -183,7 +183,7 @@ class TestGameRoomService(unittest.IsolatedAsyncioTestCase):
         state = {
             "mode": "goldfishing",
             "active_player_id": "player-1",
-            "players": [{"id": "player-1", "name": "Player 1", "hand": [], "mana": {}, "passed": False}],
+            "players": [{"id": "player-1", "name": "Player 1", "hand": ["workshop"], "mana": {}, "passed": False}],
             "projects": [{"id": "project-1", "card_id": "lumber-camp", "contributions": {}}],
             "cities": [{"id": "capital", "name": "Capital", "cards": ["logic-mill"], "exhausted_card_ids": []}],
             "catalog": {
@@ -311,7 +311,7 @@ class TestGameRoomService(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(after_first_pass["active_player_id"], "player-2")
         self.assertEqual(after_first_pass["players"][0]["mana"], {})
 
-        self.assertEqual(after_first_pass["phase"], "decay")
+        self.assertEqual(after_first_pass["phase"], "crisis")
         self.assertEqual(after_first_pass["active_player_id"], "player-2")
         self.assertEqual(after_first_pass["cities"][0]["cards"], [])
         self.assertEqual(after_first_pass["cities"][0]["exhausted_card_ids"], [])
@@ -416,6 +416,102 @@ class TestGameRoomService(unittest.IsolatedAsyncioTestCase):
         build_actions = [action for action in assigned["possible_actions"] if action["type"] == "build_project"]
         self.assertEqual([action["city_id"] for action in build_actions], ["frontier"])
 
+    async def test_project_build_options_respect_counted_city_tags(self):
+        service = GameRoomService()
+        user = User(id="user_1", username="Player One")
+        state = {
+            "mode": "goldfishing",
+            "active_player_id": "player-1",
+            "players": [{"id": "player-1", "name": "Player 1", "hand": [], "mana": {"wealth": 1}, "passed": False}],
+            "projects": [{"id": "project-1", "card_id": "granary", "contributions": {}}],
+            "cities": [
+                {"id": "capital", "name": "Capital", "cards": [], "exhausted_card_ids": []},
+                {"id": "frontier", "name": "Frontier", "cards": ["farm"], "exhausted_card_ids": []},
+            ],
+            "catalog": {
+                "cards": [
+                    {
+                        "id": "farm",
+                        "name": "Farm",
+                        "kind": "cards",
+                        "category": "building",
+                        "summary": "",
+                        "color": None,
+                        "data": {"tags": {"food": 2}},
+                    },
+                    {
+                        "id": "granary",
+                        "name": "Granary",
+                        "kind": "cards",
+                        "category": "building",
+                        "summary": "",
+                        "color": None,
+                        "data": {"cost": {"wealth": 1}, "required_city_tags": {"food": 2}},
+                    },
+                ],
+                "tags": [],
+            },
+            "log": [],
+        }
+
+        room = await service.create_room(user=user, game_type="chronicle_solo", game_state=state)
+        assigned = await service.apply_goldfishing_action(
+            room_id=room["id"],
+            user=user,
+            action="assign_mana",
+            payload={"player_id": "player-1", "project_id": "project-1", "tag_id": "wealth", "amount": 1},
+        )
+        build_actions = [action for action in assigned["possible_actions"] if action["type"] == "build_project"]
+        self.assertEqual([action["city_id"] for action in build_actions], ["frontier"])
+
+    async def test_ministry_resource_action_uses_configured_resources(self):
+        service = GameRoomService()
+        user = User(id="user_1", username="Player One")
+        state = {
+            "mode": "goldfishing",
+            "active_player_id": "player-1",
+            "minister_of_empire_player_id": "player-2",
+            "selected_ministries": {"player-1": "minister-of-infrastructure"},
+            "players": [{"id": "player-1", "name": "Player 1", "hand": ["workshop"], "mana": {}, "passed": False}],
+            "projects": [],
+            "cities": [{"id": "capital", "name": "Capital", "cards": [], "exhausted_card_ids": []}],
+            "catalog": {
+                "cards": [
+                    {
+                        "id": "workshop",
+                        "name": "Workshop",
+                        "kind": "cards",
+                        "category": "building",
+                        "summary": "",
+                        "color": None,
+                        "data": {},
+                    }
+                ],
+                "tags": [],
+                "ministries": [
+                    {
+                        "id": "minister-of-infrastructure",
+                        "name": "Minister of Infrastructure",
+                        "kind": "ministries",
+                        "category": "ministry",
+                        "summary": "",
+                        "color": None,
+                        "data": {"infrastructure_resources": {"labor": 1, "wealth": 1}},
+                    }
+                ],
+            },
+            "log": [],
+        }
+
+        room = await service.create_room(user=user, game_type="chronicle_solo", game_state=state)
+        updated = await service.apply_goldfishing_action(
+            room_id=room["id"],
+            user=user,
+            action="use_ministry_resource",
+            payload={"player_id": "player-1", "tag_id": "labor"},
+        )
+        self.assertEqual(updated["players"][0]["mana"], {"labor": 1})
+
     async def test_continue_phase_reveals_event_and_returns_to_administration(self):
         service = GameRoomService()
         user = User(id="user_1", username="Player One")
@@ -465,11 +561,8 @@ class TestGameRoomService(unittest.IsolatedAsyncioTestCase):
             payload={},
         )
         self.assertEqual(event_phase["epoch"], 2)
-        self.assertEqual(event_phase["phase"], "event")
+        self.assertEqual(event_phase["phase"], "council")
         self.assertEqual(event_phase["event_queue"], ["black-year"])
-
-        resolution = await service.apply_goldfishing_action(room_id=room["id"], user=user, action="continue_phase", payload={})
-        self.assertEqual(resolution["phase"], "event_resolution")
 
         administration = await service.apply_goldfishing_action(room_id=room["id"], user=user, action="continue_phase", payload={})
         self.assertEqual(administration["phase"], "administration")

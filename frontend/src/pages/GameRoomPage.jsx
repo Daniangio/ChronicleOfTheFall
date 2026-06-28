@@ -9,6 +9,11 @@ const normalize = (value) => String(value || "").trim().toLowerCase().replace(/[
 
 const buildLookup = (entries = []) => Object.fromEntries(entries.map((entry) => [normalize(entry.id), entry]));
 
+const tagEntries = (value) => {
+  if (Array.isArray(value)) return value.map((tagId) => [tagId, null]);
+  return Object.entries(value || {});
+};
+
 const manualActionMana = (data = {}) => {
   const node = (data.logic_nodes || []).find((entry) => entry?.trigger === "manual_action");
   if (!node) return {};
@@ -25,7 +30,7 @@ const CardMini = ({ card, tagLookup, exhausted = false, onExhaust, canExhaust = 
   const data = card?.data || {};
   const cost = data.cost || {};
   const exhaust = Object.keys(data.exhaust || {}).length ? data.exhaust : manualActionMana(data);
-  const tags = Array.isArray(data.tags) ? data.tags : [];
+  const tags = data.tags || {};
   const requirements = Array.isArray(data.requirements) ? data.requirements : [];
   const hasExhaust = Object.keys(exhaust).length > 0;
   const exhaustStripClass = "mt-3 flex w-full flex-wrap items-center gap-1.5 border-t border-slate-800 pt-3 text-left";
@@ -73,8 +78,8 @@ const CardMini = ({ card, tagLookup, exhausted = false, onExhaust, canExhaust = 
       </div>
 
       <div className="mt-auto flex flex-wrap gap-1.5 pt-3">
-        {tags.map((tagId) => (
-          <TagIcon key={tagId} tag={tagLookup[normalize(tagId)]} label={tagId} />
+        {tagEntries(tags).map(([tagId, count]) => (
+          <TagIcon key={tagId} tag={tagLookup[normalize(tagId)]} label={tagId} count={count || null} />
         ))}
       </div>
 
@@ -201,6 +206,7 @@ const GameRoomPage = () => {
 
   const cardLookup = useMemo(() => buildLookup(gameState?.catalog?.cards || []), [gameState]);
   const tagLookup = useMemo(() => buildLookup(gameState?.catalog?.tags || []), [gameState]);
+  const ministryLookup = useMemo(() => buildLookup(gameState?.catalog?.ministries || []), [gameState]);
   const players = gameState?.players || [];
   const activePlayer = players.find((player) => player.id === gameState?.active_player_id);
   const focusedPlayer = players.find((player) => player.id === focusedPlayerId) || players[0];
@@ -209,6 +215,7 @@ const GameRoomPage = () => {
   const eventLookup = useMemo(() => buildLookup(gameState?.catalog?.events || []), [gameState]);
   const possibleActions = gameState?.possible_actions || [];
   const phase = gameState?.phase || "administration";
+  const selectedMinistries = gameState?.selected_ministries || {};
   const buildActions = possibleActions.filter((entry) => entry.type === "build_project");
   const citiesWithGroups = useMemo(() => cities.map((cityEntry) => {
     const groups = {};
@@ -289,6 +296,9 @@ const GameRoomPage = () => {
               <p className="text-xs uppercase tracking-normal text-slate-500">Goldfishing</p>
               <p className="mt-1 text-sm font-semibold capitalize text-white">{phase.replace(/_/g, " ")}</p>
               <p className="mt-1 text-xs text-slate-500">Epoch {gameState.epoch || 1}</p>
+              <p className="mt-1 text-xs text-slate-500">
+                Sovereign {players.find((player) => player.id === gameState.minister_of_empire_player_id)?.name || "None"}
+              </p>
               <p className="mt-1 break-all text-xs text-slate-500">{room?.id || roomId}</p>
             </div>
             <button
@@ -319,6 +329,11 @@ const GameRoomPage = () => {
                     {active ? <span className="rounded bg-amber-300 px-1.5 py-0.5 text-[0.65rem] font-semibold text-slate-950">ACTIVE</span> : null}
                   </span>
                   <span className="mt-2 block text-xs text-slate-500">{player.hand?.length || 0} cards</span>
+                  <span className="mt-1 block text-xs text-slate-500">
+                    {player.id === gameState.minister_of_empire_player_id
+                      ? "Minister of the Empire"
+                      : ministryLookup[normalize(selectedMinistries[player.id])]?.name || "Citizen"}
+                  </span>
                 </button>
               );
             })}
@@ -479,6 +494,10 @@ const GameRoomPage = () => {
                   <h2 className="text-lg font-semibold text-white">{focusedPlayer?.name || "Player"}</h2>
                   <p className="text-xs text-slate-500">
                     {focusedPlayer?.id === activePlayer?.id ? "Active player board" : "Focused player board"}
+                    {" · "}
+                    {focusedPlayer?.id === gameState.minister_of_empire_player_id
+                      ? "Minister of the Empire"
+                      : ministryLookup[normalize(selectedMinistries[focusedPlayer?.id])]?.name || "Citizen"}
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-1.5 pt-1">
@@ -500,6 +519,22 @@ const GameRoomPage = () => {
                 </button>
               ) : null}
             </div>
+            {focusedPlayer?.id === activePlayer?.id ? (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {possibleActions.filter((entry) => entry.type === "use_ministry_resource" && entry.player_id === activePlayer.id).map((entry) => (
+                  <button
+                    key={`${entry.tag_id}-${entry.amount}`}
+                    className="inline-flex items-center gap-2 rounded-md border border-teal-700 px-3 py-2 text-sm text-teal-100 hover:bg-teal-900/40 disabled:opacity-60"
+                    disabled={busy}
+                    onClick={() => action("/actions/ministry-resource", { player_id: activePlayer.id, tag_id: entry.tag_id })}
+                    type="button"
+                  >
+                    Ministry
+                    <TagIcon tag={tagLookup[normalize(entry.tag_id)]} label={entry.tag_id} count={entry.amount} />
+                  </button>
+                ))}
+              </div>
+            ) : null}
             <div className="mt-4 grid gap-5 xl:grid-cols-2">
               <section>
                 <h3 className="mb-2 text-sm font-semibold uppercase tracking-normal text-slate-500">Hand</h3>

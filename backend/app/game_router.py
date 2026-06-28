@@ -15,6 +15,7 @@ from .schemas import (
     GoldfishingAssignManaRequest,
     GoldfishingBuildProjectRequest,
     GoldfishingExhaustRequest,
+    GoldfishingMinistryResourceRequest,
     GoldfishingPassRequest,
     GoldfishingProposeRequest,
 )
@@ -43,9 +44,11 @@ async def create_game_room(
         cards = [public_catalog_entry(entry) for entry in list_catalog_records(db, "cards")]
         tags = [public_catalog_entry(entry) for entry in list_catalog_records(db, "tags")]
         events = [public_catalog_entry(entry) for entry in list_catalog_records(db, "events")]
+        ministries = [public_catalog_entry(entry) for entry in list_catalog_records(db, "ministries")]
+        event_types = [public_catalog_entry(entry) for entry in list_catalog_records(db, "event-types")]
         deck_records = list_catalog_records(db, "decks")
-        card_deck = _latest_deck(deck_records, "cards")
-        event_deck = _latest_deck(deck_records, "events")
+        card_deck = _deck_by_id(deck_records, payload.empire_deck_id) or _latest_deck(deck_records, "empire") or _latest_deck(deck_records, "cards")
+        event_deck = _deck_by_id(deck_records, payload.event_deck_id) or _latest_deck(deck_records, "events")
         common_pool_deck = _latest_deck(deck_records, "common-pool")
         room_id = service.new_room_id()
         game_state = build_goldfishing_state(
@@ -59,6 +62,8 @@ async def create_game_room(
             event_deck_id=str(getattr(event_deck, "id", "") or ""),
             common_pool_deck_id=str(getattr(common_pool_deck, "id", "") or ""),
             event_entries=events,
+            ministry_entries=ministries,
+            event_type_entries=event_types,
         )
         return await service.create_room(
             user=current_user,
@@ -76,6 +81,21 @@ async def get_game_room(room_id: str, current_user: User = Depends(get_current_u
     if room is None:
         raise HTTPException(status_code=404, detail="Game room not found.")
     return room
+
+
+@router.get("/game/decks")
+async def list_game_decks(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    del current_user
+    decks = [public_catalog_entry(entry) for entry in list_catalog_records(db, "decks")]
+    return [
+        {
+            "id": deck["id"],
+            "name": deck["name"],
+            "deck_type": (deck.get("data") or {}).get("deck_type") or deck.get("category") or "",
+            "item_count": len((deck.get("data") or {}).get("item_ids") or []),
+        }
+        for deck in decks
+    ]
 
 
 @router.post("/game/rooms/{room_id}/end", response_model=GameRoomResponse)
@@ -130,6 +150,15 @@ async def build_game_project(
     return await _apply_action(room_id, current_user, "build_project", payload.model_dump())
 
 
+@router.post("/game/rooms/{room_id}/actions/ministry-resource")
+async def use_game_ministry_resource(
+    room_id: str,
+    payload: GoldfishingMinistryResourceRequest,
+    current_user: User = Depends(get_current_user),
+):
+    return await _apply_action(room_id, current_user, "use_ministry_resource", payload.model_dump())
+
+
 @router.post("/game/rooms/{room_id}/actions/pass")
 async def pass_game_turn(
     room_id: str,
@@ -180,6 +209,13 @@ def _latest_deck(decks: list, deck_type: str):
     if not candidates:
         return None
     return max(candidates, key=lambda deck: getattr(deck, "updated_at", None) or getattr(deck, "created_at", None))
+
+
+def _deck_by_id(decks: list, deck_id: str | None):
+    normalized = str(deck_id or "").strip()
+    if not normalized:
+        return None
+    return next((deck for deck in decks if getattr(deck, "id", "") == normalized), None)
 
 
 def _deck_item_ids(deck) -> list[str]:

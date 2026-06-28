@@ -6,18 +6,18 @@ This document tracks the playable rules implemented in the prototype. It is the 
 
 Goldfishing mode is a four-player solo simulation of the empire engine.
 
-Version 0 intentionally excludes roles, jurisdiction checks, event resolution, hidden agendas, founding new cities, and multiplayer permissions. All game mutations are executed by the backend; the frontend only displays state and sends action requests.
+Version 0 intentionally excludes hidden agendas, founding new cities, full event resolution, and multiplayer permissions. All game mutations are executed by the backend; the frontend only displays state and sends action requests.
 
 ## Setup
 
 1. The backend creates a room in `chronicle_solo` mode.
-2. The latest available card deck and event deck are selected from the admin catalog. If no deck exists, the backend falls back to available catalog cards and events.
+2. The player chooses an Empire deck and Event deck when starting a room. If no Empire deck exists, the backend falls back to available catalog cards. The Event deck may be empty.
 3. One capital city is created and its capital foundation card is placed in play.
 4. Four players are created in fixed turn order.
 5. Each player draws three cards from the selected card deck.
-6. Player 1 becomes the active player.
+6. Player 1 becomes active and starts as Minister of the Empire.
 
-Events are loaded into an event deck. The first epoch starts directly in Administration; later epochs reveal one event before Administration.
+Events are loaded into an event deck. The first epoch starts directly in Administration; later epochs enter Council, reveal one event if available, rotate the Minister of the Empire, select ministries, and draw one card per player.
 
 ## Board Zones
 
@@ -35,19 +35,19 @@ Cards display:
 
 - Tier and cost chips at the top.
 - Requirements below the title.
-- Tags in the body.
+- Counted permanent tags in the body.
 - Manual action production at the bottom.
 
-Requirements are enforced when a completed project is built. A completed project only shows build options in city zones where its requirements are satisfied.
+Building cards can define counted permanent tags, volatile resource costs, required city tags, pitch tags, and stackable exhaust effects. Exhaust effects currently support producing volatile resources and drawing cards. Requirements are enforced when a completed project is built. A completed project only shows build options in city zones where its requirements are satisfied.
 
 ## Turn Actions
 
 Each epoch moves through explicit phases tracked by the backend and shown by the UI:
 
-1. Event: reveal one event from the event deck into the event queue. The first epoch skips this phase. If the event deck is empty, no event is revealed.
-2. Event Resolution: resolve active events. In v0, event cards are visual only and have no effects.
-3. Administration: players act in turn order.
-4. Decay: unfinished contributions are wiped, completed unbuilt projects remain available, and exhausted cards refresh.
+1. Council: rotate the Minister of the Empire, select ministries, reveal one event if the event deck is not empty, and draw one card per player.
+2. Administration: players act in turn order, starting from the Minister of the Empire.
+3. Crisis: event cards are visual only and have no effects in v0.
+4. Decay cleanup: unfinished contributions are wiped, completed unbuilt projects remain available, exhausted cards refresh, and volatile mana is cleared.
 
 ## Turn Actions
 
@@ -60,7 +60,8 @@ Limited action:
 Free actions:
 
 - Assign volatile mana from the active player's pool onto a project.
-- Build a completed project into an eligible city zone. The backend returns one build action per valid target, and the UI shows those targets as semi-transparent build options in the matching zones.
+- Build a completed project into an eligible city zone. This is available to the Minister of the Empire and any ministry configured with `can_finalize_projects`. The backend returns one build action per valid target, and the UI shows those targets as semi-transparent build options in the matching zones.
+- Use a configured ministry resource action, such as the Minister of Infrastructure producing an admin-selected volatile resource. This is once per year for that ministry action.
 
 Turn-ending action:
 
@@ -110,7 +111,8 @@ Supported v0 effect types:
 
 - `set_state`, currently used for `{"variable": "is_exhausted", "value": true}`.
 - `modify_mana`, used for adding or removing volatile mana from the active player's pool.
-- `modify_token`, `move_card`, and `draw_card` are part of the schema and will be wired incrementally.
+- `draw_card`, used for drawing from the Empire deck into the active player's hand.
+- `modify_token` and `move_card` are part of the schema and will be wired incrementally.
 
 Legacy `exhaust` metadata remains supported as a shortcut. If a card has no matching `manual_action` logic node, the backend builds an equivalent exhaust action from `exhaust`.
 
@@ -120,11 +122,11 @@ Decks are catalog entries with kind `decks`.
 
 The backend does not create default game items from Python. A new database starts with an empty catalog. Reusable defaults and templates live under `catalog/` as JSON files and are loaded through the admin console import controls.
 
-A card deck uses:
+An Empire deck uses:
 
 ```json
 {
-  "deck_type": "cards",
+  "deck_type": "empire",
   "item_ids": ["lumber-camp", "militia-garrison"]
 }
 ```
@@ -149,4 +151,6 @@ A common pool deck uses:
 
 The admin console exposes deck creation, modification, deletion, export, and import alongside the other catalog pages.
 
-Cards can also be configured with `logic_nodes` from the guided card editor. The existing cost and exhaust controls are still available for simple cards.
+Tags can be marked as permanent tags or volatile resources. Cards can be configured with counted permanent tags, volatile costs, required city tags, pitch tags, and `logic_nodes` from the guided card editor.
+
+Ministries are catalog entries with configurable event-type jurisdictions. The Minister of Infrastructure-style resource list is admin-editable through `infrastructure_resources`; project finalization and Politics/Economy proposal permissions are also ministry metadata.

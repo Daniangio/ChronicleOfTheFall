@@ -9,12 +9,25 @@ from sqlalchemy.orm import Session
 from .db_models import GameCatalogEntryRecord, utc_now
 
 
-CatalogKind = Literal["tags", "cards", "roles", "agendas", "events", "groups", "card-categories", "decks"]
+CatalogKind = Literal[
+    "tags",
+    "cards",
+    "roles",
+    "ministries",
+    "event-types",
+    "agendas",
+    "events",
+    "groups",
+    "card-categories",
+    "decks",
+]
 
 CATALOG_KINDS: tuple[CatalogKind, ...] = (
     "tags",
     "cards",
     "roles",
+    "ministries",
+    "event-types",
     "agendas",
     "events",
     "groups",

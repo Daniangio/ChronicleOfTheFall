@@ -12,6 +12,8 @@ const sections = [
   { key: "audit", label: "Audit", to: "/admin/audit" },
   { key: "tags", label: "Tags", to: "/admin/tags" },
   { key: "cards", label: "Cards", to: "/admin/cards" },
+  { key: "ministries", label: "Ministries", to: "/admin/ministries" },
+  { key: "event-types", label: "Event Types", to: "/admin/event-types" },
   { key: "roles", label: "Roles", to: "/admin/roles" },
   { key: "agendas", label: "Agendas", to: "/admin/agendas" },
   { key: "events", label: "Events", to: "/admin/events" },
@@ -23,6 +25,8 @@ const catalogSections = new Set([
   "tags",
   "cards",
   "roles",
+  "ministries",
+  "event-types",
   "agendas",
   "events",
   "groups",
@@ -64,15 +68,17 @@ const dataForForm = (form) => {
 const stringifyData = (data) => JSON.stringify(data || {}, null, 2);
 
 const tagListFieldsBySection = {
-  cards: ["tags"],
+  cards: [],
   roles: ["exhaust_tags", "jurisdiction_tags"],
+  ministries: [],
   agendas: [],
   events: ["tags", "condition_tags"],
 };
 
 const tagCountFieldsBySection = {
-  cards: ["cost", "exhaust"],
+  cards: [],
   roles: [],
+  ministries: [],
   agendas: [],
   events: ["mitigation"],
 };
@@ -80,6 +86,7 @@ const tagCountFieldsBySection = {
 const tagSingleFieldsBySection = {
   cards: [],
   roles: ["default_jurisdiction"],
+  ministries: [],
   agendas: [],
   events: ["event_domain"],
 };
@@ -93,6 +100,7 @@ const emptyRequirement = { type: "not_condition", tag_id: "", card_id: "", scope
 const emptyReplacementEffect = { type: "add_condition", tag_id: "", scope: "target", amount: 1 };
 const emptyCondition = { target: "this_card", variable: "is_exhausted", operator: "==", value: false };
 const emptyEffect = { effect_type: "modify_mana", payload: { mana_type: "", amount: 1 } };
+const emptyDrawEffect = { effect_type: "draw_card", payload: { amount: 1 } };
 const defaultManualNode = {
   name: "Manual Action",
   trigger: "manual_action",
@@ -114,6 +122,12 @@ const orderedGroupedTagEntries = (tags) =>
   Object.entries(groupedTags(tags)).sort(([left], [right]) => left.localeCompare(right));
 
 const tagLabel = (value) => String(value || "").replace(/_/g, " ");
+
+const tagIsVolatileResource = (tag) =>
+  Boolean(tag?.data?.is_volatile_resource || tag?.data?.resource_type === "volatile" || tag?.category === "volatile-resource");
+
+const volatileResourceTags = (tags) => (tags || []).filter(tagIsVolatileResource);
+const permanentOnlyTags = (tags) => (tags || []).filter((tag) => !tagIsVolatileResource(tag));
 
 const TagToggleGroup = ({ label, tags, selectedIds, onToggle }) => (
   <div>
@@ -219,6 +233,23 @@ const TagSingleSelect = ({ label, tags, selectedId, onSelect }) => (
   </div>
 );
 
+const TagResourceFields = ({ data, setField }) => (
+  <div className="rounded-lg border border-slate-800 bg-slate-950 p-4">
+    <h3 className="font-semibold text-white">Tag Behavior</h3>
+    <label className="mt-3 flex items-center gap-2 text-sm font-medium text-slate-300">
+      <input
+        checked={Boolean(data.is_volatile_resource || data.resource_type === "volatile")}
+        onChange={(event) => {
+          setField("is_volatile_resource", event.target.checked);
+          setField("resource_type", event.target.checked ? "volatile" : "permanent_tag");
+        }}
+        type="checkbox"
+      />
+      Volatile resource
+    </label>
+  </div>
+);
+
 const SelectField = ({ label, value, options, onChange }) => (
   <label className="block">
     <span className="text-sm font-medium text-slate-300">{label}</span>
@@ -273,6 +304,7 @@ const LogicNodeEditor = ({ logicNodes, setLogicNodes, tagEntries }) => {
     const effect = logicNodes[nodeIndex]?.effects?.[effectIndex] || emptyEffect;
     updateEffect(nodeIndex, effectIndex, { payload: { ...(effect.payload || {}), ...patch } });
   };
+  const resourceTags = volatileResourceTags(tagEntries);
 
   return (
     <div className="space-y-3">
@@ -419,7 +451,7 @@ const LogicNodeEditor = ({ logicNodes, setLogicNodes, tagEntries }) => {
                         value={effect.payload?.mana_type || ""}
                         options={[
                           { value: "", label: "Select mana" },
-                          ...tagEntries.map((tag) => ({ value: tag.id, label: tag.name })),
+                          ...resourceTags.map((tag) => ({ value: tag.id, label: tag.name })),
                         ]}
                         onChange={(value) => updateEffectPayload(nodeIndex, effectIndex, { mana_type: value })}
                       />
@@ -429,6 +461,20 @@ const LogicNodeEditor = ({ logicNodes, setLogicNodes, tagEntries }) => {
                           type="number"
                           value={Number(effect.payload?.amount || 0)}
                           onChange={(event) => updateEffectPayload(nodeIndex, effectIndex, { amount: Number(event.target.value || 0) })}
+                          className="mt-2 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none focus:border-teal-400"
+                        />
+                      </label>
+                    </>
+                  ) : effect.effect_type === "draw_card" ? (
+                    <>
+                      <span />
+                      <label className="block">
+                        <span className="text-sm font-medium text-slate-300">Cards</span>
+                        <input
+                          type="number"
+                          min="1"
+                          value={Number(effect.payload?.amount || 1)}
+                          onChange={(event) => updateEffectPayload(nodeIndex, effectIndex, { amount: Number(event.target.value || 1) })}
                           className="mt-2 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none focus:border-teal-400"
                         />
                       </label>
@@ -497,6 +543,8 @@ const LogicNodeEditor = ({ logicNodes, setLogicNodes, tagEntries }) => {
 
 const CardGuidedFields = ({ data, setField, tagEntries, cardEntries, groupEntries }) => {
   const conditionTags = tagEntries.filter((tag) => tag.category === "condition");
+  const resourceTags = volatileResourceTags(tagEntries);
+  const permanentTags = permanentOnlyTags(tagEntries);
   const cardOptions = cardEntries.filter((entry) => entry.kind === "cards");
   const groups = groupEntries.filter((entry) => entry.category === "mutually-exclusive" || entry.data?.type === "mutually_exclusive");
   const requirements = Array.isArray(data.requirements) ? data.requirements : [];
@@ -518,10 +566,69 @@ const CardGuidedFields = ({ data, setField, tagEntries, cardEntries, groupEntrie
   return (
     <>
       <SelectField
+        label="Card Type"
+        value={data.card_type || "building"}
+        options={[
+          { value: "building", label: "Building" },
+          { value: "politics", label: "Politics" },
+          { value: "economy", label: "Economy" },
+        ]}
+        onChange={(value) => setField("card_type", value)}
+      />
+
+      <SelectField
         label="Placement"
         value={data.placement || "city"}
         options={placementOptions}
         onChange={(value) => setField("placement", value)}
+      />
+
+      <TagCounterGroup
+        label="Permanent Tags"
+        tags={permanentTags}
+        values={data.tags || {}}
+        onChange={(tagId, count) => {
+          const current = data.tags && typeof data.tags === "object" && !Array.isArray(data.tags) ? { ...data.tags } : {};
+          if (count <= 0) delete current[tagId];
+          else current[tagId] = count;
+          setField("tags", current);
+        }}
+      />
+
+      <TagCounterGroup
+        label="Volatile Resource Cost"
+        tags={resourceTags}
+        values={data.cost || {}}
+        onChange={(tagId, count) => {
+          const current = data.cost && typeof data.cost === "object" && !Array.isArray(data.cost) ? { ...data.cost } : {};
+          if (count <= 0) delete current[tagId];
+          else current[tagId] = count;
+          setField("cost", current);
+        }}
+      />
+
+      <TagCounterGroup
+        label="Required City Tags"
+        tags={permanentTags}
+        values={data.required_city_tags || {}}
+        onChange={(tagId, count) => {
+          const current = data.required_city_tags && typeof data.required_city_tags === "object" && !Array.isArray(data.required_city_tags) ? { ...data.required_city_tags } : {};
+          if (count <= 0) delete current[tagId];
+          else current[tagId] = count;
+          setField("required_city_tags", current);
+        }}
+      />
+
+      <TagCounterGroup
+        label="Pitch Tags"
+        tags={permanentTags}
+        values={data.pitches || {}}
+        onChange={(tagId, count) => {
+          const current = data.pitches && typeof data.pitches === "object" && !Array.isArray(data.pitches) ? { ...data.pitches } : {};
+          if (count <= 0) delete current[tagId];
+          else current[tagId] = count;
+          setField("pitches", current);
+        }}
       />
 
       <LogicNodeEditor
@@ -661,7 +768,7 @@ const CardGuidedFields = ({ data, setField, tagEntries, cardEntries, groupEntrie
 };
 
 const DeckGuidedFields = ({ data, setField, cardEntries, eventEntries }) => {
-  const deckType = data.deck_type === "events" || data.deck_type === "common-pool" ? data.deck_type : "cards";
+  const deckType = ["empire", "events", "common-pool", "cards"].includes(data.deck_type) ? data.deck_type : "empire";
   const items = deckType === "events" ? eventEntries : cardEntries.filter((entry) => entry.id !== "capital-foundation");
   const selectedIds = Array.isArray(data.item_ids) ? data.item_ids : [];
   const copyCounts = selectedIds.reduce((counts, itemId) => {
@@ -680,9 +787,10 @@ const DeckGuidedFields = ({ data, setField, cardEntries, eventEntries }) => {
         label="Deck Type"
         value={deckType}
         options={[
-          { value: "cards", label: "Cards" },
+          { value: "empire", label: "Empire Deck" },
           { value: "common-pool", label: "Common Pool" },
           { value: "events", label: "Events" },
+          { value: "cards", label: "Legacy Cards" },
         ]}
         onChange={(value) => {
           setField("deck_type", value);
@@ -745,6 +853,83 @@ const DeckGuidedFields = ({ data, setField, cardEntries, eventEntries }) => {
   );
 };
 
+const MinistryGuidedFields = ({ data, setField, eventTypeEntries, tagEntries }) => {
+  const administeredEventTypes = Array.isArray(data.administered_event_types) ? data.administered_event_types : [];
+  const resourceTags = volatileResourceTags(tagEntries);
+
+  const toggleEventType = (eventTypeId) => {
+    setField(
+      "administered_event_types",
+      administeredEventTypes.includes(eventTypeId)
+        ? administeredEventTypes.filter((item) => item !== eventTypeId)
+        : [...administeredEventTypes, eventTypeId]
+    );
+  };
+
+  return (
+    <>
+      <label className="flex items-center gap-2 text-sm font-medium text-slate-300">
+        <input
+          checked={Boolean(data.is_minister_of_empire)}
+          onChange={(event) => setField("is_minister_of_empire", event.target.checked)}
+          type="checkbox"
+        />
+        Minister of the Empire
+      </label>
+      <label className="flex items-center gap-2 text-sm font-medium text-slate-300">
+        <input
+          checked={Boolean(data.can_finalize_projects)}
+          onChange={(event) => setField("can_finalize_projects", event.target.checked)}
+          type="checkbox"
+        />
+        Can finalize completed projects
+      </label>
+      <label className="flex items-center gap-2 text-sm font-medium text-slate-300">
+        <input
+          checked={Boolean(data.can_propose_politics_economy)}
+          onChange={(event) => setField("can_propose_politics_economy", event.target.checked)}
+          type="checkbox"
+        />
+        Can propose Politics and Economy cards
+      </label>
+
+      <div>
+        <p className="mb-2 text-sm font-medium text-slate-300">Event Types Administered</p>
+        <div className="flex flex-wrap gap-2">
+          {eventTypeEntries.map((eventType) => {
+            const selected = administeredEventTypes.includes(eventType.id);
+            return (
+              <button
+                key={eventType.id}
+                className={`rounded-md border px-2 py-1 text-xs font-semibold ${selected ? "border-teal-400 bg-teal-400/10 text-teal-100" : "border-slate-700 text-slate-400 hover:bg-slate-800"}`}
+                onClick={() => toggleEventType(eventType.id)}
+                type="button"
+              >
+                {eventType.name}
+              </button>
+            );
+          })}
+          {eventTypeEntries.length === 0 ? <span className="text-sm text-slate-500">Create event types first.</span> : null}
+        </div>
+      </div>
+
+      <TagCounterGroup
+        label="Infrastructure Resources"
+        tags={resourceTags}
+        values={data.infrastructure_resources || {}}
+        onChange={(tagId, count) => {
+          const current = data.infrastructure_resources && typeof data.infrastructure_resources === "object" && !Array.isArray(data.infrastructure_resources)
+            ? { ...data.infrastructure_resources }
+            : {};
+          if (count <= 0) delete current[tagId];
+          else current[tagId] = count;
+          setField("infrastructure_resources", current);
+        }}
+      />
+    </>
+  );
+};
+
 const GuidedMetadataEditor = ({
   activeSection,
   catalogForm,
@@ -753,17 +938,35 @@ const GuidedMetadataEditor = ({
   cardEntries,
   groupEntries,
   eventEntries,
+  eventTypeEntries,
 }) => {
-  if (activeSection === "tags") return null;
-
   const data = dataForForm(catalogForm);
+  if (activeSection === "tags") {
+    const setField = (field, value) => {
+      setCatalogForm((state) => {
+        let currentData = {};
+        try {
+          currentData = parseDataText(state.dataText);
+        } catch (_error) {
+          currentData = data;
+        }
+        const nextData = { ...currentData };
+        if (value === "" || value === false || value == null) delete nextData[field];
+        else nextData[field] = value;
+        return { ...state, dataText: stringifyData(nextData) };
+      });
+    };
+    return <TagResourceFields data={data} setField={setField} />;
+  }
+
   const countFields = tagCountFieldsBySection[activeSection] || [];
   const listFields = tagListFieldsBySection[activeSection] || [];
   const singleFields = tagSingleFieldsBySection[activeSection] || [];
   const usefulFields = [...countFields, ...listFields, ...singleFields];
   const hasCardGuidance = activeSection === "cards";
   const hasDeckGuidance = activeSection === "decks";
-  if (!usefulFields.length && !hasCardGuidance && !hasDeckGuidance) return null;
+  const hasMinistryGuidance = activeSection === "ministries";
+  if (!usefulFields.length && !hasCardGuidance && !hasDeckGuidance && !hasMinistryGuidance) return null;
 
   const setField = (field, value) => {
     setCatalogForm((state) => {
@@ -829,6 +1032,14 @@ const GuidedMetadataEditor = ({
           eventEntries={eventEntries}
         />
       ) : null}
+      {hasMinistryGuidance ? (
+        <MinistryGuidedFields
+          data={data}
+          setField={setField}
+          eventTypeEntries={eventTypeEntries}
+          tagEntries={tagEntries}
+        />
+      ) : null}
       {countFields.map((field) => (
         <TagCounterGroup
           key={field}
@@ -871,6 +1082,7 @@ const AdminPage = () => {
   const [tagEntries, setTagEntries] = useState([]);
   const [cardEntries, setCardEntries] = useState([]);
   const [eventEntries, setEventEntries] = useState([]);
+  const [eventTypeEntries, setEventTypeEntries] = useState([]);
   const [cardCategories, setCardCategories] = useState([]);
   const [groupEntries, setGroupEntries] = useState([]);
   const [catalogSummary, setCatalogSummary] = useState(null);
@@ -940,6 +1152,9 @@ const AdminPage = () => {
       if (targetSection !== "events") {
         requests.push(request("/api/admin/events"));
       }
+      if (targetSection !== "event-types") {
+        requests.push(request("/api/admin/event-types"));
+      }
       if (targetSection !== "card-categories") {
         requests.push(request("/api/admin/card-categories"));
       }
@@ -950,6 +1165,7 @@ const AdminPage = () => {
       const cards = targetSection === "cards" ? entries : results[resultIndex++];
       const groups = targetSection === "groups" ? entries : results[resultIndex++];
       const events = targetSection === "events" ? entries : results[resultIndex++];
+      const eventTypes = targetSection === "event-types" ? entries : results[resultIndex++];
       const categories = targetSection === "card-categories" ? entries : results[resultIndex++];
       setCatalogSummary(summary);
       setCatalogEntries(entries);
@@ -957,6 +1173,7 @@ const AdminPage = () => {
       setCardEntries(targetSection === "cards" ? entries : cards);
       setGroupEntries(targetSection === "groups" ? entries : groups);
       setEventEntries(targetSection === "events" ? entries : events);
+      setEventTypeEntries(targetSection === "event-types" ? entries : eventTypes);
       setCardCategories(targetSection === "card-categories" ? entries : categories);
       setEditingEntry(null);
       setCatalogForm(emptyCatalogForm);
@@ -1023,13 +1240,19 @@ const AdminPage = () => {
           : activeCatalogKind === "card-categories"
             ? "card-category"
             : activeCatalogKind === "decks"
-              ? "cards"
+              ? "empire"
+            : activeCatalogKind === "event-types"
+              ? "event-type"
             : "",
       dataText:
         activeCatalogKind === "groups"
           ? stringifyData({ type: "mutually_exclusive" })
           : activeCatalogKind === "decks"
-            ? stringifyData({ deck_type: "cards", item_ids: [] })
+            ? stringifyData({ deck_type: "empire", item_ids: [] })
+            : activeCatalogKind === "ministries"
+              ? stringifyData({ administered_event_types: [], can_finalize_projects: false })
+              : activeCatalogKind === "tags"
+                ? stringifyData({ resource_type: "permanent_tag" })
             : "{}",
     });
     setEditorOpen(true);
@@ -1128,6 +1351,14 @@ const AdminPage = () => {
           );
         });
       }
+      if (activeCatalogKind === "event-types") {
+        setEventTypeEntries((entries) => {
+          const withoutSaved = entries.filter((entry) => entry.id !== saved.id);
+          return [...withoutSaved, saved].sort((a, b) =>
+            `${a.category}:${a.name}:${a.id}`.localeCompare(`${b.category}:${b.name}:${b.id}`)
+          );
+        });
+      }
       if (activeCatalogKind === "card-categories") {
         setCardCategories((entries) => {
           const withoutSaved = entries.filter((entry) => entry.id !== saved.id);
@@ -1174,6 +1405,9 @@ const AdminPage = () => {
       }
       if (activeCatalogKind === "events") {
         setEventEntries((entries) => entries.filter((candidate) => candidate.id !== entry.id));
+      }
+      if (activeCatalogKind === "event-types") {
+        setEventTypeEntries((entries) => entries.filter((candidate) => candidate.id !== entry.id));
       }
       if (activeCatalogKind === "card-categories") {
         setCardCategories((entries) => entries.filter((candidate) => candidate.id !== entry.id));
@@ -1645,6 +1879,7 @@ const AdminPage = () => {
                 cardEntries={cardEntries}
                 groupEntries={groupEntries}
                 eventEntries={eventEntries}
+                eventTypeEntries={eventTypeEntries}
               />
 
               <label className="block">

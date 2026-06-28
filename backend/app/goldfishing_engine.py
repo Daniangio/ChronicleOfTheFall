@@ -53,6 +53,8 @@ def build_goldfishing_state(
     event_deck_id: str,
     common_pool_deck_id: str = "",
     event_entries: list[dict[str, Any]] | None = None,
+    ministry_entries: list[dict[str, Any]] | None = None,
+    event_type_entries: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     card_by_id = {entry["id"]: entry for entry in card_entries}
     draw_deck = Deck([
@@ -78,13 +80,20 @@ def build_goldfishing_state(
                 "turn_exhaust_used": False,
             }
         )
+    ministries = ministry_entries or []
+    selected_ministries = _select_ministries(players, ministries, minister_of_empire_player_id="player-1")
     return _prepare_state({
         "mode": "goldfishing",
         "room_id": room_id,
         "epoch": 1,
         "phase": "administration",
+        "year_phase": "administration",
         "active_player_id": "player-1",
+        "minister_of_empire_player_id": "player-1",
+        "blocked_player_id": "",
+        "selected_ministries": selected_ministries,
         "players": players,
+        "pillars": {"treasury": 5, "stability": 5, "morale": 5},
         "common_pool": common_pool,
         "projects": [],
         "cities": [
@@ -103,13 +112,15 @@ def build_goldfishing_state(
             "cards": card_entries,
             "tags": tag_entries,
             "events": event_entries or [],
+            "ministries": ministries,
+            "event_types": event_type_entries or [],
         },
         "decks": {
             "cards": card_deck_id,
             "events": event_deck_id,
             "common_pool": common_pool_deck_id,
         },
-        "log": [f"Goldfishing setup complete. Capital placed. Each player drew {INITIAL_HAND_SIZE} cards."],
+        "log": [f"Goldfishing setup complete. Capital placed. Each player drew {INITIAL_HAND_SIZE} cards. Player 1 is Minister of the Empire."],
     })
 
 
@@ -141,8 +152,7 @@ def advance_turn(state: dict[str, Any]) -> dict[str, Any]:
         return state
     if all(player.get("passed") for player in players):
         _decay_phase(state)
-        state["phase"] = "decay"
-        state.setdefault("log", []).append("All players passed. Decay resolved.")
+        state.setdefault("log", []).append("All players passed. Administration ended.")
         return state
     current_index = next(
         (index for index, player in enumerate(players) if player.get("id") == state.get("active_player_id")),
@@ -168,6 +178,9 @@ def propose_project(state: dict[str, Any], *, player_id: str, card_id: str) -> d
     source = "hand" if card_id in active.get("hand", []) else "common_pool" if card_id in state.get("common_pool", []) else ""
     if not source:
         raise ValueError("Card is not available to propose.")
+    card = card_by_id(state, card_id)
+    if _card_requires_state_minister(card) and not _active_ministry(state, active).get("data", {}).get("can_propose_politics_economy"):
+        raise ValueError("Only the Minister of State can propose Politics or Economy cards.")
     if len(state.get("projects", [])) >= PROJECT_LIMIT:
         discarded = state["projects"].pop(0)
         try:
@@ -184,7 +197,7 @@ def propose_project(state: dict[str, Any], *, player_id: str, card_id: str) -> d
     )
     active["passed"] = False
     source_label = "common pool" if source == "common_pool" else "hand"
-    state.setdefault("log", []).append(f"{active['name']} proposed {card_by_id(state, card_id)['name']} from {source_label}.")
+    state.setdefault("log", []).append(f"{active['name']} proposed {card['name']} from {source_label}.")
     active["mana"] = {}
     return _prepare_state(advance_turn(state))
 
@@ -200,6 +213,8 @@ def build_project(state: dict[str, Any], *, player_id: str, project_id: str, cit
     card = card_by_id(state, project.get("card_id", ""))
     if not _project_complete(card, project):
         raise ValueError("Project is not complete.")
+    if not _player_can_finalize_project(state, active):
+        raise ValueError("This player's ministry cannot finalize projects.")
     if not _card_can_be_built_in_city(state, card, city):
         raise ValueError("Project requirements are not satisfied in this city.")
     city.setdefault("cards", []).append(card["id"])
@@ -273,6 +288,26 @@ def assign_mana(
     return _prepare_state(state)
 
 
+def use_ministry_resource(state: dict[str, Any], *, player_id: str, tag_id: str) -> dict[str, Any]:
+    state = deepcopy(state)
+    _require_phase(state, "administration")
+    active = get_active_player(state)
+    if active["id"] != player_id:
+        raise ValueError("It is not this player's turn.")
+    ministry = _active_ministry(state, active)
+    resources = (ministry.get("data", {}) or {}).get("infrastructure_resources") or {}
+    if int(resources.get(tag_id, 0)) <= 0:
+        raise ValueError("This ministry cannot produce that resource.")
+    used_key = f"ministry_resource:{ministry.get('id', '')}"
+    if used_key in active.setdefault("once_per_year_used", []):
+        raise ValueError("This ministry resource has already been used this year.")
+    active.setdefault("mana", {})[tag_id] = int(active.get("mana", {}).get(tag_id, 0)) + int(resources.get(tag_id, 1))
+    active["once_per_year_used"].append(used_key)
+    active["passed"] = False
+    state.setdefault("log", []).append(f"{active['name']} used {ministry.get('name', 'ministry')} to produce {tag_id}.")
+    return _prepare_state(state)
+
+
 def pass_turn(state: dict[str, Any], *, player_id: str) -> dict[str, Any]:
     state = deepcopy(state)
     _require_phase(state, "administration")
@@ -290,21 +325,27 @@ def continue_phase(state: dict[str, Any]) -> dict[str, Any]:
     phase = state.get("phase") or "administration"
     if phase == "decay":
         state["epoch"] = int(state.get("epoch") or 1) + 1
-        state["phase"] = "event"
+        _rotate_minister_of_empire(state)
+        _select_year_ministries(state)
+        _draw_for_all_players(state, 1)
+        state["phase"] = "council"
+        state["year_phase"] = "council"
         _reveal_event(state)
-    elif phase == "event":
-        state["phase"] = "event_resolution"
-        state.setdefault("log", []).append("Events resolved. No event effects are wired in v0.")
-    elif phase == "event_resolution":
+        state.setdefault("log", []).append("Council phase began. Ministries selected and each player drew 1 card.")
+    elif phase == "council":
         state["phase"] = "administration"
+        state["year_phase"] = "administration"
         players = state.get("players", [])
         for player in players:
             player["passed"] = False
             player["mana"] = {}
             _start_player_turn(player)
-        if players:
-            state["active_player_id"] = players[0]["id"]
+        state["active_player_id"] = state.get("minister_of_empire_player_id") or (players[0]["id"] if players else "")
         state.setdefault("log", []).append("Administration phase began.")
+    elif phase == "crisis":
+        state["phase"] = "decay"
+        state["year_phase"] = "decay"
+        state.setdefault("log", []).append("Crisis phase resolved. No event effects are wired in v0.")
     else:
         raise ValueError("Current phase cannot be advanced manually.")
     return _prepare_state(state)
@@ -320,15 +361,24 @@ def _prepare_state(state: dict[str, Any]) -> dict[str, Any]:
 
 def _ensure_state_defaults(state: dict[str, Any]) -> None:
     state.setdefault("phase", "administration")
+    state.setdefault("year_phase", state.get("phase", "administration"))
     state.setdefault("event_queue", [])
     state.setdefault("event_deck", [])
     state.setdefault("common_pool", [])
     state.setdefault("possible_actions", [])
     state.setdefault("catalog", {}).setdefault("events", [])
+    state.setdefault("catalog", {}).setdefault("ministries", [])
+    state.setdefault("catalog", {}).setdefault("event_types", [])
+    state.setdefault("pillars", {"treasury": 5, "stability": 5, "morale": 5})
+    if "minister_of_empire_player_id" not in state and state.get("players"):
+        state["minister_of_empire_player_id"] = state["players"][0].get("id", "")
+    state.setdefault("blocked_player_id", "")
+    state.setdefault("selected_ministries", {})
     for player in state.get("players", []):
         player.setdefault("mana", {})
         player.setdefault("passed", False)
         player.setdefault("turn_exhaust_used", False)
+        player.setdefault("once_per_year_used", [])
 
 
 def _auto_pass_unactionable_players(state: dict[str, Any]) -> None:
@@ -348,7 +398,7 @@ def _auto_pass_unactionable_players(state: dict[str, Any]) -> None:
 
 def _possible_actions(state: dict[str, Any]) -> list[dict[str, Any]]:
     phase = state.get("phase") or "administration"
-    if phase in {"decay", "event", "event_resolution"}:
+    if phase in {"decay", "council", "crisis"}:
         return [{"type": "continue_phase"}]
     if phase != "administration":
         return []
@@ -358,6 +408,13 @@ def _possible_actions(state: dict[str, Any]) -> list[dict[str, Any]]:
 def _possible_actions_for_active_player(state: dict[str, Any]) -> list[dict[str, Any]]:
     active = get_active_player(state)
     actions: list[dict[str, Any]] = []
+    ministry = _active_ministry(state, active)
+    ministry_resources = (ministry.get("data", {}) or {}).get("infrastructure_resources") or {}
+    used_key = f"ministry_resource:{ministry.get('id', '')}"
+    if ministry_resources and used_key not in active.get("once_per_year_used", []):
+        for tag_id, amount in ministry_resources.items():
+            if int(amount) > 0:
+                actions.append({"type": "use_ministry_resource", "player_id": active["id"], "tag_id": tag_id, "amount": int(amount)})
     if not active.get("turn_exhaust_used"):
         for city in state.get("cities", []):
             for card_id in [city.get("foundation_card_id"), *city.get("cards", [])]:
@@ -371,15 +428,25 @@ def _possible_actions_for_active_player(state: dict[str, Any]) -> list[dict[str,
                 if node and _preconditions_met(state, node, city=city, card_id=card_id, player=active):
                     actions.append({"type": "exhaust_card", "player_id": active["id"], "city_id": city["id"], "card_id": card_id})
     for card_id in active.get("hand", []):
-        actions.append({"type": "propose_project", "player_id": active["id"], "card_id": card_id, "source": "hand"})
+        try:
+            card = card_by_id(state, card_id)
+        except ValueError:
+            continue
+        if not _card_requires_state_minister(card) or _active_ministry(state, active).get("data", {}).get("can_propose_politics_economy"):
+            actions.append({"type": "propose_project", "player_id": active["id"], "card_id": card_id, "source": "hand"})
     for card_id in state.get("common_pool", []):
-        actions.append({"type": "propose_project", "player_id": active["id"], "card_id": card_id, "source": "common_pool"})
+        try:
+            card = card_by_id(state, card_id)
+        except ValueError:
+            continue
+        if not _card_requires_state_minister(card) or _active_ministry(state, active).get("data", {}).get("can_propose_politics_economy"):
+            actions.append({"type": "propose_project", "player_id": active["id"], "card_id": card_id, "source": "common_pool"})
     for project in state.get("projects", []):
         try:
             card = card_by_id(state, project.get("card_id", ""))
         except ValueError:
             continue
-        if _project_complete(card, project):
+        if _project_complete(card, project) and _player_can_finalize_project(state, active):
             for city in state.get("cities", []):
                 if _card_can_be_built_in_city(state, card, city):
                     actions.append({
@@ -442,6 +509,9 @@ def _decay_phase(state: dict[str, Any]) -> None:
         city_entry["exhausted_card_ids"] = []
     for player in state.get("players", []):
         player["mana"] = {}
+        player["once_per_year_used"] = []
+    state["phase"] = "crisis"
+    state["year_phase"] = "crisis"
 
 
 def _project_complete(card: dict[str, Any], project: dict[str, Any]) -> bool:
@@ -452,11 +522,84 @@ def _project_complete(card: dict[str, Any], project: dict[str, Any]) -> bool:
     return all(int(contributions.get(tag_id, 0)) >= int(amount) for tag_id, amount in cost.items())
 
 
+def _select_ministries(
+    players: list[dict[str, Any]],
+    ministries: list[dict[str, Any]],
+    *,
+    minister_of_empire_player_id: str,
+) -> dict[str, str]:
+    selected: dict[str, str] = {}
+    non_empire_ministries = [
+        ministry
+        for ministry in ministries
+        if not (ministry.get("data", {}) or {}).get("is_minister_of_empire")
+    ]
+    for index, player in enumerate(players):
+        player_id = str(player.get("id") or "")
+        if player_id == minister_of_empire_player_id:
+            selected[player_id] = "minister-of-the-empire"
+        elif non_empire_ministries:
+            selected[player_id] = str(non_empire_ministries[(index - 1) % len(non_empire_ministries)].get("id") or "")
+    return selected
+
+
+def _rotate_minister_of_empire(state: dict[str, Any]) -> None:
+    players = state.get("players", [])
+    if not players:
+        return
+    current_id = state.get("minister_of_empire_player_id") or players[0].get("id")
+    current_index = next((index for index, player in enumerate(players) if player.get("id") == current_id), 0)
+    next_player = players[(current_index + 1) % len(players)]
+    state["minister_of_empire_player_id"] = next_player.get("id", "")
+    state["active_player_id"] = next_player.get("id", "")
+    state.setdefault("log", []).append(f"{next_player.get('name', 'Next player')} is Minister of the Empire.")
+
+
+def _select_year_ministries(state: dict[str, Any]) -> None:
+    state["blocked_player_id"] = ""
+    state["selected_ministries"] = _select_ministries(
+        state.get("players", []),
+        state.get("catalog", {}).get("ministries", []),
+        minister_of_empire_player_id=str(state.get("minister_of_empire_player_id") or ""),
+    )
+
+
+def _draw_for_all_players(state: dict[str, Any], amount: int) -> None:
+    deck = Deck(state.get("draw_deck", []))
+    for player in state.get("players", []):
+        player.setdefault("hand", []).extend(deck.draw(amount))
+    state["draw_deck"] = deck.to_list()
+
+
 def _card_can_be_built_in_city(state: dict[str, Any], card: dict[str, Any], city: dict[str, Any]) -> bool:
     placement = str((card.get("data", {}) or {}).get("placement") or "city")
     if placement not in {"", "city", "local"}:
         return False
+    for tag_id, amount in ((card.get("data", {}) or {}).get("required_city_tags") or {}).items():
+        if _count_city_token(state, city, tag_id) < int(amount):
+            return False
     return all(_build_requirement_met(state, requirement, city) for requirement in (card.get("data", {}).get("requirements") or []))
+
+
+def _card_requires_state_minister(card: dict[str, Any]) -> bool:
+    return str((card.get("data", {}) or {}).get("card_type") or card.get("category") or "").casefold() in {"politics", "economy", "political", "economic"}
+
+
+def _player_can_finalize_project(state: dict[str, Any], player: dict[str, Any]) -> bool:
+    ministries = state.get("catalog", {}).get("ministries") or []
+    if not ministries:
+        return True
+    if player.get("id") == state.get("minister_of_empire_player_id"):
+        return True
+    return bool(_active_ministry(state, player).get("data", {}).get("can_finalize_projects"))
+
+
+def _active_ministry(state: dict[str, Any], player: dict[str, Any]) -> dict[str, Any]:
+    ministry_id = (state.get("selected_ministries") or {}).get(player.get("id"))
+    for ministry in state.get("catalog", {}).get("ministries", []):
+        if ministry.get("id") == ministry_id:
+            return ministry
+    return {}
 
 
 def _build_requirement_met(state: dict[str, Any], requirement: dict[str, Any], city: dict[str, Any]) -> bool:
@@ -612,6 +755,11 @@ def _execute_effects(
                 del player["mana"][mana_type]
         elif effect_type == "modify_token":
             _modify_token(state, payload, city=city, card_id=card_id)
+        elif effect_type == "draw_card":
+            amount = max(1, int(payload.get("amount") or 1))
+            deck = Deck(state.get("draw_deck", []))
+            player.setdefault("hand", []).extend(deck.draw(amount))
+            state["draw_deck"] = deck.to_list()
 
 
 def _modify_token(state: dict[str, Any], payload: dict[str, Any], *, city: dict[str, Any], card_id: str) -> None:
@@ -652,7 +800,10 @@ def _count_city_token(state: dict[str, Any], city: dict[str, Any], token: str) -
             continue
         data = card.get("data", {})
         total += int((data.get("tokens") or {}).get(token, 0))
-        if token in (data.get("tags") or []):
+        tags = data.get("tags") or {}
+        if isinstance(tags, dict):
+            total += int(tags.get(token, 0))
+        elif token in tags:
             total += 1
     return total
 
