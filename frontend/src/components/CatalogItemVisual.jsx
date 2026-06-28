@@ -143,13 +143,15 @@ const DataValue = ({ itemKey, value, tagLookup, cardLookup, groupLookup }) => {
   return <span className="text-slate-300">{primitiveText(value)}</span>;
 };
 
-const CatalogItemVisual = ({ entry, tags = [], cards = [], groups = [], ministries = [], actions = null }) => {
+const CatalogItemVisual = ({ entry, tags = [], cards = [], groups = [], ministries = [], images = [], actions = null }) => {
   const color = entry?.color || fallbackColor;
   const tagLookup = buildTagLookup(tags);
   const cardLookup = Object.fromEntries((cards || []).map((card) => [normalizeTagId(card.id || card.name), card]));
   const groupLookup = Object.fromEntries((groups || []).map((group) => [normalizeTagId(group.id || group.name), group]));
+  const imageLookup = Object.fromEntries((images || []).map((image) => [image.id, image]));
   const domainMinistry = (ministries || []).find((ministry) => ministry.data?.domain_id && ministry.data.domain_id === entry?.data?.domain_id);
-  const dataEntries = Object.entries(entry?.data || {}).slice(0, 6);
+  const domainIcon = domainMinistry?.data?.domain_icon || imageLookup[domainMinistry?.data?.domain_icon_image_id]?.data?.src || "";
+  const dataEntries = Object.entries(entry?.data || {}).filter(([key]) => key !== "src").slice(0, 6);
 
   return (
     <article className="overflow-hidden rounded-lg border border-slate-800 bg-slate-900">
@@ -163,8 +165,8 @@ const CatalogItemVisual = ({ entry, tags = [], cards = [], groups = [], ministri
                 <TagIcon tag={entry} />
               ) : entry.kind === "events" && domainMinistry ? (
                 <span className="inline-flex items-center gap-1 rounded bg-slate-800 px-2 py-1 text-xs font-medium text-slate-300">
-                  {domainMinistry.data?.domain_icon ? (
-                    <img alt="" className="h-4 w-4 rounded object-cover" src={domainMinistry.data.domain_icon} />
+                  {domainIcon ? (
+                    <img alt="" className="h-4 w-4 rounded object-cover" src={domainIcon} />
                   ) : (
                     <span className="font-semibold">{String(domainMinistry.data?.domain_symbol || domainMinistry.data?.domain_id || "").slice(0, 3).toUpperCase()}</span>
                   )}
@@ -185,6 +187,12 @@ const CatalogItemVisual = ({ entry, tags = [], cards = [], groups = [], ministri
         ) : (
           <p className="mt-3 text-sm text-slate-600">No summary</p>
         )}
+
+        {entry.kind === "images" && entry.data?.src ? (
+          <div className="mt-4 flex h-32 items-center justify-center rounded-md border border-slate-800 bg-slate-950 p-3">
+            <img alt="" className="max-h-full max-w-full object-contain" src={entry.data.src} />
+          </div>
+        ) : null}
 
         {dataEntries.length ? (
           <dl className="mt-4 grid gap-3 text-xs">

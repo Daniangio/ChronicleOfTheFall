@@ -6,102 +6,99 @@
       "id": "labor",
       "name": "Labor",
       "kind": "tags",
-      "category": "volatile-resource",
+      "category": "volatile",
       "summary": "Temporary workforce and construction effort.",
       "color": "#b45309",
       "data": {
-        "resource_type": "volatile",
-        "is_volatile_resource": true
+        "resource_type": "volatile"
       }
     },
     {
       "id": "material",
       "name": "Material",
       "kind": "tags",
-      "category": "volatile-resource",
+      "category": "volatile",
       "summary": "Temporary stone, timber, tools, and supply throughput.",
       "color": "#78716c",
       "data": {
-        "resource_type": "volatile",
-        "is_volatile_resource": true
+        "resource_type": "volatile"
       }
     },
     {
       "id": "wealth",
       "name": "Wealth",
       "kind": "tags",
-      "category": "volatile-resource",
+      "category": "volatile",
       "summary": "Temporary coin, credit, and trade goods.",
       "color": "#ca8a04",
       "data": {
-        "resource_type": "volatile",
-        "is_volatile_resource": true
+        "resource_type": "volatile"
       }
     },
     {
       "id": "military",
       "name": "Military",
       "kind": "tags",
-      "category": "permanent-tag",
+      "category": "permanent",
       "summary": "Permanent defensive and coercive capacity.",
       "color": "#dc2626",
       "data": {
-        "resource_type": "permanent_tag"
+        "resource_type": "permanent"
       }
     },
     {
       "id": "sanitary",
       "name": "Sanitary",
       "kind": "tags",
-      "category": "permanent-tag",
+      "category": "permanent",
       "summary": "Permanent public health and urban resilience.",
       "color": "#65a30d",
       "data": {
-        "resource_type": "permanent_tag"
+        "resource_type": "permanent"
       }
     },
     {
       "id": "diplomacy",
       "name": "Diplomacy",
       "kind": "tags",
-      "category": "permanent-tag",
+      "category": "permanent",
       "summary": "Permanent diplomatic leverage and intelligence.",
       "color": "#7c3aed",
       "data": {
-        "resource_type": "permanent_tag"
+        "resource_type": "permanent"
       }
     },
     {
       "id": "food",
       "name": "Food",
       "kind": "tags",
-      "category": "permanent-tag",
+      "category": "permanent",
       "summary": "Permanent agricultural and provisioning capacity.",
       "color": "#16a34a",
       "data": {
-        "resource_type": "permanent_tag"
+        "resource_type": "permanent"
       }
     },
     {
       "id": "industry",
       "name": "Industry",
       "kind": "tags",
-      "category": "permanent-tag",
+      "category": "permanent",
       "summary": "Permanent workshops, quarries, and production base.",
       "color": "#475569",
       "data": {
-        "resource_type": "permanent_tag"
+        "resource_type": "permanent"
       }
     },
     {
       "id": "unrest",
       "name": "Unrest",
       "kind": "tags",
-      "category": "permanent-tag",
+      "category": "permanent",
       "summary": "Commitment and crisis tag used for sabotage thresholds.",
       "color": "#be123c",
       "data": {
-        "resource_type": "permanent_tag"
+        "resource_type": "permanent"
       }
     },
     {

@@ -11,6 +11,7 @@ const sections = [
   { key: "users", label: "Users", to: "/admin/users" },
   { key: "audit", label: "Audit", to: "/admin/audit" },
   { key: "tags", label: "Tags", to: "/admin/tags" },
+  { key: "images", label: "Images", to: "/admin/images" },
   { key: "cards", label: "Cards", to: "/admin/cards" },
   { key: "ministries", label: "Ministries", to: "/admin/ministries" },
   { key: "event-types", label: "Event Types", to: "/admin/event-types" },
@@ -22,6 +23,7 @@ const sections = [
 
 const catalogSections = new Set([
   "tags",
+  "images",
   "cards",
   "ministries",
   "event-types",
@@ -118,8 +120,7 @@ const orderedGroupedTagEntries = (tags) =>
 
 const tagLabel = (value) => String(value || "").replace(/_/g, " ");
 
-const tagIsVolatileResource = (tag) =>
-  Boolean(tag?.data?.is_volatile_resource || tag?.data?.resource_type === "volatile" || tag?.category === "volatile-resource");
+const tagIsVolatileResource = (tag) => tag?.data?.resource_type === "volatile";
 
 const volatileResourceTags = (tags) => (tags || []).filter(tagIsVolatileResource);
 const permanentOnlyTags = (tags) => (tags || []).filter((tag) => !tagIsVolatileResource(tag));
@@ -254,6 +255,7 @@ const removeBackground = (image, crop, outputSize = 96) => {
 const IconImageEditor = ({ label, value, onChange }) => {
   const imageRef = useRef(null);
   const [source, setSource] = useState("");
+  const [mode, setMode] = useState("choose");
   const [crop, setCrop] = useState({ x: 16, y: 16, width: 96, height: 96 });
   const [dragStart, setDragStart] = useState(null);
 
@@ -268,13 +270,14 @@ const IconImageEditor = ({ label, value, onChange }) => {
   };
 
   const beginCrop = (event) => {
+    if (mode !== "crop") return;
     const point = pointFromEvent(event);
     setDragStart(point);
     setCrop({ x: point.x, y: point.y, width: 1, height: 1 });
   };
 
   const updateCrop = (event) => {
-    if (!dragStart) return;
+    if (!dragStart || mode !== "crop") return;
     const point = pointFromEvent(event);
     setCrop({
       x: Math.min(dragStart.x, point.x),
@@ -296,7 +299,19 @@ const IconImageEditor = ({ label, value, onChange }) => {
     };
     onChange(removeBackground(image, naturalCrop));
     setSource("");
+    setMode("choose");
     setDragStart(null);
+  };
+
+  const closePanel = () => {
+    setSource("");
+    setMode("choose");
+    setDragStart(null);
+  };
+
+  const saveOriginal = () => {
+    onChange(source);
+    closePanel();
   };
 
   return (
@@ -304,7 +319,7 @@ const IconImageEditor = ({ label, value, onChange }) => {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h3 className="font-semibold text-white">{label}</h3>
-          <p className="mt-1 text-xs text-slate-500">Upload, crop, and remove the background from the crop's top-left color.</p>
+          <p className="mt-1 text-xs text-slate-500">Upload an image as-is, or crop it and remove the crop background.</p>
         </div>
         {value ? <img alt="" className="h-10 w-10 rounded-md border border-slate-700 object-contain" src={value} /> : null}
       </div>
@@ -325,6 +340,7 @@ const IconImageEditor = ({ label, value, onChange }) => {
                 reader.readAsDataURL(file);
               });
               setSource(dataUrl);
+              setMode("choose");
               event.target.value = "";
             }}
             type="file"
@@ -344,9 +360,30 @@ const IconImageEditor = ({ label, value, onChange }) => {
         <div className="fixed inset-0 z-[1300] flex items-start justify-center overflow-y-auto bg-slate-950/85 px-4 py-8">
           <div className="w-full max-w-3xl rounded-lg border border-slate-800 bg-slate-900 p-5 shadow-2xl">
             <div className="flex items-center justify-between gap-3">
-              <h3 className="font-semibold text-white">Crop Icon</h3>
-              <button className="rounded-md border border-slate-700 p-2 text-slate-300 hover:bg-slate-800" onClick={() => setSource("")} type="button">
+              <div>
+                <h3 className="font-semibold text-white">Icon Image</h3>
+                <p className="mt-1 text-xs text-slate-500">
+                  {mode === "crop" ? "Drag a rectangle. The top-left crop pixel becomes the removed background color." : "Choose how to save this upload."}
+                </p>
+              </div>
+              <button className="rounded-md border border-slate-700 p-2 text-slate-300 hover:bg-slate-800" onClick={closePanel} type="button">
                 <X className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </div>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button
+                className={`rounded-md border px-3 py-2 text-sm ${mode === "choose" ? "border-teal-500 bg-teal-400/10 text-teal-100" : "border-slate-700 text-slate-200 hover:bg-slate-800"}`}
+                onClick={() => setMode("choose")}
+                type="button"
+              >
+                Original
+              </button>
+              <button
+                className={`rounded-md border px-3 py-2 text-sm ${mode === "crop" ? "border-teal-500 bg-teal-400/10 text-teal-100" : "border-slate-700 text-slate-200 hover:bg-slate-800"}`}
+                onClick={() => setMode("crop")}
+                type="button"
+              >
+                Crop and remove background
               </button>
             </div>
             <div
@@ -357,17 +394,19 @@ const IconImageEditor = ({ label, value, onChange }) => {
               onMouseLeave={() => setDragStart(null)}
             >
               <img ref={imageRef} alt="" className="max-h-[65vh] max-w-full" src={source} draggable={false} />
-              <div
-                className="pointer-events-none absolute border-2 border-teal-300 bg-teal-300/15"
-                style={{ left: crop.x, top: crop.y, width: crop.width, height: crop.height }}
-              />
+              {mode === "crop" ? (
+                <div
+                  className="pointer-events-none absolute border-2 border-teal-300 bg-teal-300/15"
+                  style={{ left: crop.x, top: crop.y, width: crop.width, height: crop.height }}
+                />
+              ) : null}
             </div>
             <div className="mt-4 flex justify-end gap-2">
-              <button className="rounded-md border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800" onClick={() => setSource("")} type="button">
+              <button className="rounded-md border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800" onClick={closePanel} type="button">
                 Cancel
               </button>
-              <button className="rounded-md bg-teal-400 px-3 py-2 text-sm font-semibold text-slate-950 hover:bg-teal-300" onClick={saveCrop} type="button">
-                Save Icon
+              <button className="rounded-md bg-teal-400 px-3 py-2 text-sm font-semibold text-slate-950 hover:bg-teal-300" onClick={mode === "crop" ? saveCrop : saveOriginal} type="button">
+                {mode === "crop" ? "Save Cropped Icon" : "Use Original Image"}
               </button>
             </div>
           </div>
@@ -377,23 +416,64 @@ const IconImageEditor = ({ label, value, onChange }) => {
   );
 };
 
-const TagResourceFields = ({ data, setField }) => (
-  <div className="space-y-4">
+const ImageAssetSelect = ({ label, images, selectedId, onSelect }) => {
+  const selected = (images || []).find((image) => image.id === selectedId);
+  return (
     <div className="rounded-lg border border-slate-800 bg-slate-950 p-4">
-      <h3 className="font-semibold text-white">Tag Behavior</h3>
-      <label className="mt-3 flex items-center gap-2 text-sm font-medium text-slate-300">
-        <input
-          checked={Boolean(data.is_volatile_resource || data.resource_type === "volatile")}
-          onChange={(event) => {
-            setField("is_volatile_resource", event.target.checked);
-            setField("resource_type", event.target.checked ? "volatile" : "permanent_tag");
-          }}
-          type="checkbox"
-        />
-        Volatile resource
-      </label>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h3 className="font-semibold text-white">{label}</h3>
+          <p className="mt-1 text-xs text-slate-500">Select one of the images uploaded in the Images page.</p>
+        </div>
+        {selected?.data?.src ? <img alt="" className="h-12 w-12 rounded-md object-contain" src={selected.data.src} /> : null}
+      </div>
+      <div className="mt-3 grid gap-2 sm:grid-cols-3">
+        {(images || []).map((image) => {
+          const active = selectedId === image.id;
+          return (
+            <button
+              key={image.id}
+              className={`flex min-h-24 flex-col items-center justify-between gap-2 rounded-md border p-2 text-left text-xs ${
+                active ? "border-teal-400 bg-teal-400/10 text-teal-100" : "border-slate-800 text-slate-300 hover:bg-slate-800"
+              }`}
+              onClick={() => onSelect(image)}
+              type="button"
+            >
+              {image.data?.src ? (
+                <img alt="" className="h-14 w-full object-contain" src={image.data.src} />
+              ) : (
+                <span className="flex h-14 w-full items-center justify-center rounded bg-slate-900 text-slate-600">No preview</span>
+              )}
+              <span className="w-full truncate text-center font-medium">{image.name}</span>
+            </button>
+          );
+        })}
+      </div>
+      {(images || []).length === 0 ? <p className="mt-3 text-sm text-slate-500">No uploaded images yet.</p> : null}
+      {selectedId ? (
+        <button className="mt-3 rounded-md border border-rose-900/80 px-3 py-2 text-sm text-rose-200 hover:bg-rose-950/70" onClick={() => onSelect(null)} type="button">
+          Clear image
+        </button>
+      ) : null}
     </div>
-    <IconImageEditor label="Tag Icon" value={data.icon || ""} onChange={(icon) => setField("icon", icon)} />
+  );
+};
+
+const ImageGuidedFields = ({ data, setField }) => (
+  <IconImageEditor label="Image Asset" value={data.src || ""} onChange={(src) => setField("src", src)} />
+);
+
+const TagResourceFields = ({ data, setField, imageEntries }) => (
+  <div>
+    <ImageAssetSelect
+      label="Tag Icon"
+      images={imageEntries}
+      selectedId={data.icon_image_id || ""}
+      onSelect={(image) => {
+        setField("icon_image_id", image?.id || "");
+        setField("icon", image?.data?.src || "");
+      }}
+    />
   </div>
 );
 
@@ -999,7 +1079,7 @@ const DeckGuidedFields = ({ data, setField, cardEntries, eventEntries }) => {
   );
 };
 
-const MinistryGuidedFields = ({ data, setField, eventTypeEntries, tagEntries }) => {
+const MinistryGuidedFields = ({ data, setField, eventTypeEntries, tagEntries, imageEntries }) => {
   const administeredEventTypes = Array.isArray(data.administered_event_types) ? data.administered_event_types : [];
   const resourceTags = volatileResourceTags(tagEntries);
 
@@ -1034,7 +1114,15 @@ const MinistryGuidedFields = ({ data, setField, eventTypeEntries, tagEntries }) 
           />
         </label>
       </div>
-      <IconImageEditor label="Domain Icon" value={data.domain_icon || ""} onChange={(icon) => setField("domain_icon", icon)} />
+      <ImageAssetSelect
+        label="Domain Icon"
+        images={imageEntries}
+        selectedId={data.domain_icon_image_id || ""}
+        onSelect={(image) => {
+          setField("domain_icon_image_id", image?.id || "");
+          setField("domain_icon", image?.data?.src || "");
+        }}
+      />
 
       <label className="flex items-center gap-2 text-sm font-medium text-slate-300">
         <input
@@ -1338,9 +1426,10 @@ const GuidedMetadataEditor = ({
   eventEntries,
   eventTypeEntries,
   ministryEntries,
+  imageEntries,
 }) => {
   const data = dataForForm(catalogForm);
-  if (activeSection === "tags") {
+  if (activeSection === "tags" || activeSection === "images") {
     const setField = (field, value) => {
       setCatalogForm((state) => {
         let currentData = {};
@@ -1355,7 +1444,8 @@ const GuidedMetadataEditor = ({
         return { ...state, dataText: stringifyData(nextData) };
       });
     };
-    return <TagResourceFields data={data} setField={setField} />;
+    if (activeSection === "images") return <ImageGuidedFields data={data} setField={setField} />;
+    return <TagResourceFields data={data} setField={setField} imageEntries={imageEntries} />;
   }
 
   const countFields = tagCountFieldsBySection[activeSection] || [];
@@ -1438,6 +1528,7 @@ const GuidedMetadataEditor = ({
           setField={setField}
           eventTypeEntries={eventTypeEntries}
           tagEntries={tagEntries}
+          imageEntries={imageEntries}
         />
       ) : null}
       {hasEventGuidance ? (
@@ -1488,6 +1579,7 @@ const AdminPage = () => {
   const [auditLogs, setAuditLogs] = useState([]);
   const [catalogEntries, setCatalogEntries] = useState([]);
   const [tagEntries, setTagEntries] = useState([]);
+  const [imageEntries, setImageEntries] = useState([]);
   const [cardEntries, setCardEntries] = useState([]);
   const [eventEntries, setEventEntries] = useState([]);
   const [eventTypeEntries, setEventTypeEntries] = useState([]);
@@ -1552,6 +1644,9 @@ const AdminPage = () => {
       if (targetSection !== "tags") {
         requests.push(request("/api/admin/tags"));
       }
+      if (targetSection !== "images") {
+        requests.push(request("/api/admin/images"));
+      }
       if (targetSection !== "cards") {
         requests.push(request("/api/admin/cards"));
       }
@@ -1574,6 +1669,7 @@ const AdminPage = () => {
       const [summary, entries] = results;
       let resultIndex = 2;
       const tags = targetSection === "tags" ? entries : results[resultIndex++];
+      const images = targetSection === "images" ? entries : results[resultIndex++];
       const cards = targetSection === "cards" ? entries : results[resultIndex++];
       const groups = targetSection === "groups" ? entries : results[resultIndex++];
       const events = targetSection === "events" ? entries : results[resultIndex++];
@@ -1583,6 +1679,7 @@ const AdminPage = () => {
       setCatalogSummary(summary);
       setCatalogEntries(entries);
       setTagEntries(targetSection === "tags" ? entries : tags);
+      setImageEntries(targetSection === "images" ? entries : images);
       setCardEntries(targetSection === "cards" ? entries : cards);
       setGroupEntries(targetSection === "groups" ? entries : groups);
       setEventEntries(targetSection === "events" ? entries : events);
@@ -1657,6 +1754,10 @@ const AdminPage = () => {
               ? "empire"
             : activeCatalogKind === "event-types"
               ? "event-type"
+            : activeCatalogKind === "tags"
+              ? "permanent"
+            : activeCatalogKind === "images"
+              ? "image"
             : "",
       dataText:
         activeCatalogKind === "groups"
@@ -1666,7 +1767,9 @@ const AdminPage = () => {
             : activeCatalogKind === "ministries"
               ? stringifyData({ administered_event_types: [], can_finalize_projects: false })
               : activeCatalogKind === "tags"
-                ? stringifyData({ resource_type: "permanent_tag" })
+                ? stringifyData({ resource_type: "permanent" })
+                : activeCatalogKind === "images"
+                  ? stringifyData({ src: "" })
             : "{}",
     });
     setEditorOpen(true);
@@ -1701,6 +1804,7 @@ const AdminPage = () => {
     setError("");
     try {
       const parsedData = parseCatalogData();
+      const tagResourceType = parsedData.resource_type === "volatile" ? "volatile" : "permanent";
       const payload = {
         name: catalogForm.name,
         category:
@@ -1710,6 +1814,8 @@ const AdminPage = () => {
               ? "card-category"
               : activeCatalogKind === "decks"
                 ? parsedData.deck_type || catalogForm.category || "empire"
+              : activeCatalogKind === "tags"
+                ? tagResourceType
               : catalogForm.category,
         summary: catalogForm.summary,
         color: activeCatalogKind === "tags" ? catalogForm.color : null,
@@ -1717,6 +1823,8 @@ const AdminPage = () => {
           ? { ...parsedData, type: "mutually_exclusive" }
           : activeCatalogKind === "decks"
             ? { ...parsedData, deck_type: parsedData.deck_type || "empire", item_ids: Array.isArray(parsedData.item_ids) ? parsedData.item_ids : [] }
+            : activeCatalogKind === "tags"
+              ? { ...parsedData, resource_type: tagResourceType }
             : parsedData,
       };
       const path = editingEntry
@@ -1735,6 +1843,14 @@ const AdminPage = () => {
       });
       if (activeCatalogKind === "tags") {
         setTagEntries((entries) => {
+          const withoutSaved = entries.filter((entry) => entry.id !== saved.id);
+          return [...withoutSaved, saved].sort((a, b) =>
+            `${a.category}:${a.name}:${a.id}`.localeCompare(`${b.category}:${b.name}:${b.id}`)
+          );
+        });
+      }
+      if (activeCatalogKind === "images") {
+        setImageEntries((entries) => {
           const withoutSaved = entries.filter((entry) => entry.id !== saved.id);
           return [...withoutSaved, saved].sort((a, b) =>
             `${a.category}:${a.name}:${a.id}`.localeCompare(`${b.category}:${b.name}:${b.id}`)
@@ -1818,6 +1934,9 @@ const AdminPage = () => {
       setCatalogEntries((entries) => entries.filter((candidate) => candidate.id !== entry.id));
       if (activeCatalogKind === "tags") {
         setTagEntries((entries) => entries.filter((candidate) => candidate.id !== entry.id));
+      }
+      if (activeCatalogKind === "images") {
+        setImageEntries((entries) => entries.filter((candidate) => candidate.id !== entry.id));
       }
       if (activeCatalogKind === "cards") {
         setCardEntries((entries) => entries.filter((candidate) => candidate.id !== entry.id));
@@ -2166,6 +2285,7 @@ const AdminPage = () => {
                       cards={cardEntries}
                       groups={groupEntries}
                       ministries={ministryEntries}
+                      images={imageEntries}
                       actions={
                         <>
                           <button
@@ -2257,6 +2377,33 @@ const AdminPage = () => {
                       ))}
                     </select>
                   </label>
+                ) : activeCatalogKind === "tags" ? (
+                  <label className="block">
+                    <span className="text-sm font-medium text-slate-300">Type</span>
+                    <select
+                      value={dataForForm(catalogForm).resource_type === "volatile" ? "volatile" : "permanent"}
+                      onChange={(event) => {
+                        const resourceType = event.target.value;
+                        setCatalogForm((state) => {
+                          let currentData = {};
+                          try {
+                            currentData = parseDataText(state.dataText);
+                          } catch (_error) {
+                            currentData = {};
+                          }
+                          return {
+                            ...state,
+                            category: resourceType,
+                            dataText: stringifyData({ ...currentData, resource_type: resourceType }),
+                          };
+                        });
+                      }}
+                      className="mt-2 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none focus:border-teal-400"
+                    >
+                      <option value="permanent">Permanent Tag</option>
+                      <option value="volatile">Volatile Resource</option>
+                    </select>
+                  </label>
                 ) : (
                   <label className="block">
                     <span className="text-sm font-medium text-slate-300">Category</span>
@@ -2307,6 +2454,7 @@ const AdminPage = () => {
                 eventEntries={eventEntries}
                 eventTypeEntries={eventTypeEntries}
                 ministryEntries={ministryEntries}
+                imageEntries={imageEntries}
               />
 
               <label className="block">

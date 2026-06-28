@@ -226,6 +226,7 @@ class AdminCatalogImportResult(BaseModel):
 
 class AdminCatalogSummary(BaseModel):
     tags: int = 0
+    images: int = 0
     cards: int = 0
     ministries: int = 0
     event_types: int = 0

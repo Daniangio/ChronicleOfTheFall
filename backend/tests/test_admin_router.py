@@ -19,6 +19,7 @@ from backend.app.admin_router import (
     admin_list_decks,
     admin_list_events,
     admin_list_groups,
+    admin_list_images,
     admin_list_event_types,
     admin_list_ministries,
     admin_list_tags,
@@ -112,6 +113,7 @@ def test_new_database_catalog_starts_empty(tmp_path):
 
         summary = asyncio.run(admin_catalog_summary(_admin=admin, db=db))
         assert summary.tags == 0
+        assert summary.images == 0
         assert summary.cards == 0
         assert summary.ministries == 0
         assert summary.event_types == 0
@@ -122,6 +124,7 @@ def test_new_database_catalog_starts_empty(tmp_path):
         assert summary.decks == 0
 
         tags = asyncio.run(admin_list_tags(_admin=admin, db=db))
+        images = asyncio.run(admin_list_images(_admin=admin, db=db))
         cards = asyncio.run(admin_list_cards(_admin=admin, db=db))
         ministries = asyncio.run(admin_list_ministries(_admin=admin, db=db))
         event_types = asyncio.run(admin_list_event_types(_admin=admin, db=db))
@@ -132,6 +135,7 @@ def test_new_database_catalog_starts_empty(tmp_path):
         decks = asyncio.run(admin_list_decks(_admin=admin, db=db))
 
         assert tags == []
+        assert images == []
         assert cards == []
         assert ministries == []
         assert event_types == []
@@ -157,10 +161,10 @@ def test_admin_can_create_update_and_delete_catalog_entries(tmp_path):
                 AdminCatalogEntryCreate(
                     id="naval",
                     name="Naval",
-                    category="state",
+                    category="ignored",
                     summary="Controls fleets and sea lanes.",
                     color="#2563eb",
-                    data={"scope": "local"},
+                    data={"resource_type": "permanent", "scope": "local"},
                 ),
                 _admin=admin,
                 db=db,
@@ -168,6 +172,7 @@ def test_admin_can_create_update_and_delete_catalog_entries(tmp_path):
         )
         assert created.id == "naval"
         assert created.color == "#2563eb"
+        assert created.category == "permanent"
 
         updated = asyncio.run(
             admin_update_catalog_entry(
@@ -175,16 +180,17 @@ def test_admin_can_create_update_and_delete_catalog_entries(tmp_path):
                 "naval",
                 AdminCatalogEntryUpdate(
                     name="Naval Power",
-                    category="state",
+                    category="ignored",
                     summary="Controls fleets, ports, and sea lanes.",
                     color="#1d4ed8",
-                    data={"scope": "global"},
+                    data={"resource_type": "volatile", "scope": "global"},
                 ),
                 _admin=admin,
                 db=db,
             )
         )
         assert updated.name == "Naval Power"
+        assert updated.category == "volatile"
         assert updated.data["scope"] == "global"
 
         deleted = asyncio.run(admin_delete_catalog_entry("tags", "naval", _admin=admin, db=db))
@@ -219,19 +225,19 @@ def test_admin_can_export_and_import_catalog_entries(tmp_path):
                             id="labor",
                             kind="tags",
                             name="Labor Pool",
-                            category="mana",
+                            category="ignored",
                             summary="Updated by import.",
                             color="#b45309",
-                            data={},
+                            data={"resource_type": "volatile"},
                         ),
                         AdminCatalogImportEntry(
                             id="stone",
                             kind="tags",
                             name="Stone",
-                            category="mana",
+                            category="ignored",
                             summary="Imported construction resource.",
                             color="#78716c",
-                            data={},
+                            data={"resource_type": "permanent"},
                         ),
                     ],
                 ),
@@ -245,6 +251,8 @@ def test_admin_can_export_and_import_catalog_entries(tmp_path):
         tags = asyncio.run(admin_list_tags(_admin=admin, db=db))
         assert any(entry.id == "stone" for entry in tags)
         assert next(entry for entry in tags if entry.id == "labor").name == "Labor Pool"
+        assert next(entry for entry in tags if entry.id == "labor").category == "volatile"
+        assert next(entry for entry in tags if entry.id == "stone").category == "permanent"
 
 
 def test_ministry_domain_ids_must_be_unique(tmp_path):

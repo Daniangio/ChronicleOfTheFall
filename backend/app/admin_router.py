@@ -258,6 +258,11 @@ async def admin_list_tags(_admin: User = Depends(require_admin), db: Session = D
     return _catalog_response(db, "tags")
 
 
+@router.get("/admin/images", response_model=list[AdminCatalogEntry])
+async def admin_list_images(_admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    return _catalog_response(db, "images")
+
+
 @router.get("/admin/cards", response_model=list[AdminCatalogEntry])
 async def admin_list_cards(_admin: User = Depends(require_admin), db: Session = Depends(get_db)):
     return _catalog_response(db, "cards")
