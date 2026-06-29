@@ -1056,6 +1056,7 @@ const MinistryGuidedFields = ({ data, setField, tagEntries, imageEntries }) => {
           ["fallback_event_decider", "Decides if responsible minister is missing"],
           ["can_decide_destroyed_building", "Chooses destroyed buildings"],
           ["can_propose_politics_economy", "Can propose Politics and Economy cards"],
+          ["can_peek_event_queue", "Can look at one queued Event once per Year"],
         ].map(([field, label]) => (
           <label key={field} className="flex items-center gap-2 text-sm font-medium text-slate-300">
             <input

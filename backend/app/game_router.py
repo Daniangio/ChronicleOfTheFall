@@ -17,6 +17,7 @@ from .schemas import (
     GoldfishingExhaustRequest,
     GoldfishingMinistryResourceRequest,
     GoldfishingPassRequest,
+    GoldfishingPeekEventRequest,
     GoldfishingProposeRequest,
 )
 from .security import get_current_user
@@ -157,6 +158,15 @@ async def use_game_ministry_resource(
     current_user: User = Depends(get_current_user),
 ):
     return await _apply_action(room_id, current_user, "use_ministry_resource", payload.model_dump())
+
+
+@router.post("/game/rooms/{room_id}/actions/peek-event")
+async def peek_game_event(
+    room_id: str,
+    payload: GoldfishingPeekEventRequest,
+    current_user: User = Depends(get_current_user),
+):
+    return await _apply_action(room_id, current_user, "peek_event", payload.model_dump())
 
 
 @router.post("/game/rooms/{room_id}/actions/pass")

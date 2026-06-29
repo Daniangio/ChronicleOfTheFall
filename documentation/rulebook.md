@@ -197,7 +197,7 @@ The Ministry Draft: Starting clockwise from the Minister of the Empire, all elig
 
 The Draw: All players (including the Citizen) draw exactly 1 card from the Empire Deck into their private hand.
 
-Reconnaissance: The Minister of War may secretly peek at one face-down card in the Event Queue (either Step 1, 2, or 3) and return it face-down.
+Reconnaissance: Once per Year, during their own Administration turn, the Minister of War may secretly look at one face-down card in the Event Queue and return it face-down. The Minister of War cannot reveal or discuss what they saw.
 
 PHASE 2: THE ADMINISTRATION PHASE
 
@@ -299,7 +299,7 @@ Minister of War (The Defender)
 
 Event Authority: Controls Defense Edicts for Events showing the Minister of War symbol.
 
-Council: Secretly looks at one face-down Event card anywhere in the Event Queue.
+Administration: Once per Year during their own turn, may secretly look at one face-down Event card in the Event Queue. The information cannot be shared.
 
 Minister of Health & Harvest (The Provider)
 

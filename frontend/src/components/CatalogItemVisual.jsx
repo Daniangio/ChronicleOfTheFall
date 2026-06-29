@@ -241,6 +241,7 @@ const MinisterAbilities = ({ entry, tagLookup }) => {
     data.fallback_event_decider ? "Takes decisions when the responsible minister is missing." : null,
     data.can_decide_destroyed_building ? "Chooses destroyed buildings for matching Event effects." : null,
     data.can_propose_politics_economy ? "Can propose Politics and Economy projects." : null,
+    data.can_peek_event_queue ? "Can secretly look at one queued Event once per Year during their Administration turn." : null,
   ].filter(Boolean);
   const infrastructureResources = Array.isArray(data.infrastructure_resources)
     ? data.infrastructure_resources

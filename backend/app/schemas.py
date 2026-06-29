@@ -126,6 +126,11 @@ class GoldfishingMinistryResourceRequest(BaseModel):
     tag_id: str
 
 
+class GoldfishingPeekEventRequest(BaseModel):
+    player_id: str
+    event_id: str
+
+
 class GoldfishingPassRequest(BaseModel):
     player_id: str
 

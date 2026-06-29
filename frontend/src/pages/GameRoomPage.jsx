@@ -1,4 +1,4 @@
-import { Check, Hand, Hourglass, Landmark, LogOut, RotateCcw, ScrollText, Zap } from "lucide-react";
+import { Check, Eye, Hand, Hourglass, Landmark, LogOut, RotateCcw, ScrollText, Zap } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import TagIcon from "../components/TagIcon.jsx";
@@ -449,6 +449,7 @@ const GameRoomPage = () => {
                     const eventMinistry = ministries.find((ministry) => ministry.id === event?.data?.ministry_id);
                     const eventMinistryIcon = eventMinistry?.data?.icon || "";
                     const eventMinistrySymbol = eventMinistry?.data?.symbol || event?.data?.ministry_symbol || "";
+                    const canPeekEvent = hasAction("peek_event", (entry) => entry.event_id === eventId && entry.player_id === activePlayer?.id);
                     return (
                       <article key={`${eventId}-${index}`} className="rounded-lg border border-slate-800 bg-slate-950 p-3">
                         <div className="flex items-start justify-between gap-2">
@@ -465,6 +466,17 @@ const GameRoomPage = () => {
                         </div>
                         <p className="mt-1 text-xs uppercase text-slate-500">{event?.category || "event"}</p>
                         <p className="mt-3 text-xs leading-5 text-slate-400">{event?.summary || "No event text."}</p>
+                        {canPeekEvent ? (
+                          <button
+                            className="mt-3 inline-flex items-center gap-2 rounded-md border border-amber-700 px-2 py-1.5 text-xs font-semibold text-amber-100 hover:bg-amber-950/50 disabled:opacity-60"
+                            disabled={busy}
+                            onClick={() => action("/actions/peek-event", { player_id: activePlayer.id, event_id: eventId })}
+                            type="button"
+                          >
+                            <Eye className="h-3.5 w-3.5" aria-hidden="true" />
+                            Reconnaissance
+                          </button>
+                        ) : null}
                       </article>
                     );
                   })}

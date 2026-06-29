@@ -381,7 +381,7 @@ class TestGameRoomService(unittest.IsolatedAsyncioTestCase):
         state = {
             "mode": "goldfishing",
             "active_player_id": "player-1",
-            "players": [{"id": "player-1", "name": "Player 1", "hand": [], "mana": {}, "passed": False}],
+            "players": [{"id": "player-1", "name": "Player 1", "hand": ["lumber-camp"], "mana": {}, "passed": False}],
             "projects": [{"id": "project-1", "card_id": "frontier-town", "contributions": {}}],
             "cities": [{"id": "capital", "name": "Capital", "cards": [], "exhausted_card_ids": []}],
             "catalog": {
@@ -650,3 +650,72 @@ class TestGameRoomService(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(administration["phase"], "administration")
         self.assertFalse(administration["players"][0]["passed"])
         self.assertTrue(any(action["type"] == "propose_project" for action in administration["possible_actions"]))
+
+    async def test_minister_can_peek_event_queue_once_per_year(self):
+        service = GameRoomService()
+        user = User(id="user_1", username="Player One")
+        state = {
+            "mode": "goldfishing",
+            "phase": "administration",
+            "active_player_id": "player-1",
+            "players": [{"id": "player-1", "name": "Player 1", "hand": ["lumber-camp"], "mana": {}, "passed": False}],
+            "selected_ministries": {"player-1": "minister-of-war"},
+            "event_queue": ["black-year"],
+            "projects": [],
+            "cities": [{"id": "capital", "name": "Capital", "cards": [], "exhausted_card_ids": []}],
+            "catalog": {
+                "cards": [
+                    {
+                        "id": "lumber-camp",
+                        "name": "Lumber Camp",
+                        "kind": "cards",
+                        "category": "building",
+                        "summary": "",
+                        "color": None,
+                        "data": {},
+                    }
+                ],
+                "events": [
+                    {
+                        "id": "black-year",
+                        "name": "The Black Year",
+                        "kind": "events",
+                        "category": "crisis",
+                        "summary": "",
+                        "color": None,
+                        "data": {},
+                    }
+                ],
+                "ministries": [
+                    {
+                        "id": "minister-of-war",
+                        "name": "Minister of War",
+                        "kind": "ministries",
+                        "category": "ministry",
+                        "summary": "",
+                        "color": None,
+                        "data": {"can_peek_event_queue": True},
+                    }
+                ],
+                "tags": [],
+            },
+            "log": [],
+        }
+
+        room = await service.create_room(user=user, game_type="chronicle_solo", game_state=state)
+        peeked = await service.apply_goldfishing_action(
+            room_id=room["id"],
+            user=user,
+            action="peek_event",
+            payload={"player_id": "player-1", "event_id": "black-year"},
+        )
+        self.assertEqual(peeked["players"][0]["peeked_event_ids"], ["black-year"])
+        self.assertFalse(any(action["type"] == "peek_event" for action in peeked["possible_actions"]))
+
+        with self.assertRaisesRegex(ValueError, "already looked"):
+            await service.apply_goldfishing_action(
+                room_id=room["id"],
+                user=user,
+                action="peek_event",
+                payload={"player_id": "player-1", "event_id": "black-year"},
+            )

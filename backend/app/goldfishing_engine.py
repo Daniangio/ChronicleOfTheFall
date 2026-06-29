@@ -320,6 +320,31 @@ def use_ministry_resource(state: dict[str, Any], *, player_id: str, tag_id: str)
     return _prepare_state(state)
 
 
+def peek_event(state: dict[str, Any], *, player_id: str, event_id: str) -> dict[str, Any]:
+    state = deepcopy(state)
+    _require_phase(state, "administration")
+    active = get_active_player(state)
+    if active["id"] != player_id:
+        raise ValueError("It is not this player's turn.")
+    ministry = _active_ministry(state, active)
+    if not (ministry.get("data", {}) or {}).get("can_peek_event_queue"):
+        raise ValueError("This ministry cannot look at queued events.")
+    if event_id not in state.get("event_queue", []):
+        raise ValueError("Event is not in the queue.")
+    used_key = f"peek_event:{ministry.get('id', '')}"
+    if used_key in active.setdefault("once_per_year_used", []):
+        raise ValueError("This ministry has already looked at an Event this year.")
+    active["once_per_year_used"].append(used_key)
+    active.setdefault("peeked_event_ids", []).append(event_id)
+    active["passed"] = False
+    try:
+        event = event_by_id(state, event_id)
+        state.setdefault("log", []).append(f"{active['name']} secretly looked at {event['name']}.")
+    except ValueError:
+        state.setdefault("log", []).append(f"{active['name']} secretly looked at a queued Event.")
+    return _prepare_state(state)
+
+
 def pass_turn(state: dict[str, Any], *, player_id: str) -> dict[str, Any]:
     state = deepcopy(state)
     _require_phase(state, "administration")
@@ -391,6 +416,7 @@ def _ensure_state_defaults(state: dict[str, Any]) -> None:
         player.setdefault("passed", False)
         player.setdefault("turn_exhaust_used", False)
         player.setdefault("once_per_year_used", [])
+        player.setdefault("peeked_event_ids", [])
 
 
 def _auto_pass_unactionable_players(state: dict[str, Any]) -> None:
@@ -427,6 +453,10 @@ def _possible_actions_for_active_player(state: dict[str, Any]) -> list[dict[str,
         for tag_id, amount in ministry_resources.items():
             if int(amount) > 0:
                 actions.append({"type": "use_ministry_resource", "player_id": active["id"], "tag_id": tag_id, "amount": int(amount)})
+    peek_key = f"peek_event:{ministry.get('id', '')}"
+    if (ministry.get("data", {}) or {}).get("can_peek_event_queue") and peek_key not in active.get("once_per_year_used", []):
+        for event_id in state.get("event_queue", []):
+            actions.append({"type": "peek_event", "player_id": active["id"], "event_id": event_id})
     if not active.get("turn_exhaust_used"):
         for city in state.get("cities", []):
             for card_id in _city_card_ids(city):
@@ -531,6 +561,7 @@ def _decay_phase(state: dict[str, Any]) -> None:
     for player in state.get("players", []):
         player["mana"] = {}
         player["once_per_year_used"] = []
+        player["peeked_event_ids"] = []
     state["phase"] = "crisis"
     state["year_phase"] = "crisis"
 
