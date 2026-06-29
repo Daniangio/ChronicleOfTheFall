@@ -10,8 +10,11 @@ body,
 
 body {
   margin: 0;
-  background: #020617;
-  color: #e2e8f0;
+  background:
+    radial-gradient(circle at 18% 8%, rgba(126, 80, 30, 0.2), transparent 30rem),
+    radial-gradient(circle at 82% 22%, rgba(63, 31, 20, 0.32), transparent 26rem),
+    linear-gradient(135deg, #090604 0%, #120d09 48%, #050505 100%);
+  color: #e8dcc8;
   font-family:
     Inter,
     ui-sans-serif,
@@ -20,6 +23,72 @@ body {
     BlinkMacSystemFont,
     "Segoe UI",
     sans-serif;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(rgba(255, 244, 214, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 244, 214, 0.018) 1px, transparent 1px);
+  background-size: 42px 42px;
+  mask-image: radial-gradient(circle at center, black, transparent 82%);
+  z-index: 0;
+}
+
+#root {
+  isolation: isolate;
+}
+
+.imperial-theme {
+  background:
+    radial-gradient(circle at 20% 12%, rgba(139, 92, 38, 0.18), transparent 28rem),
+    linear-gradient(135deg, #0b0705 0%, #17100b 52%, #060504 100%);
+}
+
+.imperial-theme .bg-slate-950 {
+  background-color: rgba(11, 8, 6, 0.96);
+}
+
+.imperial-theme .bg-slate-900 {
+  background-color: rgba(28, 20, 13, 0.9);
+}
+
+.imperial-theme .bg-slate-800 {
+  background-color: rgba(50, 35, 23, 0.92);
+}
+
+.imperial-theme .border-slate-800 {
+  border-color: rgba(109, 75, 42, 0.58);
+}
+
+.imperial-theme .border-slate-700 {
+  border-color: rgba(136, 96, 55, 0.68);
+}
+
+.imperial-theme .text-slate-100,
+.imperial-theme .text-white {
+  color: #fff8e8;
+}
+
+.imperial-theme .text-slate-200,
+.imperial-theme .text-slate-300 {
+  color: #e8dcc8;
+}
+
+.imperial-theme .text-slate-400 {
+  color: #c6ad8c;
+}
+
+.imperial-theme .text-slate-500 {
+  color: #9c7d58;
+}
+
+.imperial-theme .shadow-2xl,
+.imperial-theme .shadow-xl {
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.58), inset 0 1px 0 rgba(255, 236, 197, 0.04);
 }
 
 button,

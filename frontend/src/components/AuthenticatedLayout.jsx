@@ -2,13 +2,13 @@ import { NavLink } from "react-router-dom";
 import { useStore } from "../store.js";
 
 const topNavBase =
-  "rounded-md px-3 py-2 text-sm font-medium transition hover:bg-slate-900 hover:text-white";
-const topNavActive = "bg-slate-900 text-white";
+  "rounded-md px-3 py-2 text-sm font-medium transition hover:bg-amber-950/70 hover:text-amber-50";
+const topNavActive = "bg-amber-950/70 text-amber-50";
 const topNavInactive = "text-slate-300";
 
 const subNavBase =
-  "rounded-md px-3 py-2 text-sm font-medium transition hover:bg-slate-800 hover:text-white";
-const subNavActive = "bg-slate-800 text-white";
+  "rounded-md px-3 py-2 text-sm font-medium transition hover:bg-amber-950/70 hover:text-amber-50";
+const subNavActive = "bg-amber-950/70 text-amber-50";
 const subNavInactive = "text-slate-400";
 
 export const PageSubnavigation = ({ items }) => {
@@ -38,10 +38,10 @@ const AuthenticatedLayout = ({ children, onLogout }) => {
   const profilePath = user?.id ? `/profile/${user.id}` : "/lobby";
 
   return (
-    <main className="min-h-screen bg-slate-950 px-4 py-6 text-slate-100">
+    <main className="imperial-theme min-h-screen bg-slate-950 px-4 py-6 text-slate-100">
       <div className="mx-auto max-w-6xl">
-        <header className="mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-4">
-          <NavLink to="/lobby" className="text-lg font-semibold text-white">
+        <header className="mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-amber-900/60 pb-4">
+          <NavLink to="/lobby" className="text-lg font-semibold text-amber-50">
             Echoes of Empire
           </NavLink>
           <nav className="flex flex-wrap items-center gap-2">
@@ -80,7 +80,7 @@ const AuthenticatedLayout = ({ children, onLogout }) => {
               </NavLink>
             ) : null}
             <button
-              className="rounded-md border border-slate-700 px-3 py-2 text-sm font-medium text-slate-200 transition hover:bg-slate-900 hover:text-white"
+              className="rounded-md border border-amber-900/70 px-3 py-2 text-sm font-medium text-slate-200 transition hover:bg-amber-950/70 hover:text-amber-50"
               onClick={onLogout}
               type="button"
             >

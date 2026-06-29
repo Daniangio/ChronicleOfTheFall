@@ -160,17 +160,6 @@ def _validate_catalog_data(db: Session, *, kind: CatalogKind, entry_id: str, dat
         resource_type = str((data or {}).get("resource_type") or "").strip()
         if resource_type not in {"permanent", "volatile"}:
             raise ValueError("Tag resource_type must be either permanent or volatile.")
-        return
-    if kind != "ministries":
-        return
-    domain_id = str((data or {}).get("domain_id") or "").strip()
-    if not domain_id:
-        return
-    for row in list_catalog_records(db, "ministries"):
-        if row.id == entry_id:
-            continue
-        if str((row.data or {}).get("domain_id") or "").strip() == domain_id:
-            raise ValueError("Ministry domain id must be unique.")
 
 
 def _catalog_category(kind: CatalogKind, category: str, data: dict[str, Any]) -> str:

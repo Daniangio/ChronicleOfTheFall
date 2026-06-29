@@ -8,7 +8,6 @@ const tagKeyNames = new Set([
   "required_city_tags",
   "pitches",
   "infrastructure_resources",
-  "administered_event_types",
   "local_tags",
   "global_tags",
   "replacement_effects",
@@ -23,6 +22,13 @@ const normalizeTagId = (value) =>
 
 const buildTagLookup = (tags = []) =>
   Object.fromEntries((tags || []).map((tag) => [normalizeTagId(tag.id || tag.name), tag]));
+
+const ministrySymbol = (ministry) => ministry?.data?.symbol || "";
+
+const ministryIcon = (ministry, imageLookup) => {
+  const imageId = ministry?.data?.icon_image_id;
+  return ministry?.data?.icon || imageLookup?.[imageId]?.data?.src || "";
+};
 
 const humanizeKey = (value) =>
   String(value || "")
@@ -226,15 +232,54 @@ const DataValue = ({ itemKey, value, tagLookup, cardLookup, groupLookup }) => {
   return <span className="text-slate-300">{primitiveText(value)}</span>;
 };
 
+const MinisterAbilities = ({ entry, tagLookup }) => {
+  const data = entry?.data || {};
+  const abilities = [
+    data.can_finalize_projects ? "Can finalize projects." : null,
+    data.can_block_player_council ? "Can decide to block a player during Council." : null,
+    data.first_administration_turn ? "Is first during the Administration phase." : null,
+    data.fallback_event_decider ? "Takes decisions when the responsible minister is missing." : null,
+    data.can_decide_destroyed_building ? "Chooses destroyed buildings for matching Event effects." : null,
+    data.can_propose_politics_economy ? "Can propose Politics and Economy projects." : null,
+  ].filter(Boolean);
+  const infrastructureResources = Array.isArray(data.infrastructure_resources)
+    ? data.infrastructure_resources
+    : Object.keys(data.infrastructure_resources || {});
+
+  if (!abilities.length && !infrastructureResources.length) {
+    return <p className="mt-4 text-sm text-slate-600">No flagged game abilities.</p>;
+  }
+
+  return (
+    <div className="mt-4 space-y-2">
+      {abilities.map((ability) => (
+        <div key={ability} className="rounded-md border border-amber-900/60 bg-stone-950/40 px-3 py-2 text-sm text-amber-100">
+          {ability}
+        </div>
+      ))}
+      {infrastructureResources.length ? (
+        <div className="rounded-md border border-amber-900/60 bg-stone-950/40 px-3 py-2 text-sm text-amber-100">
+          <span>Can produce one Infrastructure resource each Year:</span>
+          <span className="ml-2 inline-flex flex-wrap items-center gap-1.5 align-middle">
+            {infrastructureResources.map((resourceId) => (
+              <TagIcon key={resourceId} tag={tagLookup[normalizeTagId(resourceId)]} label={resourceId} />
+            ))}
+          </span>
+        </div>
+      ) : null}
+    </div>
+  );
+};
+
 const CatalogItemVisual = ({ entry, tags = [], cards = [], groups = [], ministries = [], images = [], actions = null }) => {
   const color = entry?.color || fallbackColor;
   const tagLookup = buildTagLookup(tags);
   const cardLookup = Object.fromEntries((cards || []).map((card) => [normalizeTagId(card.id || card.name), card]));
   const groupLookup = Object.fromEntries((groups || []).map((group) => [normalizeTagId(group.id || group.name), group]));
   const imageLookup = Object.fromEntries((images || []).map((image) => [image.id, image]));
-  const domainMinistry = (ministries || []).find((ministry) => ministry.data?.domain_id && ministry.data.domain_id === entry?.data?.domain_id);
-  const domainIcon = domainMinistry?.data?.domain_icon || imageLookup[domainMinistry?.data?.domain_icon_image_id]?.data?.src || "";
-  const ministryIcon = entry?.data?.domain_icon || imageLookup[entry?.data?.domain_icon_image_id]?.data?.src || "";
+  const eventMinistry = (ministries || []).find((ministry) => ministry.id === entry?.data?.ministry_id);
+  const eventMinistryIcon = ministryIcon(eventMinistry, imageLookup);
+  const currentMinistryIcon = ministryIcon(entry, imageLookup);
   const dataEntries = Object.entries(entry?.data || {}).filter(([key]) => key !== "src").slice(0, 6);
 
   return (
@@ -248,22 +293,22 @@ const CatalogItemVisual = ({ entry, tags = [], cards = [], groups = [], ministri
               {entry.kind === "tags" ? (
                 <TagIcon tag={entry} />
               ) : entry.kind === "ministries" ? (
-                <span className="inline-flex items-center gap-1 rounded bg-slate-800 px-2 py-1 text-xs font-medium text-slate-300">
-                  {ministryIcon ? (
-                    <img alt="" className="h-5 w-5 rounded object-contain" src={ministryIcon} />
+                <span className="inline-flex items-center gap-1 rounded bg-stone-950/70 px-2 py-1 text-xs font-medium text-amber-100">
+                  {currentMinistryIcon ? (
+                    <img alt="" className="h-7 w-7 object-contain" src={currentMinistryIcon} />
                   ) : (
-                    <span className="font-semibold">{String(entry.data?.domain_symbol || entry.data?.domain_id || entry.category || "").slice(0, 3).toUpperCase()}</span>
+                    <span className="font-semibold">{String(ministrySymbol(entry) || entry.category || "").slice(0, 3).toUpperCase()}</span>
                   )}
-                  {entry.category || "ministry"}
+                  {String(ministrySymbol(entry) || "ministry").toUpperCase()}
                 </span>
-              ) : entry.kind === "events" && domainMinistry ? (
+              ) : entry.kind === "events" && eventMinistry ? (
                 <span className="inline-flex items-center gap-1 rounded bg-slate-800 px-2 py-1 text-xs font-medium text-slate-300">
-                  {domainIcon ? (
-                    <img alt="" className="h-4 w-4 rounded object-cover" src={domainIcon} />
+                  {eventMinistryIcon ? (
+                    <img alt="" className="h-4 w-4 object-contain" src={eventMinistryIcon} />
                   ) : (
-                    <span className="font-semibold">{String(domainMinistry.data?.domain_symbol || domainMinistry.data?.domain_id || "").slice(0, 3).toUpperCase()}</span>
+                    <span className="font-semibold">{String(ministrySymbol(eventMinistry) || entry.data?.ministry_symbol || "").slice(0, 3).toUpperCase()}</span>
                   )}
-                  {domainMinistry.name}
+                  {eventMinistry.name}
                 </span>
               ) : (
                 <span className="rounded bg-slate-800 px-2 py-1 text-xs font-medium text-slate-300">
@@ -287,7 +332,9 @@ const CatalogItemVisual = ({ entry, tags = [], cards = [], groups = [], ministri
           </div>
         ) : null}
 
-        {dataEntries.length ? (
+        {entry.kind === "ministries" ? (
+          <MinisterAbilities entry={entry} tagLookup={tagLookup} />
+        ) : dataEntries.length ? (
           <dl className="mt-4 grid gap-3 text-xs">
             {dataEntries.map(([key, value]) => (
               <div key={key} className="grid gap-1">

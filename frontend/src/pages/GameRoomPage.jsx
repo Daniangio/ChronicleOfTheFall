@@ -350,14 +350,14 @@ const GameRoomPage = () => {
 
   if (!gameState) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-slate-950 px-4 text-slate-100">
+      <main className="imperial-theme flex min-h-screen items-center justify-center bg-slate-950 px-4 text-slate-100">
         <p className="text-sm text-slate-400">{error || "Loading game..."}</p>
       </main>
     );
   }
 
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-100">
+    <main className="imperial-theme min-h-screen bg-slate-950 text-slate-100">
       <div className="grid min-h-screen grid-cols-1 lg:grid-cols-[14rem_minmax(0,1fr)]">
         <aside className="border-b border-slate-800 bg-slate-900/70 p-4 lg:border-b-0 lg:border-r">
           <div className="flex items-center justify-between gap-2 lg:block">
@@ -446,17 +446,19 @@ const GameRoomPage = () => {
                 <div className="mt-3 grid gap-3 md:grid-cols-3">
                   {(gameState.event_queue || []).map((eventId, index) => {
                     const event = eventLookup[normalize(eventId)];
-                    const domainMinistry = ministries.find((ministry) => ministry.data?.domain_id && ministry.data.domain_id === event?.data?.domain_id);
+                    const eventMinistry = ministries.find((ministry) => ministry.id === event?.data?.ministry_id);
+                    const eventMinistryIcon = eventMinistry?.data?.icon || "";
+                    const eventMinistrySymbol = eventMinistry?.data?.symbol || event?.data?.ministry_symbol || "";
                     return (
                       <article key={`${eventId}-${index}`} className="rounded-lg border border-slate-800 bg-slate-950 p-3">
                         <div className="flex items-start justify-between gap-2">
                           <p className="text-sm font-semibold text-white">{event?.name || eventId}</p>
-                          {domainMinistry ? (
+                          {eventMinistry ? (
                             <span className="inline-flex items-center gap-1 rounded border border-slate-700 px-2 py-1 text-[0.65rem] font-semibold text-slate-300">
-                              {domainMinistry.data?.domain_icon ? (
-                                <img alt="" className="h-4 w-4 rounded object-cover" src={domainMinistry.data.domain_icon} />
+                              {eventMinistryIcon ? (
+                                <img alt="" className="h-4 w-4 object-contain" src={eventMinistryIcon} />
                               ) : (
-                                <span>{String(domainMinistry.data?.domain_symbol || domainMinistry.data?.domain_id || "").slice(0, 3).toUpperCase()}</span>
+                                <span>{String(eventMinistrySymbol).slice(0, 3).toUpperCase()}</span>
                               )}
                             </span>
                           ) : null}

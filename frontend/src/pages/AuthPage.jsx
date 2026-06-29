@@ -26,11 +26,11 @@ const AuthPage = () => {
   };
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-950 px-4 py-10">
-      <section className="grid w-full max-w-5xl overflow-hidden rounded-lg border border-slate-800 bg-slate-900 shadow-2xl md:grid-cols-[1fr_24rem]">
-        <div className="flex min-h-[28rem] flex-col justify-between bg-[radial-gradient(circle_at_20%_20%,rgba(45,212,191,0.22),transparent_32%),linear-gradient(135deg,#0f172a,#111827_55%,#022c22)] p-8">
+    <main className="imperial-theme flex min-h-screen items-center justify-center bg-slate-950 px-4 py-10">
+      <section className="grid w-full max-w-5xl overflow-hidden rounded-lg border border-amber-900/60 bg-slate-900 shadow-2xl md:grid-cols-[1fr_24rem]">
+        <div className="flex min-h-[28rem] flex-col justify-between bg-[radial-gradient(circle_at_20%_20%,rgba(180,123,54,0.28),transparent_32%),linear-gradient(135deg,#1b1008,#0f0a06_55%,#2c1a0c)] p-8">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.22em] text-teal-200">
+            <p className="text-sm font-semibold uppercase tracking-[0.22em] text-amber-200">
               Echoes of Empire
             </p>
             <h1 className="mt-4 max-w-xl text-4xl font-semibold tracking-normal text-white">
@@ -81,7 +81,7 @@ const AuthPage = () => {
 
           <button
             type="submit"
-            className="w-full rounded-md bg-teal-400 px-4 py-2 font-semibold text-slate-950 transition hover:bg-teal-300 disabled:cursor-not-allowed disabled:opacity-60"
+            className="w-full rounded-md bg-amber-300 px-4 py-2 font-semibold text-stone-950 transition hover:bg-amber-200 disabled:cursor-not-allowed disabled:opacity-60"
             disabled={loading}
           >
             {loading ? "Working..." : isLogin ? "Sign in" : "Create account"}
@@ -93,7 +93,7 @@ const AuthPage = () => {
               setIsLogin((value) => !value);
               setError("");
             }}
-            className="w-full text-sm font-medium text-teal-200 hover:text-teal-100"
+            className="w-full text-sm font-medium text-amber-200 hover:text-amber-100"
             disabled={loading}
           >
             {isLogin ? "Need an account? Register" : "Already have an account? Sign in"}

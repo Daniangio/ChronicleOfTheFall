@@ -255,8 +255,8 @@ def test_admin_can_export_and_import_catalog_entries(tmp_path):
         assert next(entry for entry in tags if entry.id == "stone").category == "permanent"
 
 
-def test_ministry_domain_ids_must_be_unique(tmp_path):
-    session_factory = build_test_session(f"sqlite:///{tmp_path / 'ministry_domains.db'}")
+def test_ministry_symbols_are_plain_metadata(tmp_path):
+    session_factory = build_test_session(f"sqlite:///{tmp_path / 'ministry_symbols.db'}")
     with session_factory() as db:
         admin = ensure_user_bootstrap(
             db,
@@ -271,25 +271,28 @@ def test_ministry_domain_ids_must_be_unique(tmp_path):
                     id="minister-war",
                     name="Minister of War",
                     category="ministry",
-                    data={"domain_id": "military"},
+                    data={
+                        "symbol": "WAR",
+                        "can_finalize_projects": True,
+                        "can_block_player_council": True,
+                    },
                 ),
                 _admin=admin,
                 db=db,
             )
         )
 
-        with pytest.raises(HTTPException) as exc_info:
-            asyncio.run(
-                admin_create_catalog_entry(
-                    "ministries",
-                    AdminCatalogEntryCreate(
-                        id="minister-war-duplicate",
-                        name="Duplicate War Minister",
-                        category="ministry",
-                        data={"domain_id": "military"},
-                    ),
-                    _admin=admin,
-                    db=db,
-                )
+        duplicate_symbol = asyncio.run(
+            admin_create_catalog_entry(
+                "ministries",
+                AdminCatalogEntryCreate(
+                    id="minister-war-duplicate",
+                    name="Duplicate War Minister",
+                    category="ministry",
+                    data={"symbol": "WAR"},
+                ),
+                _admin=admin,
+                db=db,
             )
-        assert exc_info.value.status_code == 400
+        )
+        assert duplicate_symbol.data == {"symbol": "WAR"}

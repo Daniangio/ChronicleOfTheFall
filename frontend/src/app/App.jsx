@@ -225,7 +225,7 @@ function AppContent() {
   const isInGameRoom = /^\/games\/[^/]+$/.test(location.pathname);
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
+    <div className="imperial-theme min-h-screen bg-slate-950 text-slate-100">
       <StateGuard>
         {authBootstrapped && token && connectionIssue && !isInGameRoom ? (
           <div className="fixed left-1/2 top-3 z-[1000] -translate-x-1/2 rounded-full border border-amber-300/70 bg-slate-950/95 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-amber-100 shadow-xl">

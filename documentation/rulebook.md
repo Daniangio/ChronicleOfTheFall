@@ -79,7 +79,7 @@ Example: War Bonds immediately increases Treasury by 2, but reduces Morale and S
 
 Drawn from the Event Deck, these cards sit in the Event Queue, slowly crawling toward execution. Every Event card is structured as a comprehensive challenge:
 
-Domain: Links the Event to a specific Ministry (e.g., Military -> Minister of War).
+Jurisdiction Symbol: Each Event card shows the symbol of the Ministry responsible for that crisis. The Event card, not the Minister card, defines who has jurisdiction.
 
 Defense Requirement: The exact combination and quantity of Defense Tags (e.g., [Military], [Sanitary], [Diplomacy]) required to successfully repel the disaster.
 
@@ -237,7 +237,7 @@ If there is an Event card in the Active Crisis Zone, it must be resolved now. Fl
 
 The Public Defense: Evaluate the built, active cards in the City Graph. Tally all matching permanent defense tags (e.g., [Military] for invasions, [Sanitary] for plagues). This is your starting defense pool. (Exhausted buildings still count).
 
-The Public Edict: The Minister in charge of the Event's domain (e.g., Minister of War for a Military event) must place one of their double-sided Edict tokens on the Event. This alters the mechanical rules of the Crisis. If the relevant Minister is missing or was blocked this year, the Minister of the Empire chooses the Edict.
+The Public Edict: The Minister whose symbol appears on the Event must place one of their double-sided Edict tokens on the Event. This alters the mechanical rules of the Crisis. If the relevant Minister is missing or was blocked this year, the Minister of the Empire chooses the Edict.
 
 The Secret Pitch: Every player (including the blocked Citizen) must select exactly one card from their hand and place it face-down into the center of the table.
 
@@ -257,7 +257,7 @@ Failure: If the total is less than the Defense Requirement, the Event breaches t
 
 Event Effect Types:
 
-Generate Volatile Resources: Place the listed volatile resources into the personal pool of the Minister who has jurisdiction over the Event domain. These resources survive until the end of that player's next Administration turn, giving the Minister one turn to allocate them.
+Generate Volatile Resources: Place the listed volatile resources into the personal pool of the Minister whose symbol appears on the Event. These resources survive until the end of that player's next Administration turn, giving the Minister one turn to allocate them.
 
 Modify Pillar: Increase or decrease Treasury, Stability, or Morale by the listed amount.
 
@@ -273,13 +273,13 @@ Clean Up: Discard all cards pitched into the Crisis Pool. Slide the completed Ev
 
 7. THE MINISTRIES
 
-7.1 Ministerial Powers and Jurisdictions
+7.1 Ministerial Powers
 
-Ministries dictate who controls structural decisions during the Administration Phase and who holds executive power during the Crisis Phase.
+Ministries dictate who controls structural decisions during the Administration Phase and who holds executive power during the Crisis Phase. Minister cards carry a name, symbol, description, and only the game-facing ability flags that apply to that ministry. Crisis jurisdiction is not stored on Minister cards; it is shown by the Ministry symbol printed on each Event card.
 
 Minister of the Empire (The Sovereign)
 
-Jurisdiction: Oversees general state affairs. Decides Edicts for any Crisis whose Minister is absent or blocked.
+Fallback Authority: Decides Edicts for any Crisis whose responsible Minister is absent or blocked.
 
 Administration: Always takes the first turn of the Administration phase.
 
@@ -289,8 +289,6 @@ Council: Selects one player to be blocked from holding office for the Year.
 
 Minister of Infrastructure (The Builder)
 
-Jurisdiction: Oversees geographic and structural expansion. (flavor text, no effect here)
-
 Crisis Authority: Decides which matching Building is destroyed by any Event effect that destroys a Building with a specific tag. If the Minister of Infrastructure is missing or blocked, this decision passes to the Minister of the Empire.
 
 Free Action: May finalize fully funded Projects in the Queue.
@@ -299,17 +297,17 @@ Free Action: Once per year, generate 1 [Labor], 1 [Material], or 1 [Wealth] into
 
 Minister of War (The Defender)
 
-Jurisdiction: Controls Defense Edicts for all [Military] events.
+Event Authority: Controls Defense Edicts for Events showing the Minister of War symbol.
 
 Council: Secretly looks at one face-down Event card anywhere in the Event Queue.
 
 Minister of Health & Harvest (The Provider)
 
-Jurisdiction: Controls Defense Edicts for all [Sanitary] and Nature events.
+Event Authority: Controls Defense Edicts for Events showing the Minister of Health & Harvest symbol.
 
 Minister of State (The Diplomat)
 
-Jurisdiction: Controls Defense Edicts for all [Diplomacy]  events.
+Event Authority: Controls Defense Edicts for Events showing the Minister of State symbol.
 
 Administration: The only player permitted to propose Political or Economic cards into the Project Queue.
 

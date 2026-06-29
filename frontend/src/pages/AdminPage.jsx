@@ -1018,97 +1018,54 @@ const DeckGuidedFields = ({ data, setField, cardEntries, eventEntries }) => {
   );
 };
 
-const MinistryGuidedFields = ({ data, setField, eventTypeEntries, tagEntries, imageEntries }) => {
-  const administeredEventTypes = Array.isArray(data.administered_event_types) ? data.administered_event_types : [];
+const MinistryGuidedFields = ({ data, setField, tagEntries, imageEntries }) => {
   const resourceTags = volatileResourceTags(tagEntries);
   const infrastructureResources = Array.isArray(data.infrastructure_resources)
     ? data.infrastructure_resources
     : Object.keys(data.infrastructure_resources || {});
-
-  const toggleEventType = (eventTypeId) => {
-    setField(
-      "administered_event_types",
-      administeredEventTypes.includes(eventTypeId)
-        ? administeredEventTypes.filter((item) => item !== eventTypeId)
-        : [...administeredEventTypes, eventTypeId]
-    );
-  };
+  const ministerSymbol = data.symbol ?? "";
+  const ministerIconImageId = data.icon_image_id ?? "";
 
   return (
     <>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <label className="block">
-          <span className="text-sm font-medium text-slate-300">Domain Id</span>
-          <input
-            value={data.domain_id || ""}
-            onChange={(event) => setField("domain_id", event.target.value)}
-            className="mt-2 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none focus:border-teal-400"
-            placeholder="military"
-          />
-        </label>
-        <label className="block">
-          <span className="text-sm font-medium text-slate-300">Domain Symbol</span>
-          <input
-            value={data.domain_symbol || ""}
-            onChange={(event) => setField("domain_symbol", event.target.value)}
-            className="mt-2 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none focus:border-teal-400"
-            placeholder="WAR"
-          />
-        </label>
-      </div>
+      <label className="block">
+        <span className="text-sm font-medium text-slate-300">Minister Symbol</span>
+        <input
+          value={ministerSymbol}
+          onChange={(event) => setField("symbol", event.target.value)}
+          className="mt-2 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none focus:border-teal-400"
+          placeholder="WAR"
+        />
+      </label>
       <ImageAssetSelect
-        label="Domain Icon"
+        label="Minister Icon"
         images={imageEntries}
-        selectedId={data.domain_icon_image_id || ""}
+        selectedId={ministerIconImageId}
         onSelect={(image) => {
-          setField("domain_icon_image_id", image?.id || "");
-          setField("domain_icon", image?.data?.src || "");
+          setField("icon_image_id", image?.id || "");
+          setField("icon", image?.data?.src || "");
         }}
       />
 
-      <label className="flex items-center gap-2 text-sm font-medium text-slate-300">
-        <input
-          checked={Boolean(data.is_minister_of_empire)}
-          onChange={(event) => setField("is_minister_of_empire", event.target.checked)}
-          type="checkbox"
-        />
-        Minister of the Empire
-      </label>
-      <label className="flex items-center gap-2 text-sm font-medium text-slate-300">
-        <input
-          checked={Boolean(data.can_finalize_projects)}
-          onChange={(event) => setField("can_finalize_projects", event.target.checked)}
-          type="checkbox"
-        />
-        Can finalize completed projects
-      </label>
-      <label className="flex items-center gap-2 text-sm font-medium text-slate-300">
-        <input
-          checked={Boolean(data.can_propose_politics_economy)}
-          onChange={(event) => setField("can_propose_politics_economy", event.target.checked)}
-          type="checkbox"
-        />
-        Can propose Politics and Economy cards
-      </label>
-
-      <div>
-        <p className="mb-2 text-sm font-medium text-slate-300">Event Types Administered</p>
-        <div className="flex flex-wrap gap-2">
-          {eventTypeEntries.map((eventType) => {
-            const selected = administeredEventTypes.includes(eventType.id);
-            return (
-              <button
-                key={eventType.id}
-                className={`rounded-md border px-2 py-1 text-xs font-semibold ${selected ? "border-teal-400 bg-teal-400/10 text-teal-100" : "border-slate-700 text-slate-400 hover:bg-slate-800"}`}
-                onClick={() => toggleEventType(eventType.id)}
-                type="button"
-              >
-                {eventType.name}
-              </button>
-            );
-          })}
-          {eventTypeEntries.length === 0 ? <span className="text-sm text-slate-500">Create event types first.</span> : null}
-        </div>
+      <div className="grid gap-2 sm:grid-cols-2">
+        {[
+          ["is_minister_of_empire", "Minister of the Empire"],
+          ["can_finalize_projects", "Can finalize projects"],
+          ["can_block_player_council", "Can block a player during Council"],
+          ["first_administration_turn", "First during Administration"],
+          ["fallback_event_decider", "Decides if responsible minister is missing"],
+          ["can_decide_destroyed_building", "Chooses destroyed buildings"],
+          ["can_propose_politics_economy", "Can propose Politics and Economy cards"],
+        ].map(([field, label]) => (
+          <label key={field} className="flex items-center gap-2 text-sm font-medium text-slate-300">
+            <input
+              checked={Boolean(data[field])}
+              onChange={(event) => setField(field, event.target.checked)}
+              type="checkbox"
+            />
+            {label}
+          </label>
+        ))}
       </div>
 
       <TagToggleGroup
@@ -1165,7 +1122,7 @@ const EventEffectEditor = ({ effects, setEffects, resourceTags, allTags, ministr
                 label="Resource"
                 value={effect.payload?.resource_id || ""}
                 options={[{ value: "", label: "Select resource" }, ...resourceTags.map((tag) => ({ value: tag.id, label: tag.name }))]}
-                onChange={(value) => updatePayload(index, { resource_id: value, target: "domain_minister" })}
+                onChange={(value) => updatePayload(index, { resource_id: value, target: "event_minister" })}
               />
               <NumberField label="Amount" value={effect.payload?.amount || 1} onChange={(value) => updatePayload(index, { amount: value })} />
             </>
@@ -1196,8 +1153,8 @@ const EventEffectEditor = ({ effects, setEffects, resourceTags, allTags, ministr
                 value={effect.payload?.target || "all_players"}
                 options={[
                   { value: "all_players", label: "All players" },
-                  { value: "domain_minister", label: "Domain minister" },
-                  ...ministryEntries.map((ministry) => ({ value: ministry.id, label: ministry.name })),
+              { value: "event_minister", label: "Event minister" },
+              ...ministryEntries.map((ministry) => ({ value: ministry.id, label: ministry.name })),
                 ]}
                 onChange={(value) => updatePayload(index, { target: value })}
               />
@@ -1218,7 +1175,7 @@ const EventEffectEditor = ({ effects, setEffects, resourceTags, allTags, ministr
               <SelectField
                 label="Minister"
                 value={effect.payload?.ministry_id || ""}
-                options={[{ value: "", label: "Domain minister" }, ...ministryEntries.map((ministry) => ({ value: ministry.id, label: ministry.name }))]}
+                options={[{ value: "", label: "Event minister" }, ...ministryEntries.map((ministry) => ({ value: ministry.id, label: ministry.name }))]}
                 onChange={(value) => updatePayload(index, { ministry_id: value, duration: "next_year" })}
               />
               <span />
@@ -1259,8 +1216,12 @@ const NumberField = ({ label, value, onChange }) => (
 const EventGuidedFields = ({ data, setField, tagEntries, ministryEntries }) => {
   const resourceTags = volatileResourceTags(tagEntries);
   const defenseTags = permanentOnlyTags(tagEntries);
-  const domains = ministryEntries.filter((ministry) => ministry.data?.domain_id);
   const thresholds = Array.isArray(data.thresholds) ? data.thresholds : [];
+  const selectedMinistryId = data.ministry_id || "";
+  const ministryOptions = ministryEntries.map((ministry) => {
+    const symbol = ministry.data?.symbol || ministry.id;
+    return { value: ministry.id, label: `${ministry.name} (${String(symbol).toUpperCase()})` };
+  });
 
   const updateCount = (field, tagId, count) => {
     const current = data[field] && typeof data[field] === "object" && !Array.isArray(data[field]) ? { ...data[field] } : {};
@@ -1272,13 +1233,14 @@ const EventGuidedFields = ({ data, setField, tagEntries, ministryEntries }) => {
   return (
     <>
       <SelectField
-        label="Domain"
-        value={data.domain_id || ""}
-        options={[{ value: "", label: "Select domain" }, ...domains.map((ministry) => ({
-          value: ministry.data.domain_id,
-          label: `${ministry.name} (${ministry.data.domain_id})`,
-        }))]}
-        onChange={(value) => setField("domain_id", value)}
+        label="Jurisdiction Minister"
+        value={selectedMinistryId}
+        options={[{ value: "", label: "Select minister" }, ...ministryOptions]}
+        onChange={(value) => {
+          const selected = ministryEntries.find((ministry) => ministry.id === value);
+          setField("ministry_id", value);
+          setField("ministry_symbol", selected ? selected.data?.symbol || "" : "");
+        }}
       />
       <TagCounterGroup
         label="Defense Requirement"
@@ -1410,6 +1372,9 @@ const GuidedMetadataEditor = ({
       }
       const nextData = { ...currentData };
       if (
+        value === "" ||
+        value === false ||
+        value == null ||
         (Array.isArray(value) && value.length === 0) ||
         (value && typeof value === "object" && !Array.isArray(value) && Object.keys(value).length === 0)
       ) {
@@ -1468,7 +1433,6 @@ const GuidedMetadataEditor = ({
         <MinistryGuidedFields
           data={data}
           setField={setField}
-          eventTypeEntries={eventTypeEntries}
           tagEntries={tagEntries}
           imageEntries={imageEntries}
         />
@@ -1704,10 +1668,12 @@ const AdminPage = () => {
       dataText:
         activeCatalogKind === "groups"
           ? stringifyData({ type: "mutually_exclusive" })
-          : activeCatalogKind === "decks"
-            ? stringifyData({ deck_type: "empire", item_ids: [] })
+            : activeCatalogKind === "decks"
+              ? stringifyData({ deck_type: "empire", item_ids: [] })
             : activeCatalogKind === "ministries"
-              ? stringifyData({ administered_event_types: [], can_finalize_projects: false })
+              ? stringifyData({
+                  infrastructure_resources: [],
+                })
               : activeCatalogKind === "tags"
                 ? stringifyData({ resource_type: "permanent" })
                 : activeCatalogKind === "images"

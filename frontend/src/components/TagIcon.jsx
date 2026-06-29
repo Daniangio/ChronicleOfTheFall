@@ -7,7 +7,7 @@ const categoryIcons = {
   transient: CircleDollarSign,
   state: Landmark,
   condition: AlertTriangle,
-  domain: Badge,
+  jurisdiction: Badge,
 };
 
 const normalizeLabel = (value) =>
