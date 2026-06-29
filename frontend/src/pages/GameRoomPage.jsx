@@ -280,12 +280,12 @@ const GameRoomPage = () => {
   const activePlayer = players.find((player) => player.id === gameState?.active_player_id);
   const focusedPlayer = players.find((player) => player.id === focusedPlayerId) || players[0];
   const cities = gameState?.cities || [];
-  const city = cities[0];
   const eventLookup = useMemo(() => buildLookup(gameState?.catalog?.events || []), [gameState]);
   const possibleActions = gameState?.possible_actions || [];
   const phase = gameState?.phase || "administration";
   const selectedMinistries = gameState?.selected_ministries || {};
   const buildActions = possibleActions.filter((entry) => entry.type === "build_project");
+  const newCityBuildActions = buildActions.filter((entry) => entry.city_id === "__new_city__");
   const citiesWithGroups = useMemo(() => cities.map((cityEntry) => {
     const groups = {};
     for (const cardId of cityEntry.cards || []) {
@@ -474,26 +474,31 @@ const GameRoomPage = () => {
 
               {citiesWithGroups.map(({ city: cityEntry, buildActions: cityBuildActions, groups }) => {
                 const exhaustedIds = cityEntry.exhausted_card_ids || [];
+                const cityCardId = cityEntry.city_card_id || cityEntry.foundation_card_id;
+                const buildingSlots = Number(cityEntry.building_slots ?? cardLookup[normalize(cityCardId)]?.data?.building_slots ?? 0);
                 return (
                   <section key={cityEntry.id} className="rounded-lg border border-slate-800 bg-slate-900 p-4">
                     <div className="flex items-center gap-2">
                       <Landmark className="h-5 w-5 text-teal-300" aria-hidden="true" />
                       <div>
                         <h1 className="text-xl font-semibold text-white">{cityEntry.name || "City"}</h1>
-                        <p className="text-xs text-slate-500">Active player: {activePlayer?.name || "None"}</p>
+                        <p className="text-xs text-slate-500">
+                          Active player: {activePlayer?.name || "None"}
+                          {buildingSlots ? ` · Buildings ${cityEntry.cards?.length || 0}/${buildingSlots}` : ""}
+                        </p>
                       </div>
                     </div>
                     <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                      {cityEntry.foundation_card_id ? (
+                      {cityCardId ? (
                         <CardMini
-                          card={cardLookup[normalize(cityEntry.foundation_card_id)]}
+                          card={cardLookup[normalize(cityCardId)]}
                           tagLookup={tagLookup}
-                          exhausted={exhaustedIds.includes(cityEntry.foundation_card_id)}
-                          canExhaust={hasAction("exhaust_card", (entry) => entry.card_id === cityEntry.foundation_card_id && entry.city_id === cityEntry.id)}
+                          exhausted={exhaustedIds.includes(cityCardId)}
+                          canExhaust={hasAction("exhaust_card", (entry) => entry.card_id === cityCardId && entry.city_id === cityEntry.id)}
                           onExhaust={() => action("/actions/exhaust", {
                             player_id: activePlayer.id,
                             city_id: cityEntry.id,
-                            card_id: cityEntry.foundation_card_id,
+                            card_id: cityCardId,
                           })}
                         />
                       ) : null}
@@ -535,6 +540,29 @@ const GameRoomPage = () => {
               {citiesWithGroups.length === 0 ? (
                 <section className="rounded-lg border border-slate-800 bg-slate-900 p-6 text-sm text-slate-500">
                   No city zones available.
+                </section>
+              ) : null}
+              {newCityBuildActions.length ? (
+                <section className="rounded-lg border border-teal-900/70 bg-teal-950/20 p-4">
+                  <div className="flex items-center gap-2">
+                    <Landmark className="h-5 w-5 text-teal-300" aria-hidden="true" />
+                    <h2 className="font-semibold text-white">New City</h2>
+                  </div>
+                  <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                    {newCityBuildActions.map((entry) => (
+                      <BuildOptionCard
+                        key={`${entry.project_id}-${entry.card_id}`}
+                        card={cardLookup[normalize(entry.card_id)]}
+                        cityName="new city"
+                        disabled={busy}
+                        onBuild={() => action("/actions/build-project", {
+                          player_id: activePlayer.id,
+                          project_id: entry.project_id,
+                          city_id: entry.city_id,
+                        })}
+                      />
+                    ))}
+                  </div>
                 </section>
               ) : null}
             </div>

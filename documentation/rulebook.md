@@ -55,13 +55,15 @@ Example: You exhaust a Stone Quarry to generate 2 [Material]. You must immediate
 
 The Empire Deck and the Event Deck are composed of highly specific, interlocking card types.
 
-3.1 Buildings (The City Infrastructure)
+3.1 Cities And Buildings
 
-Buildings are physical components constructed within the City Graph.
+City cards are project cards that found city zones. They have costs and requirements like other cards, may provide permanent tags, and may have manual actions.
 
-Placement: Must be placed connected to a City Node.
+Each city card defines a number of building slots. The city card itself does not occupy a building slot.
 
-Function: They provide permanent tags and can be exhausted once per Year during the Administration Phase to generate Volatile Resources or trigger unique card effects.
+Buildings are physical components constructed into a city zone's building slots. Building requirements that check tags only inspect the city where that building would be placed.
+
+Function: Cities and buildings provide permanent tags and can be exhausted once per Year during the Administration Phase to generate Volatile Resources or trigger unique card effects.
 
 3.2 Politics & Economy (Instant Resolutions)
 
@@ -113,7 +115,7 @@ Pillar Board: A tracking board scale 0-10 for the three Global Pillars.
 
 4.2 The Five Play Zones
 
-The City Graph (The Map): The physical layout of the Empire. It starts with the Capital in the center. Cities are expanded by placing connections and building cards around them.
+The City Zones (The Map): The physical layout of the Empire. It starts with the Capital. New city cards create separate city zones. Roads and connections are omitted from the current prototype.
 
 The Project Queue: A physical track with exactly 3 slots (Indices 0, 1, and 2). It functions as a strict First-In-First-Out (FIFO) queue for cards under construction.
 
@@ -223,7 +225,7 @@ Allocate Resources: Spend Volatile Resources currently in your temporary pool an
 
 Finalize a Project: Only available to the Minister of the Empire and the Minister of Infrastructure. If a Project card in the Queue has accumulated resources matching its build cost, you may pay a Free Action to move it onto the board.
 
-Buildings are placed on the map adhering to spatial connection rules.
+City cards create separate city zones. Buildings are placed into an eligible city zone with an open building slot; roads and spatial connections are not used in the current prototype.
 
 Politics/Economy cards resolve their effects instantly and are discarded into the trash. If they enter an occupied Empire Slot, the old card is overwritten and discarded.
 

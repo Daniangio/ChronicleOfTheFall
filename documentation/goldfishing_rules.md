@@ -6,7 +6,7 @@ This document tracks the playable rules implemented in the prototype. It is the 
 
 Goldfishing mode is a four-player solo simulation of the empire engine.
 
-Version 0 intentionally excludes hidden agendas, founding new cities, full event resolution, and multiplayer permissions. All game mutations are executed by the backend; the frontend only displays state and sends action requests.
+Version 0 intentionally excludes hidden agendas, roads or city connections, full event resolution, and multiplayer permissions. All game mutations are executed by the backend; the frontend only displays state and sends action requests.
 
 ## Setup
 
@@ -21,9 +21,11 @@ Events are loaded into an event deck. The first epoch starts directly in Adminis
 
 ## Board Zones
 
-The central board shows the capital city. City cards are grouped by card category, such as foundation, institution, or route.
+The central board shows city zones. Each city zone is created by a city card, starting with the capital city card. City cards are normal project cards with costs, requirements, tags, and manual actions, plus a `building_slots` value.
 
-The project zone can hold up to three projects. A project is a card from a player's hand or the common pool that is waiting for its cost to be paid, then built into an eligible city zone.
+Buildings are placed into a city zone's building slots. City cards do not occupy building slots and are shown separately from buildings. Roads and connections are not part of v0.
+
+The project zone can hold up to three projects. A project is a card from a player's hand or the common pool that is waiting for its cost to be paid, then built into an eligible city zone or founded as a new city if it is a city card.
 
 The common pool is a shared set of cards loaded from the latest deck whose `deck_type` is `common-pool`. Cards in the common pool are shown next to the focused player's hand and can be proposed by the active player.
 
@@ -38,7 +40,7 @@ Cards display:
 - Counted permanent tags in the body.
 - Manual action production at the bottom.
 
-Building cards can define counted permanent tags, volatile resource costs, required city tags, pitch tags, and stackable exhaust effects. Exhaust effects currently support producing volatile resources and drawing cards. Requirements are enforced when a completed project is built. A completed project only shows build options in city zones where its requirements are satisfied.
+City cards and building cards can define counted permanent tags, volatile resource costs, required tags, pitch tags, and stackable manual effects. Building requirements that check city tags only inspect the target city where the building would be placed. Requirements are enforced when a completed project is built. A completed building only shows build options in city zones where its requirements are satisfied and at least one building slot is open.
 
 ## Turn Actions
 
@@ -60,7 +62,7 @@ Limited action:
 Free actions:
 
 - Assign volatile mana from the active player's pool onto a project.
-- Build a completed project into an eligible city zone. This is available to the Minister of the Empire and any ministry configured with `can_finalize_projects`. The backend returns one build action per valid target, and the UI shows those targets as semi-transparent build options in the matching zones.
+- Build a completed project. City projects create a new city zone. Building projects are built into an eligible city zone with an open building slot. This is available to the Minister of the Empire and any ministry configured with `can_finalize_projects`. The backend returns one build action per valid target, and the UI shows those targets as semi-transparent build options in the matching zones.
 - Use a configured ministry resource action, such as the Minister of Infrastructure producing an admin-selected volatile resource. This is once per year for that ministry action.
 
 Turn-ending action:
@@ -76,7 +78,7 @@ If the backend calculates that a player has no legal action except Pass, that pl
 
 Mana tokens are volatile and are stored on player boards only during that player's current turn.
 
-Players can assign stored mana tokens to projects through backend action endpoints. Projects do not build automatically. Once a project is complete, any active player can use the free Build Project action to place it into a city where its requirements are satisfied.
+Players can assign stored mana tokens to projects through backend action endpoints. Projects do not build automatically. Once a project is complete, any active player can use the free Build Project action. City projects create new city zones; building projects are placed into a city where their requirements are satisfied and a slot is available.
 
 During Decay:
 

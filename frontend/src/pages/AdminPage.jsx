@@ -726,6 +726,7 @@ const CardGuidedFields = ({ data, setField, tagEntries, cardEntries, groupEntrie
         label="Card Type"
         value={data.card_type || "building"}
         options={[
+          { value: "city", label: "City" },
           { value: "building", label: "Building" },
           { value: "politics", label: "Politics" },
           { value: "economy", label: "Economy" },
@@ -739,6 +740,14 @@ const CardGuidedFields = ({ data, setField, tagEntries, cardEntries, groupEntrie
         options={placementOptions}
         onChange={(value) => setField("placement", value)}
       />
+
+      {data.card_type === "city" ? (
+        <NumberField
+          label="Building Slots"
+          value={data.building_slots || 3}
+          onChange={(value) => setField("building_slots", Math.max(0, value))}
+        />
+      ) : null}
 
       <TagCounterGroup
         label="Permanent Tags"

@@ -375,6 +375,78 @@ class TestGameRoomService(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(built["projects"], [])
         self.assertEqual(built["active_player_id"], "player-1")
 
+    async def test_completed_city_project_creates_city_zone(self):
+        service = GameRoomService()
+        user = User(id="user_1", username="Player One")
+        state = {
+            "mode": "goldfishing",
+            "active_player_id": "player-1",
+            "players": [{"id": "player-1", "name": "Player 1", "hand": [], "mana": {}, "passed": False}],
+            "projects": [{"id": "project-1", "card_id": "frontier-town", "contributions": {}}],
+            "cities": [{"id": "capital", "name": "Capital", "cards": [], "exhausted_card_ids": []}],
+            "catalog": {
+                "cards": [
+                    {
+                        "id": "frontier-town",
+                        "name": "Frontier Town",
+                        "kind": "cards",
+                        "category": "city",
+                        "summary": "",
+                        "color": None,
+                        "data": {"card_type": "city", "building_slots": 2},
+                    }
+                ],
+                "tags": [],
+            },
+            "log": [],
+        }
+
+        room = await service.create_room(user=user, game_type="chronicle_solo", game_state=state)
+        built = await service.apply_goldfishing_action(
+            room_id=room["id"],
+            user=user,
+            action="build_project",
+            payload={"player_id": "player-1", "project_id": "project-1", "city_id": "__new_city__"},
+        )
+        self.assertEqual(len(built["cities"]), 2)
+        self.assertEqual(built["cities"][1]["city_card_id"], "frontier-town")
+        self.assertEqual(built["cities"][1]["building_slots"], 2)
+        self.assertEqual(built["cities"][1]["cards"], [])
+
+    async def test_building_project_requires_open_city_slot(self):
+        service = GameRoomService()
+        user = User(id="user_1", username="Player One")
+        state = {
+            "mode": "goldfishing",
+            "active_player_id": "player-1",
+            "players": [{"id": "player-1", "name": "Player 1", "hand": [], "mana": {"labor": 1}, "passed": False}],
+            "projects": [{"id": "project-1", "card_id": "workshop", "contributions": {}}],
+            "cities": [
+                {"id": "capital", "name": "Capital", "city_card_id": "capital-city", "building_slots": 1, "cards": ["farm"], "exhausted_card_ids": []},
+                {"id": "frontier", "name": "Frontier", "city_card_id": "frontier-town", "building_slots": 2, "cards": [], "exhausted_card_ids": []},
+            ],
+            "catalog": {
+                "cards": [
+                    {"id": "capital-city", "name": "Capital City", "kind": "cards", "category": "city", "summary": "", "color": None, "data": {"card_type": "city", "building_slots": 1}},
+                    {"id": "frontier-town", "name": "Frontier Town", "kind": "cards", "category": "city", "summary": "", "color": None, "data": {"card_type": "city", "building_slots": 2}},
+                    {"id": "farm", "name": "Farm", "kind": "cards", "category": "building", "summary": "", "color": None, "data": {}},
+                    {"id": "workshop", "name": "Workshop", "kind": "cards", "category": "building", "summary": "", "color": None, "data": {"cost": {"labor": 1}}},
+                ],
+                "tags": [],
+            },
+            "log": [],
+        }
+
+        room = await service.create_room(user=user, game_type="chronicle_solo", game_state=state)
+        assigned = await service.apply_goldfishing_action(
+            room_id=room["id"],
+            user=user,
+            action="assign_mana",
+            payload={"player_id": "player-1", "project_id": "project-1", "tag_id": "labor", "amount": 1},
+        )
+        build_actions = [action for action in assigned["possible_actions"] if action["type"] == "build_project"]
+        self.assertEqual([action["city_id"] for action in build_actions], ["frontier"])
+
     async def test_project_build_options_respect_city_requirements(self):
         service = GameRoomService()
         user = User(id="user_1", username="Player One")

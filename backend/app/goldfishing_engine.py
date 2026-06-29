@@ -100,7 +100,9 @@ def build_goldfishing_state(
             {
                 "id": "capital",
                 "name": "Capital",
+                "city_card_id": "capital-foundation",
                 "foundation_card_id": "capital-foundation",
+                "building_slots": int((card_by_id.get("capital-foundation", {}).get("data", {}) or {}).get("building_slots") or 3),
                 "cards": [],
                 "exhausted_card_ids": [],
             }
@@ -209,12 +211,20 @@ def build_project(state: dict[str, Any], *, player_id: str, project_id: str, cit
     if active["id"] != player_id:
         raise ValueError("It is not this player's turn.")
     project = _project(state, project_id)
-    city = _city(state, city_id)
     card = card_by_id(state, project.get("card_id", ""))
     if not _project_complete(card, project):
         raise ValueError("Project is not complete.")
     if not _player_can_finalize_project(state, active):
         raise ValueError("This player's ministry cannot finalize projects.")
+    if _is_city_card(card):
+        if not _city_card_can_be_founded(state, card):
+            raise ValueError("Project requirements are not satisfied for this city.")
+        city = _create_city_from_card(state, card)
+        state["projects"] = [entry for entry in state.get("projects", []) if entry.get("id") != project_id]
+        active["passed"] = False
+        state.setdefault("log", []).append(f"{active['name']} founded {city['name']}.")
+        return _prepare_state(state)
+    city = _city(state, city_id)
     if not _card_can_be_built_in_city(state, card, city):
         raise ValueError("Project requirements are not satisfied in this city.")
     city.setdefault("cards", []).append(card["id"])
@@ -233,7 +243,7 @@ def exhaust_card(state: dict[str, Any], *, player_id: str, city_id: str, card_id
     if active.get("turn_exhaust_used"):
         raise ValueError("This player has already exhausted a card this turn.")
     city = _city(state, city_id)
-    in_city = card_id == city.get("foundation_card_id") or card_id in city.get("cards", [])
+    in_city = _city_has_card(city, card_id)
     if not in_city:
         raise ValueError("Card is not in this city.")
     if card_id in city.get("exhausted_card_ids", []):
@@ -419,7 +429,7 @@ def _possible_actions_for_active_player(state: dict[str, Any]) -> list[dict[str,
                 actions.append({"type": "use_ministry_resource", "player_id": active["id"], "tag_id": tag_id, "amount": int(amount)})
     if not active.get("turn_exhaust_used"):
         for city in state.get("cities", []):
-            for card_id in [city.get("foundation_card_id"), *city.get("cards", [])]:
+            for card_id in _city_card_ids(city):
                 if not card_id or card_id in city.get("exhausted_card_ids", []):
                     continue
                 try:
@@ -449,15 +459,24 @@ def _possible_actions_for_active_player(state: dict[str, Any]) -> list[dict[str,
         except ValueError:
             continue
         if _project_complete(card, project) and _player_can_finalize_project(state, active):
-            for city in state.get("cities", []):
-                if _card_can_be_built_in_city(state, card, city):
-                    actions.append({
-                        "type": "build_project",
-                        "player_id": active["id"],
-                        "project_id": project["id"],
-                        "card_id": card["id"],
-                        "city_id": city["id"],
-                    })
+            if _is_city_card(card) and _city_card_can_be_founded(state, card):
+                actions.append({
+                    "type": "build_project",
+                    "player_id": active["id"],
+                    "project_id": project["id"],
+                    "card_id": card["id"],
+                    "city_id": "__new_city__",
+                })
+            else:
+                for city in state.get("cities", []):
+                    if _card_can_be_built_in_city(state, card, city):
+                        actions.append({
+                            "type": "build_project",
+                            "player_id": active["id"],
+                            "project_id": project["id"],
+                            "card_id": card["id"],
+                            "city_id": city["id"],
+                        })
         cost = card.get("data", {}).get("cost") or {}
         contributions = project.get("contributions") or {}
         for tag_id, required in cost.items():
@@ -574,13 +593,36 @@ def _draw_for_all_players(state: dict[str, Any], amount: int) -> None:
 
 
 def _card_can_be_built_in_city(state: dict[str, Any], card: dict[str, Any], city: dict[str, Any]) -> bool:
+    if _is_city_card(card):
+        return False
     placement = str((card.get("data", {}) or {}).get("placement") or "city")
     if placement not in {"", "city", "local"}:
+        return False
+    if _city_building_slots_available(state, city) <= 0:
         return False
     for tag_id, amount in ((card.get("data", {}) or {}).get("required_city_tags") or {}).items():
         if _count_city_token(state, city, tag_id) < int(amount):
             return False
     return all(_build_requirement_met(state, requirement, city) for requirement in (card.get("data", {}).get("requirements") or []))
+
+
+def _city_card_can_be_founded(state: dict[str, Any], card: dict[str, Any]) -> bool:
+    data = card.get("data", {}) or {}
+    for tag_id, amount in (data.get("required_city_tags") or {}).items():
+        if _count_global_token(state, tag_id) < int(amount):
+            return False
+    return all(_city_requirement_met(state, requirement) for requirement in (data.get("requirements") or []))
+
+
+def _city_requirement_met(state: dict[str, Any], requirement: dict[str, Any]) -> bool:
+    requirement_type = requirement.get("type")
+    if requirement_type == "not_condition":
+        tag_id = str(requirement.get("tag_id") or "")
+        return bool(tag_id) and _count_global_token(state, tag_id) <= 0
+    if requirement_type == "has_card":
+        card_id = str(requirement.get("card_id") or "")
+        return bool(card_id) and any(_city_has_card(entry, card_id) for entry in state.get("cities", []))
+    return False
 
 
 def _card_requires_state_minister(card: dict[str, Any]) -> bool:
@@ -634,7 +676,58 @@ def _build_requirement_met(state: dict[str, Any], requirement: dict[str, Any], c
 
 
 def _city_has_card(city: dict[str, Any], card_id: str) -> bool:
-    return city.get("foundation_card_id") == card_id or card_id in (city.get("cards") or [])
+    return card_id in _city_card_ids(city)
+
+
+def _city_card_ids(city: dict[str, Any]) -> list[str]:
+    card_ids: list[str] = []
+    for card_id in [city.get("city_card_id"), city.get("foundation_card_id"), *(city.get("cards") or [])]:
+        if card_id and card_id not in card_ids:
+            card_ids.append(card_id)
+    return card_ids
+
+
+def _is_city_card(card: dict[str, Any]) -> bool:
+    data = card.get("data", {}) or {}
+    return str(data.get("card_type") or card.get("category") or "").casefold() in {"city", "settlement"}
+
+
+def _city_building_slots(state: dict[str, Any], city: dict[str, Any]) -> int | None:
+    if "building_slots" in city:
+        return max(0, int(city.get("building_slots") or 0))
+    city_card_id = city.get("city_card_id") or city.get("foundation_card_id")
+    if not city_card_id:
+        return None
+    try:
+        card = card_by_id(state, city_card_id)
+    except ValueError:
+        return None
+    data = card.get("data", {}) or {}
+    if "building_slots" not in data:
+        return None
+    return max(0, int(data.get("building_slots") or 0))
+
+
+def _city_building_slots_available(state: dict[str, Any], city: dict[str, Any]) -> int:
+    slots = _city_building_slots(state, city)
+    if slots is None:
+        return 9999
+    return slots - len(city.get("cards") or [])
+
+
+def _create_city_from_card(state: dict[str, Any], card: dict[str, Any]) -> dict[str, Any]:
+    city_id = f"city-{uuid.uuid4().hex[:8]}"
+    data = card.get("data", {}) or {}
+    city = {
+        "id": city_id,
+        "name": card.get("name") or "City",
+        "city_card_id": card["id"],
+        "building_slots": max(0, int(data.get("building_slots") or 0)),
+        "cards": [],
+        "exhausted_card_ids": [],
+    }
+    state.setdefault("cities", []).append(city)
+    return city
 
 
 def _manual_action_node(card: dict[str, Any]) -> dict[str, Any] | None:
@@ -812,7 +905,7 @@ def _modify_token(state: dict[str, Any], payload: dict[str, Any], *, city: dict[
 
 def _count_city_token(state: dict[str, Any], city: dict[str, Any], token: str) -> int:
     total = int((city.get("tokens") or {}).get(token, 0))
-    for card_id in [city.get("foundation_card_id"), *city.get("cards", [])]:
+    for card_id in _city_card_ids(city):
         if not card_id:
             continue
         try:

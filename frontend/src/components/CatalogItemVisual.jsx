@@ -234,6 +234,7 @@ const CatalogItemVisual = ({ entry, tags = [], cards = [], groups = [], ministri
   const imageLookup = Object.fromEntries((images || []).map((image) => [image.id, image]));
   const domainMinistry = (ministries || []).find((ministry) => ministry.data?.domain_id && ministry.data.domain_id === entry?.data?.domain_id);
   const domainIcon = domainMinistry?.data?.domain_icon || imageLookup[domainMinistry?.data?.domain_icon_image_id]?.data?.src || "";
+  const ministryIcon = entry?.data?.domain_icon || imageLookup[entry?.data?.domain_icon_image_id]?.data?.src || "";
   const dataEntries = Object.entries(entry?.data || {}).filter(([key]) => key !== "src").slice(0, 6);
 
   return (
@@ -246,6 +247,15 @@ const CatalogItemVisual = ({ entry, tags = [], cards = [], groups = [], ministri
               <h3 className="truncate text-base font-semibold text-white">{entry.name}</h3>
               {entry.kind === "tags" ? (
                 <TagIcon tag={entry} />
+              ) : entry.kind === "ministries" ? (
+                <span className="inline-flex items-center gap-1 rounded bg-slate-800 px-2 py-1 text-xs font-medium text-slate-300">
+                  {ministryIcon ? (
+                    <img alt="" className="h-5 w-5 rounded object-contain" src={ministryIcon} />
+                  ) : (
+                    <span className="font-semibold">{String(entry.data?.domain_symbol || entry.data?.domain_id || entry.category || "").slice(0, 3).toUpperCase()}</span>
+                  )}
+                  {entry.category || "ministry"}
+                </span>
               ) : entry.kind === "events" && domainMinistry ? (
                 <span className="inline-flex items-center gap-1 rounded bg-slate-800 px-2 py-1 text-xs font-medium text-slate-300">
                   {domainIcon ? (
