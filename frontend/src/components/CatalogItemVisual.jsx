@@ -1,4 +1,4 @@
-import { RotateCcw, ScrollText, Zap } from "lucide-react";
+import { Ban, Hammer, RotateCcw, ScrollText, ShieldX, Snowflake, Users, UserX, Zap } from "lucide-react";
 import TagIcon from "./TagIcon.jsx";
 
 const fallbackColor = "#64748b";
@@ -30,6 +30,11 @@ const ministryIcon = (ministry, imageLookup) => {
   return ministry?.data?.icon || imageLookup?.[imageId]?.data?.src || "";
 };
 
+const catalogIcon = (entry, imageLookup) => {
+  const imageId = entry?.data?.icon_image_id || entry?.data?.image_id;
+  return entry?.data?.icon || entry?.data?.image || imageLookup?.[imageId]?.data?.src || "";
+};
+
 const humanizeKey = (value) =>
   String(value || "")
     .replace(/_/g, " ")
@@ -40,6 +45,22 @@ const primitiveText = (value) => {
   if (Array.isArray(value)) return value.join(", ");
   if (value && typeof value === "object") return JSON.stringify(value);
   return String(value);
+};
+
+const SmallIcon = ({ src, fallback, label, tone = "slate" }) => {
+  const toneClass = tone === "rose"
+    ? "border-rose-800/70 text-rose-200"
+    : tone === "emerald"
+      ? "border-emerald-800/70 text-emerald-200"
+      : tone === "amber"
+        ? "border-amber-800/70 text-amber-200"
+        : "border-slate-700 text-slate-300";
+  const Fallback = fallback;
+  return (
+    <span className={`inline-flex h-7 min-w-7 items-center justify-center rounded-md border bg-stone-950/60 px-1.5 text-[0.65rem] font-semibold ${toneClass}`} title={label}>
+      {src ? <img alt="" className="h-5 w-5 object-contain" src={src} /> : Fallback ? <Fallback className="h-4 w-4" aria-hidden="true" /> : String(label || "").slice(0, 3).toUpperCase()}
+    </span>
+  );
 };
 
 const TagValue = ({ value, tagLookup }) => {
@@ -272,16 +293,182 @@ const MinisterAbilities = ({ entry, tagLookup }) => {
   );
 };
 
-const CatalogItemVisual = ({ entry, tags = [], cards = [], groups = [], ministries = [], images = [], actions = null }) => {
+const EventEffectIcon = ({ effectType, effectIconLookup, imageLookup, fallback, label, tone }) => {
+  const entry = effectIconLookup[normalizeTagId(effectType)];
+  return <SmallIcon src={catalogIcon(entry, imageLookup)} fallback={fallback} label={label || entry?.name || effectType} tone={tone} />;
+};
+
+const EventTargetIcon = ({ target, eventMinistry, ministryLookup, effectIconLookup, imageLookup }) => {
+  if (target === "all_players") {
+    return <EventEffectIcon effectType="all_players" effectIconLookup={effectIconLookup} imageLookup={imageLookup} fallback={Users} label="All players" tone="amber" />;
+  }
+  const ministry = target === "event_minister" || !target ? eventMinistry : ministryLookup[normalizeTagId(target)];
+  return <SmallIcon src={ministryIcon(ministry, imageLookup)} label={ministry?.name || target || "Minister"} tone="amber" />;
+};
+
+const EventEffectToken = ({ effect, eventMinistry, ministryLookup, effectIconLookup, pillarLookup, tagLookup, imageLookup }) => {
+  const payload = effect?.payload || {};
+  const amount = Number(payload.amount || 1);
+  if (effect?.effect_type === "modify_pillar") {
+    const pillar = pillarLookup[normalizeTagId(payload.pillar)];
+    return (
+      <span className="inline-flex items-center gap-1">
+        <SmallIcon src={catalogIcon(pillar, imageLookup)} label={pillar?.name || payload.pillar || "Pillar"} tone={amount >= 0 ? "emerald" : "rose"} />
+        <span className={`text-xs font-bold ${amount >= 0 ? "text-emerald-200" : "text-rose-200"}`}>{amount >= 0 ? `+${amount}` : amount}</span>
+      </span>
+    );
+  }
+  if (effect?.effect_type === "generate_resource") {
+    return (
+      <span className="inline-flex items-center gap-1">
+        <EventTargetIcon target={payload.target || "event_minister"} eventMinistry={eventMinistry} ministryLookup={ministryLookup} effectIconLookup={effectIconLookup} imageLookup={imageLookup} />
+        <TagIcon tag={tagLookup[normalizeTagId(payload.resource_id)]} label={payload.resource_id} count={amount} />
+      </span>
+    );
+  }
+  if (effect?.effect_type === "destroy_building_with_tag") {
+    return (
+      <span className="inline-flex items-center gap-1">
+        <EventEffectIcon effectType="destroy_building_with_tag" effectIconLookup={effectIconLookup} imageLookup={imageLookup} fallback={Hammer} label="Destroy building" tone="rose" />
+        <TagIcon tag={tagLookup[normalizeTagId(payload.tag_id)]} label={payload.tag_id} count={amount} />
+      </span>
+    );
+  }
+  if (effect?.effect_type === "discard_card") {
+    return (
+      <span className="inline-flex items-center gap-1">
+        <EventTargetIcon target={payload.target || "all_players"} eventMinistry={eventMinistry} ministryLookup={ministryLookup} effectIconLookup={effectIconLookup} imageLookup={imageLookup} />
+        <EventEffectIcon effectType="discard_card" effectIconLookup={effectIconLookup} imageLookup={imageLookup} fallback={ScrollText} label="Discard card" tone="rose" />
+        {amount > 1 ? <span className="text-xs font-bold text-rose-200">{amount}</span> : null}
+      </span>
+    );
+  }
+  if (effect?.effect_type === "freeze_resource_generation") {
+    return (
+      <span className="inline-flex items-center gap-1">
+        <EventEffectIcon effectType="freeze_resource_generation" effectIconLookup={effectIconLookup} imageLookup={imageLookup} fallback={Snowflake} label="Freeze resource" tone="rose" />
+        <TagIcon tag={tagLookup[normalizeTagId(payload.resource_id)]} label={payload.resource_id} />
+      </span>
+    );
+  }
+  if (effect?.effect_type === "block_minister_next_year") {
+    const ministry = ministryLookup[normalizeTagId(payload.ministry_id || eventMinistry?.id)];
+    return (
+      <span className="inline-flex items-center gap-1">
+        <SmallIcon src={ministryIcon(ministry, imageLookup)} fallback={UserX} label={ministry?.name || "Minister"} tone="amber" />
+        <EventEffectIcon effectType="block_minister_next_year" effectIconLookup={effectIconLookup} imageLookup={imageLookup} fallback={Ban} label="Block minister" tone="rose" />
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1">
+      <EventEffectIcon effectType={effect?.effect_type || "effect"} effectIconLookup={effectIconLookup} imageLookup={imageLookup} fallback={ShieldX} label={effect?.effect_type || "Effect"} />
+    </span>
+  );
+};
+
+const EventEffectRow = ({ title, effects, tone, eventMinistry, ministryLookup, effectIconLookup, pillarLookup, tagLookup, imageLookup }) => {
+  if (!effects?.length) return null;
+  return (
+    <div className={`rounded-md border ${tone === "success" ? "border-emerald-900/70 bg-emerald-950/15" : "border-rose-900/70 bg-rose-950/15"} p-2`}>
+      <p className={`mb-2 text-[0.65rem] font-bold uppercase tracking-normal ${tone === "success" ? "text-emerald-200" : "text-rose-200"}`}>{title}</p>
+      <div className="flex flex-wrap gap-1.5">
+        {effects.map((effect, index) => (
+          <EventEffectToken
+            key={index}
+            effect={effect}
+            eventMinistry={eventMinistry}
+            ministryLookup={ministryLookup}
+            effectIconLookup={effectIconLookup}
+            pillarLookup={pillarLookup}
+            tagLookup={tagLookup}
+            imageLookup={imageLookup}
+          />
+        ))}
+      </div>
+    </div>
+  );
+};
+
+const EventCardVisual = ({ entry, eventMinistry, ministryLookup, effectIconLookup, pillarLookup, tagLookup, imageLookup, actions }) => {
+  const data = entry?.data || {};
+  const eventImage = data.image || imageLookup[data.image_id]?.data?.src || "";
+  const successEffects = Array.isArray(data.success_effects) ? data.success_effects : [];
+  const failureEffects = Array.isArray(data.failure_effects) ? data.failure_effects : [];
+  return (
+    <article className="overflow-hidden rounded-lg border border-amber-900/70 bg-stone-950 shadow-xl">
+      <div className="flex items-start justify-between gap-3 border-b border-amber-900/50 bg-stone-900/80 p-3">
+        <div className="min-w-0">
+          <h3 className="truncate text-base font-bold text-amber-50">{entry.name}</h3>
+          <p className="mt-0.5 text-[0.65rem] text-amber-700">{entry.id}</p>
+        </div>
+        <SmallIcon src={ministryIcon(eventMinistry, imageLookup)} label={eventMinistry?.name || data.ministry_symbol || "Minister"} tone="amber" />
+      </div>
+      {eventImage ? <img alt="" className="h-24 w-full object-cover opacity-80" src={eventImage} /> : null}
+      <div className="space-y-3 p-3">
+        {entry.summary ? <p className="text-xs leading-5 text-slate-300">{entry.summary}</p> : null}
+        <div>
+          <p className="mb-1 text-[0.65rem] font-bold uppercase tracking-normal text-slate-500">Requirement</p>
+          <TagValue value={data.defense_requirement || {}} tagLookup={tagLookup} />
+        </div>
+        {successEffects.length || failureEffects.length ? (
+          <div className={`grid gap-2 ${successEffects.length && failureEffects.length ? "sm:grid-cols-2" : ""}`}>
+            <EventEffectRow title="Success" effects={successEffects} tone="success" eventMinistry={eventMinistry} ministryLookup={ministryLookup} effectIconLookup={effectIconLookup} pillarLookup={pillarLookup} tagLookup={tagLookup} imageLookup={imageLookup} />
+            <EventEffectRow title="Failure" effects={failureEffects} tone="failure" eventMinistry={eventMinistry} ministryLookup={ministryLookup} effectIconLookup={effectIconLookup} pillarLookup={pillarLookup} tagLookup={tagLookup} imageLookup={imageLookup} />
+          </div>
+        ) : null}
+        {Array.isArray(data.thresholds) && data.thresholds.length ? (
+          <div className="space-y-2 border-t border-amber-900/40 pt-3">
+            <p className="text-[0.65rem] font-bold uppercase tracking-normal text-slate-500">Thresholds</p>
+            {data.thresholds.map((threshold, index) => (
+              <div key={index} className="flex flex-wrap items-center gap-1.5 text-xs text-slate-300">
+                <TagIcon tag={tagLookup[normalizeTagId(threshold.tag_id)]} label={threshold.tag_id} count={threshold.amount} />
+                <span className="text-slate-600">:</span>
+                {(threshold.effects || []).map((effect, effectIndex) => (
+                  <EventEffectToken key={effectIndex} effect={effect} eventMinistry={eventMinistry} ministryLookup={ministryLookup} effectIconLookup={effectIconLookup} pillarLookup={pillarLookup} tagLookup={tagLookup} imageLookup={imageLookup} />
+                ))}
+              </div>
+            ))}
+          </div>
+        ) : null}
+        {actions ? <div className="flex flex-wrap gap-2 border-t border-amber-900/40 pt-3">{actions}</div> : null}
+      </div>
+    </article>
+  );
+};
+
+const CatalogItemVisual = ({ entry, tags = [], cards = [], groups = [], ministries = [], images = [], pillars = [], effectIcons = [], actions = null }) => {
   const color = entry?.color || fallbackColor;
   const tagLookup = buildTagLookup(tags);
   const cardLookup = Object.fromEntries((cards || []).map((card) => [normalizeTagId(card.id || card.name), card]));
   const groupLookup = Object.fromEntries((groups || []).map((group) => [normalizeTagId(group.id || group.name), group]));
   const imageLookup = Object.fromEntries((images || []).map((image) => [image.id, image]));
+  const ministryLookup = Object.fromEntries((ministries || []).map((ministry) => [normalizeTagId(ministry.id || ministry.name), ministry]));
+  const pillarLookup = Object.fromEntries((pillars || []).map((pillar) => [normalizeTagId(pillar.id || pillar.name), pillar]));
+  const effectIconLookup = Object.fromEntries((effectIcons || []).flatMap((effectIcon) => {
+    const keys = [effectIcon.id, effectIcon.data?.effect_type].filter(Boolean).map(normalizeTagId);
+    return keys.map((key) => [key, effectIcon]);
+  }));
   const eventMinistry = (ministries || []).find((ministry) => ministry.id === entry?.data?.ministry_id);
   const eventMinistryIcon = ministryIcon(eventMinistry, imageLookup);
   const currentMinistryIcon = ministryIcon(entry, imageLookup);
-  const dataEntries = Object.entries(entry?.data || {}).filter(([key]) => key !== "src").slice(0, 6);
+  const currentCatalogIcon = catalogIcon(entry, imageLookup);
+  const dataEntries = Object.entries(entry?.data || {}).filter(([key]) => !["src", "icon", "image"].includes(key)).slice(0, 6);
+
+  if (entry.kind === "events") {
+    return (
+      <EventCardVisual
+        entry={entry}
+        eventMinistry={eventMinistry}
+        ministryLookup={ministryLookup}
+        effectIconLookup={effectIconLookup}
+        pillarLookup={pillarLookup}
+        tagLookup={tagLookup}
+        imageLookup={imageLookup}
+        actions={actions}
+      />
+    );
+  }
 
   return (
     <article className="overflow-hidden rounded-lg border border-slate-800 bg-slate-900">
@@ -293,6 +480,8 @@ const CatalogItemVisual = ({ entry, tags = [], cards = [], groups = [], ministri
               <h3 className="truncate text-base font-semibold text-white">{entry.name}</h3>
               {entry.kind === "tags" ? (
                 <TagIcon tag={entry} />
+              ) : ["pillars", "effect-icons"].includes(entry.kind) ? (
+                <SmallIcon src={currentCatalogIcon} label={entry.name} tone="amber" />
               ) : entry.kind === "ministries" ? (
                 <span className="inline-flex items-center gap-1 rounded bg-stone-950/70 px-2 py-1 text-xs font-medium text-amber-100">
                   {currentMinistryIcon ? (

@@ -234,7 +234,8 @@ class AdminCatalogSummary(BaseModel):
     images: int = 0
     cards: int = 0
     ministries: int = 0
-    event_types: int = 0
+    pillars: int = 0
+    effect_icons: int = 0
     agendas: int = 0
     events: int = 0
     groups: int = 0

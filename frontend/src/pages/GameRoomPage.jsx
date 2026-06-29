@@ -1,6 +1,7 @@
 import { Check, Eye, Hand, Hourglass, Landmark, LogOut, RotateCcw, ScrollText, Zap } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import CatalogItemVisual from "../components/CatalogItemVisual.jsx";
 import TagIcon from "../components/TagIcon.jsx";
 import { useStore } from "../store.js";
 import { buildApiUrl } from "../utils/connection.js";
@@ -446,29 +447,18 @@ const GameRoomPage = () => {
                 <div className="mt-3 grid gap-3 md:grid-cols-3">
                   {(gameState.event_queue || []).map((eventId, index) => {
                     const event = eventLookup[normalize(eventId)];
-                    const eventMinistry = ministries.find((ministry) => ministry.id === event?.data?.ministry_id);
-                    const eventMinistryIcon = eventMinistry?.data?.icon || "";
-                    const eventMinistrySymbol = eventMinistry?.data?.symbol || event?.data?.ministry_symbol || "";
                     const canPeekEvent = hasAction("peek_event", (entry) => entry.event_id === eventId && entry.player_id === activePlayer?.id);
                     return (
-                      <article key={`${eventId}-${index}`} className="rounded-lg border border-slate-800 bg-slate-950 p-3">
-                        <div className="flex items-start justify-between gap-2">
-                          <p className="text-sm font-semibold text-white">{event?.name || eventId}</p>
-                          {eventMinistry ? (
-                            <span className="inline-flex items-center gap-1 rounded border border-slate-700 px-2 py-1 text-[0.65rem] font-semibold text-slate-300">
-                              {eventMinistryIcon ? (
-                                <img alt="" className="h-4 w-4 object-contain" src={eventMinistryIcon} />
-                              ) : (
-                                <span>{String(eventMinistrySymbol).slice(0, 3).toUpperCase()}</span>
-                              )}
-                            </span>
-                          ) : null}
-                        </div>
-                        <p className="mt-1 text-xs uppercase text-slate-500">{event?.category || "event"}</p>
-                        <p className="mt-3 text-xs leading-5 text-slate-400">{event?.summary || "No event text."}</p>
-                        {canPeekEvent ? (
+                      <CatalogItemVisual
+                        key={`${eventId}-${index}`}
+                        entry={event || { id: eventId, name: eventId, kind: "events", data: {} }}
+                        tags={gameState.catalog?.tags || []}
+                        ministries={ministries}
+                        pillars={gameState.catalog?.pillars || []}
+                        effectIcons={gameState.catalog?.effect_icons || []}
+                        actions={canPeekEvent ? (
                           <button
-                            className="mt-3 inline-flex items-center gap-2 rounded-md border border-amber-700 px-2 py-1.5 text-xs font-semibold text-amber-100 hover:bg-amber-950/50 disabled:opacity-60"
+                            className="inline-flex items-center gap-2 rounded-md border border-amber-700 px-2 py-1.5 text-xs font-semibold text-amber-100 hover:bg-amber-950/50 disabled:opacity-60"
                             disabled={busy}
                             onClick={() => action("/actions/peek-event", { player_id: activePlayer.id, event_id: eventId })}
                             type="button"
@@ -477,7 +467,7 @@ const GameRoomPage = () => {
                             Reconnaissance
                           </button>
                         ) : null}
-                      </article>
+                      />
                     );
                   })}
                   {(gameState.event_queue || []).length === 0 ? (

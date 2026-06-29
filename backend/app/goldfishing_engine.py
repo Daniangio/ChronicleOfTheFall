@@ -54,7 +54,8 @@ def build_goldfishing_state(
     common_pool_deck_id: str = "",
     event_entries: list[dict[str, Any]] | None = None,
     ministry_entries: list[dict[str, Any]] | None = None,
-    event_type_entries: list[dict[str, Any]] | None = None,
+    pillar_entries: list[dict[str, Any]] | None = None,
+    effect_icon_entries: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     card_by_id = {entry["id"]: entry for entry in card_entries}
     draw_deck = Deck([
@@ -115,7 +116,8 @@ def build_goldfishing_state(
             "tags": tag_entries,
             "events": event_entries or [],
             "ministries": ministries,
-            "event_types": event_type_entries or [],
+            "pillars": pillar_entries or [],
+            "effect_icons": effect_icon_entries or [],
         },
         "decks": {
             "cards": card_deck_id,
@@ -405,7 +407,8 @@ def _ensure_state_defaults(state: dict[str, Any]) -> None:
     state.setdefault("possible_actions", [])
     state.setdefault("catalog", {}).setdefault("events", [])
     state.setdefault("catalog", {}).setdefault("ministries", [])
-    state.setdefault("catalog", {}).setdefault("event_types", [])
+    state.setdefault("catalog", {}).setdefault("pillars", [])
+    state.setdefault("catalog", {}).setdefault("effect_icons", [])
     state.setdefault("pillars", {"treasury": 5, "stability": 5, "morale": 5})
     if "minister_of_empire_player_id" not in state and state.get("players"):
         state["minister_of_empire_player_id"] = state["players"][0].get("id", "")

@@ -273,9 +273,14 @@ async def admin_list_ministries(_admin: User = Depends(require_admin), db: Sessi
     return _catalog_response(db, "ministries")
 
 
-@router.get("/admin/event-types", response_model=list[AdminCatalogEntry])
-async def admin_list_event_types(_admin: User = Depends(require_admin), db: Session = Depends(get_db)):
-    return _catalog_response(db, "event-types")
+@router.get("/admin/pillars", response_model=list[AdminCatalogEntry])
+async def admin_list_pillars(_admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    return _catalog_response(db, "pillars")
+
+
+@router.get("/admin/effect-icons", response_model=list[AdminCatalogEntry])
+async def admin_list_effect_icons(_admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    return _catalog_response(db, "effect-icons")
 
 
 @router.get("/admin/agendas", response_model=list[AdminCatalogEntry])

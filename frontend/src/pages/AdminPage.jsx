@@ -14,7 +14,8 @@ const sections = [
   { key: "images", label: "Images", to: "/admin/images" },
   { key: "cards", label: "Cards", to: "/admin/cards" },
   { key: "ministries", label: "Ministries", to: "/admin/ministries" },
-  { key: "event-types", label: "Event Types", to: "/admin/event-types" },
+  { key: "pillars", label: "Pillars", to: "/admin/pillars" },
+  { key: "effect-icons", label: "Effect Icons", to: "/admin/effect-icons" },
   { key: "agendas", label: "Agendas", to: "/admin/agendas" },
   { key: "events", label: "Events", to: "/admin/events" },
   { key: "groups", label: "Groups", to: "/admin/groups" },
@@ -26,7 +27,8 @@ const catalogSections = new Set([
   "images",
   "cards",
   "ministries",
-  "event-types",
+  "pillars",
+  "effect-icons",
   "agendas",
   "events",
   "groups",
@@ -72,6 +74,8 @@ const tagListFieldsBySection = {
   ministries: [],
   agendas: [],
   events: [],
+  pillars: [],
+  "effect-icons": [],
 };
 
 const tagCountFieldsBySection = {
@@ -79,6 +83,8 @@ const tagCountFieldsBySection = {
   ministries: [],
   agendas: [],
   events: [],
+  pillars: [],
+  "effect-icons": [],
 };
 
 const tagSingleFieldsBySection = {
@@ -86,6 +92,8 @@ const tagSingleFieldsBySection = {
   ministries: [],
   agendas: [],
   events: [],
+  pillars: [],
+  "effect-icons": [],
 };
 
 const placementOptions = [
@@ -1089,7 +1097,7 @@ const MinistryGuidedFields = ({ data, setField, tagEntries, imageEntries }) => {
 const emptyEventEffect = { effect_type: "modify_pillar", payload: { pillar: "treasury", amount: -1 } };
 const emptyEventThreshold = { tag_id: "unrest", amount: 1, effects: [emptyEventEffect] };
 
-const EventEffectEditor = ({ effects, setEffects, resourceTags, allTags, ministryEntries }) => {
+const EventEffectEditor = ({ effects, setEffects, resourceTags, allTags, ministryEntries, pillarEntries = [] }) => {
   const updateEffect = (index, patch) => {
     const next = [...effects];
     next[index] = { ...next[index], ...patch };
@@ -1132,7 +1140,10 @@ const EventEffectEditor = ({ effects, setEffects, resourceTags, allTags, ministr
               <SelectField
                 label="Pillar"
                 value={effect.payload?.pillar || "treasury"}
-                options={["treasury", "stability", "morale"].map((pillar) => ({ value: pillar, label: tagLabel(pillar) }))}
+                options={[
+                  { value: "", label: "Select pillar" },
+                  ...pillarEntries.map((pillar) => ({ value: pillar.id, label: pillar.name })),
+                ]}
                 onChange={(value) => updatePayload(index, { pillar: value })}
               />
               <NumberField label="Amount" value={effect.payload?.amount || -1} onChange={(value) => updatePayload(index, { amount: value })} />
@@ -1214,7 +1225,7 @@ const NumberField = ({ label, value, onChange }) => (
   </label>
 );
 
-const EventGuidedFields = ({ data, setField, tagEntries, ministryEntries }) => {
+const EventGuidedFields = ({ data, setField, tagEntries, ministryEntries, imageEntries, pillarEntries }) => {
   const resourceTags = volatileResourceTags(tagEntries);
   const defenseTags = permanentOnlyTags(tagEntries);
   const thresholds = Array.isArray(data.thresholds) ? data.thresholds : [];
@@ -1243,6 +1254,15 @@ const EventGuidedFields = ({ data, setField, tagEntries, ministryEntries }) => {
           setField("ministry_symbol", selected ? selected.data?.symbol || "" : "");
         }}
       />
+      <ImageAssetSelect
+        label="Event Image"
+        images={imageEntries}
+        selectedId={data.image_id || ""}
+        onSelect={(image) => {
+          setField("image_id", image?.id || "");
+          setField("image", image?.data?.src || "");
+        }}
+      />
       <TagCounterGroup
         label="Defense Requirement"
         tags={defenseTags}
@@ -1258,6 +1278,7 @@ const EventGuidedFields = ({ data, setField, tagEntries, ministryEntries }) => {
           resourceTags={resourceTags}
           allTags={tagEntries}
           ministryEntries={ministryEntries}
+          pillarEntries={pillarEntries}
         />
       </div>
       <div className="space-y-3">
@@ -1268,6 +1289,7 @@ const EventGuidedFields = ({ data, setField, tagEntries, ministryEntries }) => {
           resourceTags={resourceTags}
           allTags={tagEntries}
           ministryEntries={ministryEntries}
+          pillarEntries={pillarEntries}
         />
       </div>
 
@@ -1305,6 +1327,7 @@ const EventGuidedFields = ({ data, setField, tagEntries, ministryEntries }) => {
                 resourceTags={resourceTags}
                 allTags={tagEntries}
                 ministryEntries={ministryEntries}
+                pillarEntries={pillarEntries}
               />
               <button
                 className="text-xs font-semibold text-rose-300 hover:text-rose-200"
@@ -1321,6 +1344,67 @@ const EventGuidedFields = ({ data, setField, tagEntries, ministryEntries }) => {
   );
 };
 
+const PillarGuidedFields = ({ data, setField, imageEntries }) => {
+  const rangeEffectsText = JSON.stringify(Array.isArray(data.range_effects) ? data.range_effects : [], null, 2);
+  return (
+    <>
+      <ImageAssetSelect
+        label="Pillar Icon"
+        images={imageEntries}
+        selectedId={data.icon_image_id || ""}
+        onSelect={(image) => {
+          setField("icon_image_id", image?.id || "");
+          setField("icon", image?.data?.src || "");
+        }}
+      />
+      <div className="grid gap-3 sm:grid-cols-3">
+        <NumberField label="Minimum" value={data.min ?? 0} onChange={(value) => setField("min", value)} />
+        <NumberField label="Maximum" value={data.max ?? 10} onChange={(value) => setField("max", value)} />
+        <NumberField label="Starting Value" value={data.start ?? 5} onChange={(value) => setField("start", value)} />
+      </div>
+      <label className="block">
+        <span className="text-sm font-medium text-slate-300">Range Effects JSON</span>
+        <textarea
+          value={rangeEffectsText}
+          onChange={(event) => {
+            try {
+              const parsed = JSON.parse(event.target.value || "[]");
+              setField("range_effects", Array.isArray(parsed) ? parsed : []);
+            } catch (_error) {
+              setField("range_effects_text", event.target.value);
+            }
+          }}
+          className="mt-2 min-h-[7rem] w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 font-mono text-xs text-white outline-none focus:border-teal-400"
+          spellCheck={false}
+        />
+      </label>
+    </>
+  );
+};
+
+const EffectIconGuidedFields = ({ data, setField, imageEntries }) => (
+  <>
+    <label className="block">
+      <span className="text-sm font-medium text-slate-300">Effect Code</span>
+      <input
+        value={data.effect_type || ""}
+        onChange={(event) => setField("effect_type", event.target.value)}
+        className="mt-2 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none focus:border-teal-400"
+        placeholder="discard_card"
+      />
+    </label>
+    <ImageAssetSelect
+      label="Effect Icon"
+      images={imageEntries}
+      selectedId={data.icon_image_id || ""}
+      onSelect={(image) => {
+        setField("icon_image_id", image?.id || "");
+        setField("icon", image?.data?.src || "");
+      }}
+    />
+  </>
+);
+
 const GuidedMetadataEditor = ({
   activeSection,
   catalogForm,
@@ -1329,9 +1413,9 @@ const GuidedMetadataEditor = ({
   cardEntries,
   groupEntries,
   eventEntries,
-  eventTypeEntries,
   ministryEntries,
   imageEntries,
+  pillarEntries,
 }) => {
   const data = dataForForm(catalogForm);
   if (activeSection === "tags" || activeSection === "images") {
@@ -1361,7 +1445,9 @@ const GuidedMetadataEditor = ({
   const hasDeckGuidance = activeSection === "decks";
   const hasMinistryGuidance = activeSection === "ministries";
   const hasEventGuidance = activeSection === "events";
-  if (!usefulFields.length && !hasCardGuidance && !hasDeckGuidance && !hasMinistryGuidance && !hasEventGuidance) return null;
+  const hasPillarGuidance = activeSection === "pillars";
+  const hasEffectIconGuidance = activeSection === "effect-icons";
+  if (!usefulFields.length && !hasCardGuidance && !hasDeckGuidance && !hasMinistryGuidance && !hasEventGuidance && !hasPillarGuidance && !hasEffectIconGuidance) return null;
 
   const setField = (field, value) => {
     setCatalogForm((state) => {
@@ -1444,7 +1530,15 @@ const GuidedMetadataEditor = ({
           setField={setField}
           tagEntries={tagEntries}
           ministryEntries={ministryEntries}
+          imageEntries={imageEntries}
+          pillarEntries={pillarEntries}
         />
+      ) : null}
+      {hasPillarGuidance ? (
+        <PillarGuidedFields data={data} setField={setField} imageEntries={imageEntries} />
+      ) : null}
+      {hasEffectIconGuidance ? (
+        <EffectIconGuidedFields data={data} setField={setField} imageEntries={imageEntries} />
       ) : null}
       {countFields.map((field) => (
         <TagCounterGroup
@@ -1489,7 +1583,8 @@ const AdminPage = () => {
   const [imageEntries, setImageEntries] = useState([]);
   const [cardEntries, setCardEntries] = useState([]);
   const [eventEntries, setEventEntries] = useState([]);
-  const [eventTypeEntries, setEventTypeEntries] = useState([]);
+  const [pillarEntries, setPillarEntries] = useState([]);
+  const [effectIconEntries, setEffectIconEntries] = useState([]);
   const [ministryEntries, setMinistryEntries] = useState([]);
   const [cardCategories, setCardCategories] = useState([]);
   const [groupEntries, setGroupEntries] = useState([]);
@@ -1563,8 +1658,11 @@ const AdminPage = () => {
       if (targetSection !== "events") {
         requests.push(request("/api/admin/events"));
       }
-      if (targetSection !== "event-types") {
-        requests.push(request("/api/admin/event-types"));
+      if (targetSection !== "pillars") {
+        requests.push(request("/api/admin/pillars"));
+      }
+      if (targetSection !== "effect-icons") {
+        requests.push(request("/api/admin/effect-icons"));
       }
       if (targetSection !== "ministries") {
         requests.push(request("/api/admin/ministries"));
@@ -1580,7 +1678,8 @@ const AdminPage = () => {
       const cards = targetSection === "cards" ? entries : results[resultIndex++];
       const groups = targetSection === "groups" ? entries : results[resultIndex++];
       const events = targetSection === "events" ? entries : results[resultIndex++];
-      const eventTypes = targetSection === "event-types" ? entries : results[resultIndex++];
+      const pillars = targetSection === "pillars" ? entries : results[resultIndex++];
+      const effectIcons = targetSection === "effect-icons" ? entries : results[resultIndex++];
       const ministries = targetSection === "ministries" ? entries : results[resultIndex++];
       const categories = targetSection === "card-categories" ? entries : results[resultIndex++];
       setCatalogSummary(summary);
@@ -1590,7 +1689,8 @@ const AdminPage = () => {
       setCardEntries(targetSection === "cards" ? entries : cards);
       setGroupEntries(targetSection === "groups" ? entries : groups);
       setEventEntries(targetSection === "events" ? entries : events);
-      setEventTypeEntries(targetSection === "event-types" ? entries : eventTypes);
+      setPillarEntries(targetSection === "pillars" ? entries : pillars);
+      setEffectIconEntries(targetSection === "effect-icons" ? entries : effectIcons);
       setMinistryEntries(targetSection === "ministries" ? entries : ministries);
       setCardCategories(targetSection === "card-categories" ? entries : categories);
       setEditingEntry(null);
@@ -1659,8 +1759,12 @@ const AdminPage = () => {
             ? "card-category"
             : activeCatalogKind === "decks"
               ? "empire"
-            : activeCatalogKind === "event-types"
-              ? "event-type"
+            : activeCatalogKind === "events"
+              ? "event"
+            : activeCatalogKind === "pillars"
+              ? "pillar"
+            : activeCatalogKind === "effect-icons"
+              ? "effect-icon"
             : activeCatalogKind === "tags"
               ? "permanent"
             : activeCatalogKind === "images"
@@ -1675,6 +1779,12 @@ const AdminPage = () => {
               ? stringifyData({
                   infrastructure_resources: [],
                 })
+              : activeCatalogKind === "events"
+                ? stringifyData({ defense_requirement: {}, success_effects: [], failure_effects: [], thresholds: [] })
+              : activeCatalogKind === "pillars"
+                ? stringifyData({ min: 0, max: 10, start: 5, range_effects: [] })
+              : activeCatalogKind === "effect-icons"
+                ? stringifyData({ effect_type: "", icon_image_id: "", icon: "" })
               : activeCatalogKind === "tags"
                 ? stringifyData({ resource_type: "permanent" })
                 : activeCatalogKind === "images"
@@ -1723,6 +1833,12 @@ const AdminPage = () => {
               ? "card-category"
               : activeCatalogKind === "decks"
                 ? parsedData.deck_type || catalogForm.category || "empire"
+              : activeCatalogKind === "events"
+                ? "event"
+              : activeCatalogKind === "pillars"
+                ? "pillar"
+              : activeCatalogKind === "effect-icons"
+                ? "effect-icon"
               : activeCatalogKind === "tags"
                 ? tagResourceType
               : catalogForm.category,
@@ -1790,8 +1906,16 @@ const AdminPage = () => {
           );
         });
       }
-      if (activeCatalogKind === "event-types") {
-        setEventTypeEntries((entries) => {
+      if (activeCatalogKind === "pillars") {
+        setPillarEntries((entries) => {
+          const withoutSaved = entries.filter((entry) => entry.id !== saved.id);
+          return [...withoutSaved, saved].sort((a, b) =>
+            `${a.category}:${a.name}:${a.id}`.localeCompare(`${b.category}:${b.name}:${b.id}`)
+          );
+        });
+      }
+      if (activeCatalogKind === "effect-icons") {
+        setEffectIconEntries((entries) => {
           const withoutSaved = entries.filter((entry) => entry.id !== saved.id);
           return [...withoutSaved, saved].sort((a, b) =>
             `${a.category}:${a.name}:${a.id}`.localeCompare(`${b.category}:${b.name}:${b.id}`)
@@ -1856,8 +1980,11 @@ const AdminPage = () => {
       if (activeCatalogKind === "events") {
         setEventEntries((entries) => entries.filter((candidate) => candidate.id !== entry.id));
       }
-      if (activeCatalogKind === "event-types") {
-        setEventTypeEntries((entries) => entries.filter((candidate) => candidate.id !== entry.id));
+      if (activeCatalogKind === "pillars") {
+        setPillarEntries((entries) => entries.filter((candidate) => candidate.id !== entry.id));
+      }
+      if (activeCatalogKind === "effect-icons") {
+        setEffectIconEntries((entries) => entries.filter((candidate) => candidate.id !== entry.id));
       }
       if (activeCatalogKind === "ministries") {
         setMinistryEntries((entries) => entries.filter((candidate) => candidate.id !== entry.id));
@@ -2195,6 +2322,8 @@ const AdminPage = () => {
                       groups={groupEntries}
                       ministries={ministryEntries}
                       images={imageEntries}
+                      pillars={pillarEntries}
+                      effectIcons={effectIconEntries}
                       actions={
                         <>
                           <button
@@ -2271,7 +2400,7 @@ const AdminPage = () => {
                 </label>
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className={`grid gap-4 ${activeCatalogKind === "events" ? "" : "sm:grid-cols-2"}`}>
                 {activeCatalogKind === "cards" ? (
                   <label className="block">
                     <span className="text-sm font-medium text-slate-300">Category</span>
@@ -2313,7 +2442,7 @@ const AdminPage = () => {
                       <option value="volatile">Volatile Resource</option>
                     </select>
                   </label>
-                ) : (
+                ) : activeCatalogKind === "events" ? null : (
                   <label className="block">
                     <span className="text-sm font-medium text-slate-300">Category</span>
                     <input
@@ -2361,9 +2490,9 @@ const AdminPage = () => {
                 cardEntries={cardEntries}
                 groupEntries={groupEntries}
                 eventEntries={eventEntries}
-                eventTypeEntries={eventTypeEntries}
                 ministryEntries={ministryEntries}
                 imageEntries={imageEntries}
+                pillarEntries={pillarEntries}
               />
 
               <label className="block">

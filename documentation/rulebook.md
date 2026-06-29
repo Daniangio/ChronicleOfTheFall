@@ -79,7 +79,7 @@ Example: War Bonds immediately increases Treasury by 2, but reduces Morale and S
 
 Drawn from the Event Deck, these cards sit in the Event Queue, slowly crawling toward execution. Every Event card is structured as a comprehensive challenge:
 
-Jurisdiction Symbol: Each Event card shows the symbol of the Ministry responsible for that crisis. The Event card, not the Minister card, defines who has jurisdiction.
+Jurisdiction Symbol: Each Event card selects one Ministry responsible for that crisis and shows that Minister's symbol in the top-right corner. The Event card, not the Minister card, defines who has jurisdiction. Event cards do not have a separate event type or category.
 
 Defense Requirement: The exact combination and quantity of Defense Tags (e.g., [Military], [Sanitary], [Diplomacy]) required to successfully repel the disaster.
 
@@ -92,6 +92,8 @@ Major Sabotage (e.g., 2+ Unrest): Heavy penalties, automatic defense failure, or
 Success Reward (Optional): Grants resources, cards, or positive Pillar adjustments if successfully mitigated.
 
 Failure Drawback: The severe structural penalty applied to the Empire's Pillars or active buildings if the Defense Requirement is not met.
+
+Event Card Layout: Event cards are compact reference cards. The card name is shown at the top, the responsible Minister's icon is shown at top-right, the Defense Requirement is shown below, and Success and Failure effects are shown as icon rows. Pillar changes use the configured Pillar icon plus a signed value. Targeted effects use target icons, such as all players or a specific Minister, followed by the effect icon.
 
 4. GAME COMPONENTS & PLAY SPACES
 
@@ -259,7 +261,7 @@ Event Effect Types:
 
 Generate Volatile Resources: Place the listed volatile resources into the personal pool of the Minister whose symbol appears on the Event. These resources survive until the end of that player's next Administration turn, giving the Minister one turn to allocate them.
 
-Modify Pillar: Increase or decrease Treasury, Stability, or Morale by the listed amount.
+Modify Pillar: Increase or decrease a configured Pillar, such as Treasury, Stability, or Morale, by the listed amount. Pillars are admin-defined with a range, icon, and range effects that may be permanent or trigger when entering a value range.
 
 Destroy Building With Tag: Destroy one built Building with the listed permanent tag. The Minister of Infrastructure chooses which matching Building is destroyed. If there is no Minister of Infrastructure this year or that Minister is blocked, the Minister of the Empire chooses.
 

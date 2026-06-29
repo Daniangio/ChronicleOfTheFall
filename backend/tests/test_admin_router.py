@@ -17,11 +17,12 @@ from backend.app.admin_router import (
     admin_list_cards,
     admin_list_card_categories,
     admin_list_decks,
+    admin_list_effect_icons,
     admin_list_events,
     admin_list_groups,
     admin_list_images,
-    admin_list_event_types,
     admin_list_ministries,
+    admin_list_pillars,
     admin_list_tags,
     admin_list_users,
     admin_update_catalog_entry,
@@ -116,7 +117,8 @@ def test_new_database_catalog_starts_empty(tmp_path):
         assert summary.images == 0
         assert summary.cards == 0
         assert summary.ministries == 0
-        assert summary.event_types == 0
+        assert summary.pillars == 0
+        assert summary.effect_icons == 0
         assert summary.agendas == 0
         assert summary.events == 0
         assert summary.groups == 0
@@ -127,7 +129,8 @@ def test_new_database_catalog_starts_empty(tmp_path):
         images = asyncio.run(admin_list_images(_admin=admin, db=db))
         cards = asyncio.run(admin_list_cards(_admin=admin, db=db))
         ministries = asyncio.run(admin_list_ministries(_admin=admin, db=db))
-        event_types = asyncio.run(admin_list_event_types(_admin=admin, db=db))
+        pillars = asyncio.run(admin_list_pillars(_admin=admin, db=db))
+        effect_icons = asyncio.run(admin_list_effect_icons(_admin=admin, db=db))
         agendas = asyncio.run(admin_list_agendas(_admin=admin, db=db))
         events = asyncio.run(admin_list_events(_admin=admin, db=db))
         groups = asyncio.run(admin_list_groups(_admin=admin, db=db))
@@ -138,7 +141,8 @@ def test_new_database_catalog_starts_empty(tmp_path):
         assert images == []
         assert cards == []
         assert ministries == []
-        assert event_types == []
+        assert pillars == []
+        assert effect_icons == []
         assert agendas == []
         assert events == []
         assert groups == []

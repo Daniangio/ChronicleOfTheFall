@@ -3,6 +3,126 @@
   "kind": "all",
   "entries": [
     {
+      "id": "treasury",
+      "name": "Treasury",
+      "kind": "pillars",
+      "category": "pillar",
+      "summary": "Imperial wealth, credit, and fiscal reserves.",
+      "color": null,
+      "data": {
+        "min": 0,
+        "max": 10,
+        "start": 5,
+        "range_effects": []
+      }
+    },
+    {
+      "id": "stability",
+      "name": "Stability",
+      "kind": "pillars",
+      "category": "pillar",
+      "summary": "Institutional cohesion and public order.",
+      "color": null,
+      "data": {
+        "min": 0,
+        "max": 10,
+        "start": 5,
+        "range_effects": []
+      }
+    },
+    {
+      "id": "morale",
+      "name": "Morale",
+      "kind": "pillars",
+      "category": "pillar",
+      "summary": "Shared faith in the imperial project.",
+      "color": null,
+      "data": {
+        "min": 0,
+        "max": 10,
+        "start": 5,
+        "range_effects": []
+      }
+    },
+    {
+      "id": "all_players",
+      "name": "All Players",
+      "kind": "effect-icons",
+      "category": "effect-icon",
+      "summary": "Target icon for effects applied to every player.",
+      "color": null,
+      "data": {
+        "effect_type": "all_players",
+        "icon_image_id": "",
+        "icon": ""
+      }
+    },
+    {
+      "id": "discard_card",
+      "name": "Discard Card",
+      "kind": "effect-icons",
+      "category": "effect-icon",
+      "summary": "Effect icon for discarding cards.",
+      "color": null,
+      "data": {
+        "effect_type": "discard_card",
+        "icon_image_id": "",
+        "icon": ""
+      }
+    },
+    {
+      "id": "destroy_building_with_tag",
+      "name": "Destroy Building",
+      "kind": "effect-icons",
+      "category": "effect-icon",
+      "summary": "Effect icon for destroying a matching building.",
+      "color": null,
+      "data": {
+        "effect_type": "destroy_building_with_tag",
+        "icon_image_id": "",
+        "icon": ""
+      }
+    },
+    {
+      "id": "freeze_resource_generation",
+      "name": "Freeze Resource",
+      "kind": "effect-icons",
+      "category": "effect-icon",
+      "summary": "Effect icon for freezing resource production.",
+      "color": null,
+      "data": {
+        "effect_type": "freeze_resource_generation",
+        "icon_image_id": "",
+        "icon": ""
+      }
+    },
+    {
+      "id": "block_minister_next_year",
+      "name": "Block Minister",
+      "kind": "effect-icons",
+      "category": "effect-icon",
+      "summary": "Effect icon for blocking a minister next year.",
+      "color": null,
+      "data": {
+        "effect_type": "block_minister_next_year",
+        "icon_image_id": "",
+        "icon": ""
+      }
+    },
+    {
+      "id": "generate_resource",
+      "name": "Generate Resource",
+      "kind": "effect-icons",
+      "category": "effect-icon",
+      "summary": "Effect icon for generating volatile resources.",
+      "color": null,
+      "data": {
+        "effect_type": "generate_resource",
+        "icon_image_id": "",
+        "icon": ""
+      }
+    },
+    {
       "id": "building",
       "name": "Building",
       "kind": "card-categories",
@@ -548,37 +668,10 @@
       }
     },
     {
-      "id": "diplomacy-event-type",
-      "name": "Diplomacy",
-      "kind": "event-types",
-      "category": "event-type",
-      "summary": "Events decided by the Minister of State.",
-      "color": null,
-      "data": {}
-    },
-    {
-      "id": "military-event-type",
-      "name": "Military",
-      "kind": "event-types",
-      "category": "event-type",
-      "summary": "Events decided by the Minister of War.",
-      "color": null,
-      "data": {}
-    },
-    {
-      "id": "provision-event-type",
-      "name": "Provision",
-      "kind": "event-types",
-      "category": "event-type",
-      "summary": "Events decided by the Minister of Health and Harvest.",
-      "color": null,
-      "data": {}
-    },
-    {
       "id": "barbarian-horde",
       "name": "The Barbarian Horde",
       "kind": "events",
-      "category": "crisis",
+      "category": "event",
       "summary": "A military invasion tests the Empire's permanent defenses.",
       "color": null,
       "data": {
@@ -648,7 +741,7 @@
       "id": "crimson-plague",
       "name": "The Crimson Plague",
       "kind": "events",
-      "category": "crisis",
+      "category": "event",
       "summary": "Disease punishes weak public health and low food reserves.",
       "color": null,
       "data": {
@@ -717,7 +810,7 @@
       "id": "trade-embargo",
       "name": "Trade Embargo",
       "kind": "events",
-      "category": "crisis",
+      "category": "event",
       "summary": "Diplomatic isolation freezes commercial production.",
       "color": null,
       "data": {
