@@ -20,6 +20,9 @@ CatalogKind = Literal[
     "events",
     "groups",
     "card-categories",
+    "empire-decks",
+    "event-decks",
+    "levels",
     "decks",
 ]
 
@@ -34,6 +37,9 @@ CATALOG_KINDS: tuple[CatalogKind, ...] = (
     "events",
     "groups",
     "card-categories",
+    "empire-decks",
+    "event-decks",
+    "levels",
     "decks",
 )
 HEX_COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")

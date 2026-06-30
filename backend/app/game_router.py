@@ -49,10 +49,32 @@ async def create_game_room(
         pillars = [public_catalog_entry(entry) for entry in list_catalog_records(db, "pillars")]
         effect_icons = [public_catalog_entry(entry) for entry in list_catalog_records(db, "effect-icons")]
         images = [public_catalog_entry(entry) for entry in list_catalog_records(db, "images")]
-        deck_records = list_catalog_records(db, "decks")
-        card_deck = _deck_by_id(deck_records, payload.empire_deck_id) or _latest_deck(deck_records, "empire")
-        event_deck = _deck_by_id(deck_records, payload.event_deck_id) or _latest_deck(deck_records, "events")
-        common_pool_deck = _latest_deck(deck_records, "common-pool")
+        empire_decks = list_catalog_records(db, "empire-decks")
+        event_decks = list_catalog_records(db, "event-decks")
+        levels = list_catalog_records(db, "levels")
+        legacy_decks = list_catalog_records(db, "decks")
+        level = _deck_by_id(levels, payload.level_id) or _latest_record(levels)
+        level_data = getattr(level, "data", {}) or {}
+        card_deck = (
+            _deck_by_id(empire_decks, payload.empire_deck_id)
+            or _deck_by_id(empire_decks, level_data.get("empire_deck_id"))
+            or _latest_record(empire_decks)
+            or _deck_by_id(legacy_decks, payload.empire_deck_id)
+            or _latest_deck(legacy_decks, "empire")
+        )
+        event_deck = (
+            _deck_by_id(event_decks, payload.event_deck_id)
+            or _deck_by_id(event_decks, level_data.get("event_deck_id"))
+            or _latest_record(event_decks)
+            or _deck_by_id(legacy_decks, payload.event_deck_id)
+            or _latest_deck(legacy_decks, "events")
+        )
+        common_pool_deck = (
+            _deck_by_id(empire_decks, level_data.get("common_pool_deck_id"))
+            or _deck_by_id(legacy_decks, level_data.get("common_pool_deck_id"))
+            or _latest_deck(legacy_decks, "common-pool")
+        )
+        initial_city_card_id = str(level_data.get("initial_city_card_id") or "capital-foundation")
         room_id = service.new_room_id()
         game_state = build_goldfishing_state(
             room_id=room_id,
@@ -63,6 +85,8 @@ async def create_game_room(
             common_pool_ids=_deck_item_ids(common_pool_deck),
             card_deck_id=str(getattr(card_deck, "id", "") or ""),
             event_deck_id=str(getattr(event_deck, "id", "") or ""),
+            initial_city_card_id=initial_city_card_id,
+            level_id=str(getattr(level, "id", "") or ""),
             common_pool_deck_id=str(getattr(common_pool_deck, "id", "") or ""),
             event_entries=events,
             ministry_entries=ministries,
@@ -88,18 +112,33 @@ async def get_game_room(room_id: str, current_user: User = Depends(get_current_u
     return room
 
 
-@router.get("/game/decks")
-async def list_game_decks(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+@router.get("/game/levels")
+async def list_game_levels(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     del current_user
-    decks = [public_catalog_entry(entry) for entry in list_catalog_records(db, "decks")]
+    levels = [public_catalog_entry(entry) for entry in list_catalog_records(db, "levels")]
+    cards = {entry.id: public_catalog_entry(entry) for entry in list_catalog_records(db, "cards")}
+    empire_decks = {entry.id: public_catalog_entry(entry) for entry in list_catalog_records(db, "empire-decks")}
+    event_decks = {entry.id: public_catalog_entry(entry) for entry in list_catalog_records(db, "event-decks")}
+    legacy_decks = {entry.id: public_catalog_entry(entry) for entry in list_catalog_records(db, "decks")}
     return [
         {
-            "id": deck["id"],
-            "name": deck["name"],
-            "deck_type": (deck.get("data") or {}).get("deck_type") or deck.get("category") or "",
-            "item_count": len((deck.get("data") or {}).get("item_ids") or []),
+            "id": level["id"],
+            "name": level["name"],
+            "summary": level.get("summary") or "",
+            "initial_city_card_id": (level.get("data") or {}).get("initial_city_card_id") or "",
+            "initial_city_name": cards.get((level.get("data") or {}).get("initial_city_card_id"), {}).get("name") or "",
+            "empire_deck_id": (level.get("data") or {}).get("empire_deck_id") or "",
+            "empire_deck_name": empire_decks.get((level.get("data") or {}).get("empire_deck_id"), {}).get("name") or "",
+            "event_deck_id": (level.get("data") or {}).get("event_deck_id") or "",
+            "event_deck_name": event_decks.get((level.get("data") or {}).get("event_deck_id"), {}).get("name") or "",
+            "common_pool_deck_id": (level.get("data") or {}).get("common_pool_deck_id") or "",
+            "common_pool_deck_name": (
+                empire_decks.get((level.get("data") or {}).get("common_pool_deck_id"), {}).get("name")
+                or legacy_decks.get((level.get("data") or {}).get("common_pool_deck_id"), {}).get("name")
+                or ""
+            ),
         }
-        for deck in decks
+        for level in levels
     ]
 
 
@@ -223,6 +262,12 @@ def _latest_deck(decks: list, deck_type: str):
     if not candidates:
         return None
     return max(candidates, key=lambda deck: getattr(deck, "updated_at", None) or getattr(deck, "created_at", None))
+
+
+def _latest_record(records: list):
+    if not records:
+        return None
+    return max(records, key=lambda record: getattr(record, "updated_at", None) or getattr(record, "created_at", None))
 
 
 def _deck_by_id(decks: list, deck_id: str | None):

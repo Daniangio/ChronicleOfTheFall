@@ -31,6 +31,7 @@ from backend.app.admin_router import (
     require_admin,
 )
 from backend.app.database import Base, _build_engine
+from backend.app.empire_catalog import CATALOG_KINDS
 from backend.app.schemas import (
     AdminCatalogEntryCreate,
     AdminCatalogEntryUpdate,
@@ -125,6 +126,9 @@ def test_new_database_catalog_starts_empty(tmp_path):
         assert summary.events == 0
         assert summary.groups == 0
         assert summary.card_categories == 0
+        assert summary.empire_decks == 0
+        assert summary.event_decks == 0
+        assert summary.levels == 0
         assert summary.decks == 0
 
         tags = asyncio.run(admin_list_tags(_admin=admin, db=db))
@@ -150,6 +154,54 @@ def test_new_database_catalog_starts_empty(tmp_path):
         assert groups == []
         assert card_categories == []
         assert decks == []
+
+        created_empire_deck = asyncio.run(
+            admin_create_catalog_entry(
+                "empire-decks",
+                AdminCatalogEntryCreate(
+                    id="starter-empire",
+                    name="Starter Empire",
+                    category="empire",
+                    data={"item_ids": ["farm", "farm", "market"]},
+                ),
+                _admin=admin,
+                db=db,
+            )
+        )
+        created_event_deck = asyncio.run(
+            admin_create_catalog_entry(
+                "event-decks",
+                AdminCatalogEntryCreate(
+                    id="starter-events",
+                    name="Starter Events",
+                    category="events",
+                    data={"item_ids": ["raid"]},
+                ),
+                _admin=admin,
+                db=db,
+            )
+        )
+        created_level = asyncio.run(
+            admin_create_catalog_entry(
+                "levels",
+                AdminCatalogEntryCreate(
+                    id="starter-level",
+                    name="Starter Level",
+                    category="level",
+                    data={
+                        "initial_city_card_id": "capital-foundation",
+                        "empire_deck_id": created_empire_deck.id,
+                        "event_deck_id": created_event_deck.id,
+                        "common_pool_deck_id": created_empire_deck.id,
+                    },
+                ),
+                _admin=admin,
+                db=db,
+            )
+        )
+        assert created_empire_deck.kind == "empire-decks"
+        assert created_event_deck.kind == "event-decks"
+        assert created_level.kind == "levels"
 
 
 def test_admin_can_manage_effect_icons(tmp_path):
@@ -316,6 +368,76 @@ def test_admin_can_export_and_import_catalog_entries(tmp_path):
         assert next(entry for entry in tags if entry.id == "labor").name == "Labor Pool"
         assert next(entry for entry in tags if entry.id == "labor").category == "volatile"
         assert next(entry for entry in tags if entry.id == "stone").category == "permanent"
+
+
+def test_export_all_includes_every_catalog_admin_kind(tmp_path):
+    session_factory = build_test_session(f"sqlite:///{tmp_path / 'catalog_export_all.db'}")
+    with session_factory() as db:
+        admin = ensure_user_bootstrap(
+            db,
+            create_registered_user(db, "admin@test.local", "verysecurepassword"),
+            force_admin=True,
+        )
+
+        examples = {
+            "tags": AdminCatalogEntryCreate(
+                id="test-tag",
+                name="Test Tag",
+                category="permanent",
+                color="#64748b",
+                data={"resource_type": "permanent"},
+            ),
+            "images": AdminCatalogEntryCreate(id="test-image", name="test-image.png", category="image", data={}),
+            "cards": AdminCatalogEntryCreate(id="test-card", name="Test Card", category="building", data={}),
+            "ministries": AdminCatalogEntryCreate(id="test-ministry", name="Test Ministry", category="ministry", data={}),
+            "pillars": AdminCatalogEntryCreate(id="test-pillar", name="Test Pillar", category="pillar", data={"min": 0, "max": 10}),
+            "effect-icons": AdminCatalogEntryCreate(id="test-effect-icon", name="Test Effect Icon", category="effect-icon", data={"effect_type": "test"}),
+            "agendas": AdminCatalogEntryCreate(id="test-agenda", name="Test Agenda", category="agenda", data={}),
+            "events": AdminCatalogEntryCreate(id="test-event", name="Test Event", category="event", data={}),
+            "groups": AdminCatalogEntryCreate(id="test-group", name="Test Group", category="mutually-exclusive", data={"type": "mutually_exclusive"}),
+            "card-categories": AdminCatalogEntryCreate(id="test-category", name="Test Category", category="card-category", data={}),
+            "empire-decks": AdminCatalogEntryCreate(id="test-empire-deck", name="Test Empire Deck", category="empire", data={"item_ids": ["test-card"]}),
+            "event-decks": AdminCatalogEntryCreate(id="test-event-deck", name="Test Event Deck", category="events", data={"item_ids": ["test-event"]}),
+            "levels": AdminCatalogEntryCreate(
+                id="test-level",
+                name="Test Level",
+                category="level",
+                data={
+                    "initial_city_card_id": "test-card",
+                    "empire_deck_id": "test-empire-deck",
+                    "event_deck_id": "test-event-deck",
+                    "common_pool_deck_id": "test-empire-deck",
+                },
+            ),
+            "decks": AdminCatalogEntryCreate(id="test-legacy-deck", name="Test Legacy Deck", category="common-pool", data={"deck_type": "common-pool", "item_ids": ["test-card"]}),
+        }
+        assert set(examples) == set(CATALOG_KINDS)
+
+        for kind in CATALOG_KINDS:
+            asyncio.run(admin_create_catalog_entry(kind, examples[kind], _admin=admin, db=db))
+
+        exported = asyncio.run(admin_export_catalog(kind="", _admin=admin, db=db))
+        exported_kinds = {entry["kind"] for entry in exported["entries"]}
+        assert exported["kind"] == "all"
+        assert exported["catalog_kinds"] == list(CATALOG_KINDS)
+        assert exported_kinds == set(CATALOG_KINDS)
+
+        import_session_factory = build_test_session(f"sqlite:///{tmp_path / 'catalog_export_all_import.db'}")
+        with import_session_factory() as import_db:
+            import_admin = ensure_user_bootstrap(
+                import_db,
+                create_registered_user(import_db, "import-admin@test.local", "verysecurepassword"),
+                force_admin=True,
+            )
+            result = asyncio.run(
+                admin_import_catalog(
+                    AdminCatalogImportPayload(**exported),
+                    _admin=import_admin,
+                    db=import_db,
+                )
+            )
+            assert result.created == len(CATALOG_KINDS)
+            assert result.skipped == 0
 
 
 def test_catalog_import_skips_unknown_kinds_and_strips_image_payloads(tmp_path):

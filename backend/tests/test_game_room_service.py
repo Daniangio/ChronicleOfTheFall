@@ -1,5 +1,6 @@
 import unittest
 
+from backend.app.goldfishing_engine import build_goldfishing_state
 from backend.app.game_room_service import GameRoomService, ROOM_STATE_FINISHED, ROOM_STATE_IN_GAME
 from backend.app.server_models import User
 
@@ -15,6 +16,44 @@ def manual_mana_node(tag_id: str, amount: int) -> dict:
 
 
 class TestGameRoomService(unittest.IsolatedAsyncioTestCase):
+    async def test_goldfishing_state_uses_configured_initial_city(self):
+        state = build_goldfishing_state(
+            room_id="room-level",
+            card_entries=[
+                {
+                    "id": "river-capital",
+                    "name": "River Capital",
+                    "kind": "cards",
+                    "category": "city",
+                    "summary": "",
+                    "color": None,
+                    "data": {"card_type": "city", "building_slots": 4},
+                },
+                {
+                    "id": "farm",
+                    "name": "Farm",
+                    "kind": "cards",
+                    "category": "building",
+                    "summary": "",
+                    "color": None,
+                    "data": {},
+                },
+            ],
+            tag_entries=[],
+            card_deck_ids=["river-capital", "farm"],
+            event_deck_ids=[],
+            card_deck_id="starter-empire",
+            event_deck_id="starter-events",
+            initial_city_card_id="river-capital",
+            level_id="river-level",
+        )
+
+        self.assertEqual(state["level_id"], "river-level")
+        self.assertEqual(state["cities"][0]["name"], "River Capital")
+        self.assertEqual(state["cities"][0]["city_card_id"], "river-capital")
+        self.assertEqual(state["cities"][0]["building_slots"], 4)
+        self.assertNotIn("river-capital", state["draw_deck"])
+
     async def test_memory_room_lifecycle_records_history(self):
         service = GameRoomService()
         user = User(id="user_1", username="Player One")

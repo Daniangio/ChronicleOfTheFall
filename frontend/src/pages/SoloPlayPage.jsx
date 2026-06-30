@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { PageSubnavigation } from "../components/AuthenticatedLayout.jsx";
 import { useStore } from "../store.js";
@@ -11,36 +11,31 @@ const SoloPlayPage = () => {
   const navigate = useNavigate();
   const [error, setError] = useState("");
   const [creating, setCreating] = useState(false);
-  const [decks, setDecks] = useState([]);
-  const [empireDeckId, setEmpireDeckId] = useState("");
-  const [eventDeckId, setEventDeckId] = useState("");
+  const [levels, setLevels] = useState([]);
+  const [levelId, setLevelId] = useState("");
 
   useEffect(() => {
     if (!token) return;
-    const loadDecks = async () => {
+    const loadLevels = async () => {
       try {
-        const response = await fetch(buildApiUrl("/api/game/decks"), {
+        const response = await fetch(buildApiUrl("/api/game/levels"), {
           headers: { Authorization: `Bearer ${token}` },
         });
         const payload = await response.json().catch(() => []);
-        if (!response.ok) throw new Error(payload.detail || "Failed to load decks.");
-        setDecks(payload);
-        const empireDeck = payload.find((deck) => deck.deck_type === "empire");
-        const eventDeck = payload.find((deck) => deck.deck_type === "events");
-        setEmpireDeckId((current) => current || empireDeck?.id || "");
-        setEventDeckId((current) => current || eventDeck?.id || "");
+        if (!response.ok) throw new Error(payload.detail || "Failed to load levels.");
+        setLevels(payload);
+        setLevelId((current) => current || payload[0]?.id || "");
       } catch (loadError) {
-        setError(loadError.message || "Failed to load decks.");
+        setError(loadError.message || "Failed to load levels.");
       }
     };
-    void loadDecks();
+    void loadLevels();
   }, [token]);
 
-  const empireDecks = useMemo(() => decks.filter((deck) => deck.deck_type === "empire"), [decks]);
-  const eventDecks = useMemo(() => decks.filter((deck) => deck.deck_type === "events"), [decks]);
+  const selectedLevel = levels.find((level) => level.id === levelId);
 
   const createChronicleRoom = async () => {
-    if (!token || creating) return;
+    if (!token || creating || !levelId) return;
     setCreating(true);
     setError("");
     try {
@@ -53,8 +48,7 @@ const SoloPlayPage = () => {
         body: JSON.stringify({
           mode: "solo",
           game_type: "chronicle_solo",
-          empire_deck_id: empireDeckId || null,
-          event_deck_id: eventDeckId || null,
+          level_id: levelId,
         }),
       });
       const payload = await response.json().catch(() => ({}));
@@ -74,33 +68,32 @@ const SoloPlayPage = () => {
       <section className="mb-5">
         <h1 className="text-2xl font-semibold text-white">Solo Play</h1>
         <p className="mt-1 max-w-3xl text-sm text-slate-400">
-          Start a solo Chronicle room for the cooperative empire-collapse engine.
+          Choose a level, then start a goldfishing room for the empire engine.
         </p>
       </section>
 
       {error ? <p className="mb-4 rounded-md bg-rose-950/70 px-3 py-2 text-sm text-rose-200">{error}</p> : null}
 
       <section className="grid gap-4 md:grid-cols-3">
+        <ModeCard title="Campaign" description="A connected sequence of empire chronicles. Prepared for future content." disabled />
+        <ModeCard title="Missions" description="Standalone crisis scenarios with specific constraints. Prepared for future content." disabled />
         <ModeCard
-          title="Campaign"
-          description="A connected sequence of empire chronicles. Prepared for future content."
-          disabled
-        />
-        <ModeCard
-          title="Missions"
-          description="Standalone crisis scenarios with specific historical constraints. Prepared for future content."
-          disabled
-        />
-        <ModeCard
-          title="Chronicle Solo"
-          description="Create a solo room immediately while the empire engine is being built."
+          title="Goldfishing"
+          description="Start a four-player goldfishing room from a configured level."
           actionLabel={creating ? "Creating..." : "Start"}
           onClick={createChronicleRoom}
-          disabled={creating}
+          disabled={creating || !levelId}
         >
           <div className="mt-4 grid gap-3">
-            <DeckSelect label="Empire Deck" value={empireDeckId} decks={empireDecks} onChange={setEmpireDeckId} />
-            <DeckSelect label="Event Deck" value={eventDeckId} decks={eventDecks} onChange={setEventDeckId} allowEmpty />
+            <LevelSelect value={levelId} levels={levels} onChange={setLevelId} />
+            {selectedLevel ? (
+              <div className="rounded-md border border-slate-800 bg-slate-950 p-3 text-left text-xs text-slate-400">
+                <p><span className="font-semibold text-slate-300">Initial City:</span> {selectedLevel.initial_city_name || selectedLevel.initial_city_card_id || "Missing"}</p>
+                <p className="mt-1"><span className="font-semibold text-slate-300">Empire Deck:</span> {selectedLevel.empire_deck_name || selectedLevel.empire_deck_id || "Missing"}</p>
+                <p className="mt-1"><span className="font-semibold text-slate-300">Event Deck:</span> {selectedLevel.event_deck_name || selectedLevel.event_deck_id || "Missing"}</p>
+                <p className="mt-1"><span className="font-semibold text-slate-300">Common Pool:</span> {selectedLevel.common_pool_deck_name || selectedLevel.common_pool_deck_id || "Missing"}</p>
+              </div>
+            ) : null}
           </div>
         </ModeCard>
       </section>
@@ -108,19 +101,18 @@ const SoloPlayPage = () => {
   );
 };
 
-const DeckSelect = ({ label, value, decks, onChange, allowEmpty = false }) => (
+const LevelSelect = ({ value, levels, onChange }) => (
   <label className="block text-left">
-    <span className="text-xs font-semibold uppercase tracking-normal text-slate-500">{label}</span>
+    <span className="text-xs font-semibold uppercase tracking-normal text-slate-500">Level</span>
     <select
       className="mt-2 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white outline-none focus:border-teal-400"
       value={value}
       onChange={(event) => onChange(event.target.value)}
     >
-      {allowEmpty ? <option value="">Empty</option> : null}
-      {decks.map((deck) => (
-        <option key={deck.id} value={deck.id}>{deck.name} ({deck.item_count})</option>
+      {levels.map((level) => (
+        <option key={level.id} value={level.id}>{level.name}</option>
       ))}
-      {!decks.length && !allowEmpty ? <option value="">No deck available</option> : null}
+      {!levels.length ? <option value="">No level available</option> : null}
     </select>
   </label>
 );

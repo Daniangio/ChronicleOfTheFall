@@ -19,7 +19,9 @@ const sections = [
   { key: "agendas", label: "Agendas", to: "/admin/agendas" },
   { key: "events", label: "Events", to: "/admin/events" },
   { key: "groups", label: "Groups", to: "/admin/groups" },
-  { key: "decks", label: "Decks", to: "/admin/decks" },
+  { key: "empire-decks", label: "Empire Decks", to: "/admin/empire-decks" },
+  { key: "event-decks", label: "Event Decks", to: "/admin/event-decks" },
+  { key: "levels", label: "Levels", to: "/admin/levels" },
 ];
 
 const catalogSections = new Set([
@@ -33,6 +35,9 @@ const catalogSections = new Set([
   "events",
   "groups",
   "card-categories",
+  "empire-decks",
+  "event-decks",
+  "levels",
   "decks",
 ]);
 
@@ -76,6 +81,9 @@ const tagListFieldsBySection = {
   events: [],
   pillars: [],
   "effect-icons": [],
+  "empire-decks": [],
+  "event-decks": [],
+  levels: [],
 };
 
 const tagCountFieldsBySection = {
@@ -85,6 +93,9 @@ const tagCountFieldsBySection = {
   events: [],
   pillars: [],
   "effect-icons": [],
+  "empire-decks": [],
+  "event-decks": [],
+  levels: [],
 };
 
 const tagSingleFieldsBySection = {
@@ -94,6 +105,9 @@ const tagSingleFieldsBySection = {
   events: [],
   pillars: [],
   "effect-icons": [],
+  "empire-decks": [],
+  "event-decks": [],
+  levels: [],
 };
 
 const placementOptions = [
@@ -993,9 +1007,7 @@ const CardGuidedFields = ({ data, setField, tagEntries, cardEntries, groupEntrie
   );
 };
 
-const DeckGuidedFields = ({ data, setField, cardEntries, eventEntries }) => {
-  const deckType = ["empire", "events", "common-pool"].includes(data.deck_type) ? data.deck_type : "empire";
-  const items = deckType === "events" ? eventEntries : cardEntries.filter((entry) => entry.id !== "capital-foundation");
+const DeckGuidedFields = ({ data, setField, items, title = "Deck Items" }) => {
   const selectedIds = Array.isArray(data.item_ids) ? data.item_ids : [];
   const copyCounts = selectedIds.reduce((counts, itemId) => {
     return { ...counts, [itemId]: Number(counts[itemId] || 0) + 1 };
@@ -1009,21 +1021,8 @@ const DeckGuidedFields = ({ data, setField, cardEntries, eventEntries }) => {
 
   return (
     <>
-      <SelectField
-        label="Deck Type"
-        value={deckType}
-        options={[
-          { value: "empire", label: "Empire Deck" },
-          { value: "common-pool", label: "Common Pool" },
-          { value: "events", label: "Events" },
-        ]}
-        onChange={(value) => {
-          setField("deck_type", value);
-          setField("item_ids", []);
-        }}
-      />
       <div>
-        <p className="mb-2 text-sm font-medium text-slate-300">Deck Items</p>
+        <p className="mb-2 text-sm font-medium text-slate-300">{title}</p>
         <div className="grid gap-2 sm:grid-cols-2">
           {items.map((item) => {
             const copies = Number(copyCounts[item.id] || 0);
@@ -1074,6 +1073,38 @@ const DeckGuidedFields = ({ data, setField, cardEntries, eventEntries }) => {
           {items.length === 0 ? <p className="text-sm text-slate-500">No valid items available.</p> : null}
         </div>
       </div>
+    </>
+  );
+};
+
+const LevelGuidedFields = ({ data, setField, cardEntries, empireDeckEntries, eventDeckEntries }) => {
+  const cityCards = cardEntries.filter((card) => String(card.data?.card_type || card.category || "").toLowerCase() === "city");
+  return (
+    <>
+      <SelectField
+        label="Initial City Card"
+        value={data.initial_city_card_id || ""}
+        options={[{ value: "", label: "Select city card" }, ...cityCards.map((card) => ({ value: card.id, label: card.name }))]}
+        onChange={(value) => setField("initial_city_card_id", value)}
+      />
+      <SelectField
+        label="Empire Deck"
+        value={data.empire_deck_id || ""}
+        options={[{ value: "", label: "Select empire deck" }, ...empireDeckEntries.map((deck) => ({ value: deck.id, label: deck.name }))]}
+        onChange={(value) => setField("empire_deck_id", value)}
+      />
+      <SelectField
+        label="Event Deck"
+        value={data.event_deck_id || ""}
+        options={[{ value: "", label: "Select event deck" }, ...eventDeckEntries.map((deck) => ({ value: deck.id, label: deck.name }))]}
+        onChange={(value) => setField("event_deck_id", value)}
+      />
+      <SelectField
+        label="Common Pool Deck"
+        value={data.common_pool_deck_id || ""}
+        options={[{ value: "", label: "Select common pool deck" }, ...empireDeckEntries.map((deck) => ({ value: deck.id, label: deck.name }))]}
+        onChange={(value) => setField("common_pool_deck_id", value)}
+      />
     </>
   );
 };
@@ -1484,6 +1515,8 @@ const GuidedMetadataEditor = ({
   cardEntries,
   groupEntries,
   eventEntries,
+  empireDeckEntries,
+  eventDeckEntries,
   ministryEntries,
   imageEntries,
   pillarEntries,
@@ -1523,12 +1556,13 @@ const GuidedMetadataEditor = ({
   const singleFields = tagSingleFieldsBySection[activeSection] || [];
   const usefulFields = [...countFields, ...listFields, ...singleFields];
   const hasCardGuidance = activeSection === "cards";
-  const hasDeckGuidance = activeSection === "decks";
+  const hasDeckGuidance = activeSection === "decks" || activeSection === "empire-decks" || activeSection === "event-decks";
+  const hasLevelGuidance = activeSection === "levels";
   const hasMinistryGuidance = activeSection === "ministries";
   const hasEventGuidance = activeSection === "events";
   const hasPillarGuidance = activeSection === "pillars";
   const hasEffectIconGuidance = activeSection === "effect-icons";
-  if (!usefulFields.length && !hasCardGuidance && !hasDeckGuidance && !hasMinistryGuidance && !hasEventGuidance && !hasPillarGuidance && !hasEffectIconGuidance) return null;
+  if (!usefulFields.length && !hasCardGuidance && !hasDeckGuidance && !hasLevelGuidance && !hasMinistryGuidance && !hasEventGuidance && !hasPillarGuidance && !hasEffectIconGuidance) return null;
 
   const setField = (field, value) => {
     setCatalogForm((state) => {
@@ -1593,8 +1627,21 @@ const GuidedMetadataEditor = ({
         <DeckGuidedFields
           data={data}
           setField={setField}
+          items={
+            activeSection === "event-decks"
+              ? eventEntries
+              : cardEntries.filter((entry) => String(entry.data?.card_type || entry.category || "").toLowerCase() !== "city")
+          }
+          title={activeSection === "event-decks" ? "Event Cards" : "Empire Cards"}
+        />
+      ) : null}
+      {hasLevelGuidance ? (
+        <LevelGuidedFields
+          data={data}
+          setField={setField}
           cardEntries={cardEntries}
-          eventEntries={eventEntries}
+          empireDeckEntries={empireDeckEntries}
+          eventDeckEntries={eventDeckEntries}
         />
       ) : null}
       {hasMinistryGuidance ? (
@@ -1674,6 +1721,9 @@ const AdminPage = () => {
   const [effectIconEntries, setEffectIconEntries] = useState([]);
   const [ministryEntries, setMinistryEntries] = useState([]);
   const [cardCategories, setCardCategories] = useState([]);
+  const [empireDeckEntries, setEmpireDeckEntries] = useState([]);
+  const [eventDeckEntries, setEventDeckEntries] = useState([]);
+  const [levelEntries, setLevelEntries] = useState([]);
   const [groupEntries, setGroupEntries] = useState([]);
   const [catalogSummary, setCatalogSummary] = useState(null);
   const [editingEntry, setEditingEntry] = useState(null);
@@ -1773,6 +1823,15 @@ const AdminPage = () => {
       if (targetSection !== "card-categories") {
         requests.push(request("/api/admin/card-categories"));
       }
+      if (targetSection !== "empire-decks") {
+        requests.push(request("/api/admin/empire-decks"));
+      }
+      if (targetSection !== "event-decks") {
+        requests.push(request("/api/admin/event-decks"));
+      }
+      if (targetSection !== "levels") {
+        requests.push(request("/api/admin/levels"));
+      }
       const results = await Promise.all(requests);
       const [summary, entries] = results;
       let resultIndex = 2;
@@ -1785,6 +1844,9 @@ const AdminPage = () => {
       const effectIcons = targetSection === "effect-icons" ? entries : results[resultIndex++];
       const ministries = targetSection === "ministries" ? entries : results[resultIndex++];
       const categories = targetSection === "card-categories" ? entries : results[resultIndex++];
+      const empireDecks = targetSection === "empire-decks" ? entries : results[resultIndex++];
+      const eventDecks = targetSection === "event-decks" ? entries : results[resultIndex++];
+      const levels = targetSection === "levels" ? entries : results[resultIndex++];
       setCatalogSummary(summary);
       setCatalogEntries(entries);
       setTagEntries(targetSection === "tags" ? entries : tags);
@@ -1796,6 +1858,9 @@ const AdminPage = () => {
       setEffectIconEntries(targetSection === "effect-icons" ? entries : effectIcons);
       setMinistryEntries(targetSection === "ministries" ? entries : ministries);
       setCardCategories(targetSection === "card-categories" ? entries : categories);
+      setEmpireDeckEntries(targetSection === "empire-decks" ? entries : empireDecks);
+      setEventDeckEntries(targetSection === "event-decks" ? entries : eventDecks);
+      setLevelEntries(targetSection === "levels" ? entries : levels);
       setEditingEntry(null);
       setCatalogForm(emptyCatalogForm);
       setEditorOpen(false);
@@ -1860,8 +1925,12 @@ const AdminPage = () => {
           ? "mutually-exclusive"
           : activeCatalogKind === "card-categories"
             ? "card-category"
-            : activeCatalogKind === "decks"
+            : activeCatalogKind === "empire-decks"
               ? "empire"
+            : activeCatalogKind === "event-decks"
+              ? "events"
+            : activeCatalogKind === "levels"
+              ? "level"
             : activeCatalogKind === "events"
               ? "event"
             : activeCatalogKind === "pillars"
@@ -1876,8 +1945,12 @@ const AdminPage = () => {
       dataText:
         activeCatalogKind === "groups"
           ? stringifyData({ type: "mutually_exclusive" })
-            : activeCatalogKind === "decks"
-              ? stringifyData({ deck_type: "empire", item_ids: [] })
+            : activeCatalogKind === "empire-decks"
+              ? stringifyData({ item_ids: [] })
+            : activeCatalogKind === "event-decks"
+              ? stringifyData({ item_ids: [] })
+            : activeCatalogKind === "levels"
+              ? stringifyData({ initial_city_card_id: "", empire_deck_id: "", event_deck_id: "", common_pool_deck_id: "" })
             : activeCatalogKind === "ministries"
               ? stringifyData({
                   infrastructure_resources: [],
@@ -1962,8 +2035,12 @@ const AdminPage = () => {
             ? "mutually-exclusive"
             : activeCatalogKind === "card-categories"
               ? "card-category"
-              : activeCatalogKind === "decks"
-                ? parsedData.deck_type || catalogForm.category || "empire"
+              : activeCatalogKind === "empire-decks"
+                ? "empire"
+              : activeCatalogKind === "event-decks"
+                ? "events"
+              : activeCatalogKind === "levels"
+                ? "level"
               : activeCatalogKind === "events"
                 ? "event"
               : activeCatalogKind === "pillars"
@@ -1977,9 +2054,19 @@ const AdminPage = () => {
         color: activeCatalogKind === "tags" ? catalogForm.color : null,
         data: activeCatalogKind === "groups"
           ? { ...parsedData, type: "mutually_exclusive" }
-          : activeCatalogKind === "decks"
-            ? { ...parsedData, deck_type: parsedData.deck_type || "empire", item_ids: Array.isArray(parsedData.item_ids) ? parsedData.item_ids : [] }
-            : activeCatalogKind === "tags"
+          : activeCatalogKind === "empire-decks"
+            ? { ...parsedData, item_ids: Array.isArray(parsedData.item_ids) ? parsedData.item_ids : [] }
+          : activeCatalogKind === "event-decks"
+            ? { ...parsedData, item_ids: Array.isArray(parsedData.item_ids) ? parsedData.item_ids : [] }
+          : activeCatalogKind === "levels"
+            ? {
+                ...parsedData,
+                initial_city_card_id: parsedData.initial_city_card_id || "",
+                empire_deck_id: parsedData.empire_deck_id || "",
+                event_deck_id: parsedData.event_deck_id || "",
+                common_pool_deck_id: parsedData.common_pool_deck_id || "",
+              }
+          : activeCatalogKind === "tags"
               ? { ...parsedData, resource_type: tagResourceType }
             : parsedData,
       };
@@ -2069,6 +2156,30 @@ const AdminPage = () => {
           );
         });
       }
+      if (activeCatalogKind === "empire-decks") {
+        setEmpireDeckEntries((entries) => {
+          const withoutSaved = entries.filter((entry) => entry.id !== saved.id);
+          return [...withoutSaved, saved].sort((a, b) =>
+            `${a.category}:${a.name}:${a.id}`.localeCompare(`${b.category}:${b.name}:${b.id}`)
+          );
+        });
+      }
+      if (activeCatalogKind === "event-decks") {
+        setEventDeckEntries((entries) => {
+          const withoutSaved = entries.filter((entry) => entry.id !== saved.id);
+          return [...withoutSaved, saved].sort((a, b) =>
+            `${a.category}:${a.name}:${a.id}`.localeCompare(`${b.category}:${b.name}:${b.id}`)
+          );
+        });
+      }
+      if (activeCatalogKind === "levels") {
+        setLevelEntries((entries) => {
+          const withoutSaved = entries.filter((entry) => entry.id !== saved.id);
+          return [...withoutSaved, saved].sort((a, b) =>
+            `${a.category}:${a.name}:${a.id}`.localeCompare(`${b.category}:${b.name}:${b.id}`)
+          );
+        });
+      }
       setEditingEntry(saved);
       setCatalogForm({
         id: saved.id,
@@ -2122,6 +2233,15 @@ const AdminPage = () => {
       }
       if (activeCatalogKind === "card-categories") {
         setCardCategories((entries) => entries.filter((candidate) => candidate.id !== entry.id));
+      }
+      if (activeCatalogKind === "empire-decks") {
+        setEmpireDeckEntries((entries) => entries.filter((candidate) => candidate.id !== entry.id));
+      }
+      if (activeCatalogKind === "event-decks") {
+        setEventDeckEntries((entries) => entries.filter((candidate) => candidate.id !== entry.id));
+      }
+      if (activeCatalogKind === "levels") {
+        setLevelEntries((entries) => entries.filter((candidate) => candidate.id !== entry.id));
       }
       if (editingEntry?.id === entry.id) {
         setEditingEntry(null);
@@ -2625,6 +2745,8 @@ const AdminPage = () => {
                 cardEntries={cardEntries}
                 groupEntries={groupEntries}
                 eventEntries={eventEntries}
+                empireDeckEntries={empireDeckEntries}
+                eventDeckEntries={eventDeckEntries}
                 ministryEntries={ministryEntries}
                 imageEntries={imageEntries}
                 pillarEntries={pillarEntries}

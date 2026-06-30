@@ -15,6 +15,7 @@ from .config import settings
 from .database import get_db
 from .db_models import AdminAuditLogRecord, GameCatalogEntryRecord, UserProfileRecord
 from .empire_catalog import (
+    CATALOG_KINDS,
     CatalogKind,
     catalog_record_summary,
     create_catalog_record,
@@ -391,6 +392,21 @@ async def admin_list_card_categories(
     return _catalog_response(db, "card-categories")
 
 
+@router.get("/admin/empire-decks", response_model=list[AdminCatalogEntry])
+async def admin_list_empire_decks(_admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    return _catalog_response(db, "empire-decks")
+
+
+@router.get("/admin/event-decks", response_model=list[AdminCatalogEntry])
+async def admin_list_event_decks(_admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    return _catalog_response(db, "event-decks")
+
+
+@router.get("/admin/levels", response_model=list[AdminCatalogEntry])
+async def admin_list_levels(_admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    return _catalog_response(db, "levels")
+
+
 @router.get("/admin/decks", response_model=list[AdminCatalogEntry])
 async def admin_list_decks(_admin: User = Depends(require_admin), db: Session = Depends(get_db)):
     return _catalog_response(db, "decks")
@@ -410,6 +426,7 @@ async def admin_export_catalog(
     return {
         "version": 1,
         "kind": catalog_kind or "all",
+        "catalog_kinds": list(CATALOG_KINDS),
         "entries": entries,
     }
 

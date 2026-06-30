@@ -63,6 +63,7 @@ class LobbyStateResponse(BaseModel):
 class GameRoomCreateRequest(BaseModel):
     mode: str = "solo"
     game_type: str = "chronicle_solo"
+    level_id: Optional[str] = None
     empire_deck_id: Optional[str] = None
     event_deck_id: Optional[str] = None
 
@@ -240,4 +241,7 @@ class AdminCatalogSummary(BaseModel):
     events: int = 0
     groups: int = 0
     card_categories: int = 0
+    empire_decks: int = 0
+    event_decks: int = 0
+    levels: int = 0
     decks: int = 0

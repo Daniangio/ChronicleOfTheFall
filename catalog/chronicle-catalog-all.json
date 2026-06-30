@@ -3,6 +3,20 @@
   "kind": "all",
   "entries": [
     {
+      "id": "capital-foundation",
+      "name": "Capital Foundation",
+      "kind": "cards",
+      "category": "city",
+      "summary": "Initial capital city card for goldfishing levels.",
+      "color": null,
+      "data": {
+        "card_type": "city",
+        "placement": "city",
+        "building_slots": 3,
+        "tags": {}
+      }
+    },
+    {
       "id": "building",
       "name": "Building",
       "kind": "card-categories",
@@ -680,63 +694,6 @@
               }
             ]
           }
-        ]
-      }
-    },
-    {
-      "id": "default-common-pool",
-      "name": "Default Common Pool",
-      "kind": "decks",
-      "category": "common-pool",
-      "summary": "Starter shared project pool.",
-      "color": null,
-      "data": {
-        "deck_type": "common-pool",
-        "item_ids": [
-          "basic-farm",
-          "stone-quarry",
-          "grand-garrison"
-        ]
-      }
-    },
-    {
-      "id": "default-empire-deck",
-      "name": "Default Empire Deck",
-      "kind": "decks",
-      "category": "empire",
-      "summary": "Starter Empire deck for player hands.",
-      "color": null,
-      "data": {
-        "deck_type": "empire",
-        "item_ids": [
-          "stone-quarry",
-          "grand-garrison",
-          "spymasters-guild",
-          "war-bonds",
-          "stone-quarry",
-          "grand-garrison",
-          "basic-farm",
-          "stone-quarry",
-          "spymasters-guild",
-          "basic-farm",
-          "war-bonds",
-          "grand-garrison"
-        ]
-      }
-    },
-    {
-      "id": "default-event-deck",
-      "name": "Default Event Deck",
-      "kind": "decks",
-      "category": "events",
-      "summary": "Starter Event deck.",
-      "color": null,
-      "data": {
-        "deck_type": "events",
-        "item_ids": [
-          "barbarian-horde",
-          "crimson-plague",
-          "trade-embargo"
         ]
       }
     },
@@ -1486,6 +1443,74 @@
       "data": {
         "resource_type": "volatile",
         "icon_image_id": "resource-wealth"
+      }
+    },
+    {
+      "id": "default-common-pool",
+      "name": "Default Common Pool",
+      "kind": "empire-decks",
+      "category": "common-pool",
+      "summary": "Starter shared project pool.",
+      "color": null,
+      "data": {
+        "item_ids": [
+          "basic-farm",
+          "stone-quarry",
+          "grand-garrison"
+        ]
+      }
+    },
+    {
+      "id": "default-empire-deck",
+      "name": "Default Empire Deck",
+      "kind": "empire-decks",
+      "category": "empire",
+      "summary": "Starter Empire deck for player hands.",
+      "color": null,
+      "data": {
+        "item_ids": [
+          "stone-quarry",
+          "grand-garrison",
+          "spymasters-guild",
+          "war-bonds",
+          "stone-quarry",
+          "grand-garrison",
+          "basic-farm",
+          "stone-quarry",
+          "spymasters-guild",
+          "basic-farm",
+          "war-bonds",
+          "grand-garrison"
+        ]
+      }
+    },
+    {
+      "id": "default-event-deck",
+      "name": "Default Event Deck",
+      "kind": "event-decks",
+      "category": "events",
+      "summary": "Starter Event deck.",
+      "color": null,
+      "data": {
+        "item_ids": [
+          "barbarian-horde",
+          "crimson-plague",
+          "trade-embargo"
+        ]
+      }
+    },
+    {
+      "id": "default-goldfishing-level",
+      "name": "Default Goldfishing Level",
+      "kind": "levels",
+      "category": "level",
+      "summary": "Default setup for a goldfishing game.",
+      "color": null,
+      "data": {
+        "initial_city_card_id": "capital-foundation",
+        "empire_deck_id": "default-empire-deck",
+        "event_deck_id": "default-event-deck",
+        "common_pool_deck_id": "default-common-pool"
       }
     }
   ]

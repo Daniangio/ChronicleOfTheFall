@@ -51,6 +51,8 @@ def build_goldfishing_state(
     common_pool_ids: list[str] | None = None,
     card_deck_id: str,
     event_deck_id: str,
+    initial_city_card_id: str = "capital-foundation",
+    level_id: str = "",
     common_pool_deck_id: str = "",
     event_entries: list[dict[str, Any]] | None = None,
     ministry_entries: list[dict[str, Any]] | None = None,
@@ -59,15 +61,17 @@ def build_goldfishing_state(
     image_entries: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     card_by_id = {entry["id"]: entry for entry in card_entries}
+    initial_city_card_id = initial_city_card_id if initial_city_card_id in card_by_id else "capital-foundation"
+    initial_city_card = card_by_id.get(initial_city_card_id, {})
     draw_deck = Deck([
         card_id
         for card_id in card_deck_ids
-        if card_id in card_by_id and card_id != "capital-foundation"
+        if card_id in card_by_id and card_id != initial_city_card_id
     ])
     common_pool = [
         card_id
         for card_id in (common_pool_ids or [])
-        if card_id in card_by_id and card_id != "capital-foundation"
+        if card_id in card_by_id and card_id != initial_city_card_id
     ]
     draw_deck.shuffle(room_id)
     players = []
@@ -101,10 +105,10 @@ def build_goldfishing_state(
         "cities": [
             {
                 "id": "capital",
-                "name": "Capital",
-                "city_card_id": "capital-foundation",
-                "foundation_card_id": "capital-foundation",
-                "building_slots": int((card_by_id.get("capital-foundation", {}).get("data", {}) or {}).get("building_slots") or 3),
+                "name": initial_city_card.get("name") or "Capital",
+                "city_card_id": initial_city_card_id,
+                "foundation_card_id": initial_city_card_id,
+                "building_slots": int((initial_city_card.get("data", {}) or {}).get("building_slots") or 3),
                 "cards": [],
                 "exhausted_card_ids": [],
             }
@@ -126,6 +130,7 @@ def build_goldfishing_state(
             "events": event_deck_id,
             "common_pool": common_pool_deck_id,
         },
+        "level_id": level_id,
         "log": [f"Goldfishing setup complete. Capital placed. Each player drew {INITIAL_HAND_SIZE} cards. Player 1 is Minister of the Empire."],
     })
 
