@@ -132,6 +132,11 @@ class GoldfishingPeekEventRequest(BaseModel):
     event_id: str
 
 
+class GoldfishingChooseMinistryRequest(BaseModel):
+    player_id: str
+    ministry_id: str
+
+
 class GoldfishingPassRequest(BaseModel):
     player_id: str
 
@@ -200,6 +205,7 @@ class AdminCatalogEntryCreate(BaseModel):
 
 
 class AdminCatalogEntryUpdate(BaseModel):
+    id: Optional[str] = None
     name: str
     category: str = ""
     summary: str = ""

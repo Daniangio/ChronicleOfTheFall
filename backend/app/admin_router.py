@@ -339,6 +339,26 @@ async def admin_catalog_summary(
     return AdminCatalogSummary(**catalog_record_summary(db))
 
 
+@router.get("/admin/catalog/entries", response_model=list[AdminCatalogEntry])
+async def admin_search_catalog_entries(
+    query: str = Query(default="", max_length=128),
+    _admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    normalized = _query_text(query).strip().casefold()
+    records = list_catalog_records(db)
+    if normalized:
+        records = [
+            record
+            for record in records
+            if normalized in str(record.id or "").casefold()
+            or normalized in str(record.kind or "").casefold()
+            or normalized in str(record.name or "").casefold()
+            or normalized in str(record.category or "").casefold()
+        ]
+    return [_catalog_entry_response(record) for record in records[:200]]
+
+
 @router.get("/admin/tags", response_model=list[AdminCatalogEntry])
 async def admin_list_tags(_admin: User = Depends(require_admin), db: Session = Depends(get_db)):
     return _catalog_response(db, "tags")
@@ -561,6 +581,7 @@ async def admin_update_catalog_entry(
             db,
             kind=catalog_kind,
             entry_id=entry_id,
+            new_entry_id=payload.id,
             name=payload.name,
             category=payload.category,
             summary=payload.summary,

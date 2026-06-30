@@ -112,8 +112,9 @@ def create_catalog_record(
     data: dict[str, Any],
 ) -> GameCatalogEntryRecord:
     normalized_id = normalize_catalog_id(entry_id)
-    if db.get(GameCatalogEntryRecord, normalized_id) is not None:
-        raise ValueError("A catalog entry with this id already exists.")
+    existing = db.get(GameCatalogEntryRecord, normalized_id)
+    if existing is not None:
+        raise ValueError(f"A catalog entry with this id already exists as {existing.kind}:{existing.id}.")
     normalized_data = data or {}
     _validate_catalog_data(db, kind=kind, entry_id=normalized_id, data=normalized_data)
     row = GameCatalogEntryRecord(
@@ -138,6 +139,7 @@ def update_catalog_record(
     *,
     kind: CatalogKind,
     entry_id: str,
+    new_entry_id: str | None = None,
     name: str,
     category: str,
     summary: str,
@@ -147,8 +149,13 @@ def update_catalog_record(
     row = get_catalog_record(db, kind=kind, entry_id=entry_id)
     if row is None:
         return None
+    normalized_id = row.id if new_entry_id is None else normalize_catalog_id(new_entry_id or name)
+    existing = db.get(GameCatalogEntryRecord, normalized_id)
+    if existing is not None and existing.id != row.id:
+        raise ValueError(f"A catalog entry with this id already exists as {existing.kind}:{existing.id}.")
     normalized_data = data or {}
-    _validate_catalog_data(db, kind=kind, entry_id=row.id, data=normalized_data)
+    _validate_catalog_data(db, kind=kind, entry_id=normalized_id, data=normalized_data)
+    row.id = normalized_id
     row.name = str(name or "").strip()
     row.category = _catalog_category(kind, category, normalized_data)
     row.summary = str(summary or "").strip()

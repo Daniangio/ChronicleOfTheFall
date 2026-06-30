@@ -1,4 +1,5 @@
 import { Ban, Hammer, RotateCcw, ScrollText, ShieldX, Snowflake, Users, UserX, Zap } from "lucide-react";
+import CardVisual from "./CardVisual.jsx";
 import TagIcon from "./TagIcon.jsx";
 import { buildApiUrl } from "../utils/connection.js";
 
@@ -344,7 +345,7 @@ const EventEffectToken = ({ effect, eventMinistry, ministryLookup, effectIconLoo
     return (
       <span className="inline-flex items-center gap-1">
         <EventEffectIcon effectType="destroy_building_with_tag" effectIconLookup={effectIconLookup} imageLookup={imageLookup} fallback={Hammer} label="Destroy building" tone="rose" />
-        <TagIcon tag={tagLookup[normalizeTagId(payload.tag_id)]} label={payload.tag_id} count={amount} />
+        {payload.tag_id ? <TagIcon tag={tagLookup[normalizeTagId(payload.tag_id)]} label={payload.tag_id} count={amount} size="sm" /> : null}
       </span>
     );
   }
@@ -381,10 +382,24 @@ const EventEffectToken = ({ effect, eventMinistry, ministryLookup, effectIconLoo
   );
 };
 
+const EventRequirementCost = ({ value, tagLookup }) => {
+  const entries = tagEntries(value);
+  if (!entries.length) return <span className="text-[0.65rem] text-amber-800">No defense cost</span>;
+  return (
+    <div className="grid max-w-[11rem] grid-cols-5 gap-1">
+      {entries.flatMap(([tagId, count]) => (
+        Array.from({ length: Math.max(1, Number(count) || 1) }).map((_, index) => (
+          <TagIcon key={`${tagId}-${index}`} tag={tagLookup[normalizeTagId(tagId)]} label={tagId} size="sm" />
+        ))
+      ))}
+    </div>
+  );
+};
+
 const EventEffectRow = ({ title, effects, tone, eventMinistry, ministryLookup, effectIconLookup, pillarLookup, tagLookup, imageLookup }) => {
   if (!effects?.length) return null;
   return (
-    <div className={`rounded-md border ${tone === "success" ? "border-emerald-900/70 bg-emerald-950/15" : "border-rose-900/70 bg-rose-950/15"} p-2`}>
+    <div className={`min-h-[5.5rem] rounded-md border ${tone === "success" ? "border-emerald-900/70 bg-emerald-950/15" : "border-rose-900/70 bg-rose-950/15"} p-2`}>
       <p className={`mb-2 text-[0.65rem] font-bold uppercase tracking-normal ${tone === "success" ? "text-emerald-200" : "text-rose-200"}`}>{title}</p>
       <div className="flex flex-wrap gap-1.5">
         {effects.map((effect, index) => (
@@ -409,34 +424,34 @@ const EventCardVisual = ({ entry, eventMinistry, ministryLookup, effectIconLooku
   const eventImage = assetSrc(data.image || imageLookup[data.image_id]?.data?.src || "");
   const successEffects = Array.isArray(data.success_effects) ? data.success_effects : [];
   const failureEffects = Array.isArray(data.failure_effects) ? data.failure_effects : [];
+  const thresholds = Array.isArray(data.thresholds) ? data.thresholds : [];
   return (
-    <article className="overflow-hidden rounded-lg border border-amber-900/70 bg-stone-950 shadow-xl">
-      <div className="flex items-start justify-between gap-3 border-b border-amber-900/50 bg-stone-900/80 p-3">
-        <div className="min-w-0">
-          <h3 className="truncate text-base font-bold text-amber-50">{entry.name}</h3>
-          <p className="mt-0.5 text-[0.65rem] text-amber-700">{entry.id}</p>
-        </div>
+    <article className="flex aspect-[5/7] w-[clamp(12rem,16vw,15rem)] shrink-0 flex-col overflow-hidden rounded-lg border border-amber-900/70 bg-stone-950 p-3 shadow-xl">
+      <div className="grid grid-cols-[3rem_minmax(0,1fr)] gap-2">
         <SmallIcon src={ministryIcon(eventMinistry, imageLookup)} label={eventMinistry?.name || data.ministry_symbol || "Minister"} tone="amber" />
-      </div>
-      {eventImage ? <img alt="" className="h-24 w-full object-cover opacity-80" src={eventImage} /> : null}
-      <div className="space-y-3 p-3">
-        {entry.summary ? <p className="text-xs leading-5 text-slate-300">{entry.summary}</p> : null}
-        <div>
-          <p className="mb-1 text-[0.65rem] font-bold uppercase tracking-normal text-slate-500">Requirement</p>
-          <TagValue value={data.defense_requirement || {}} tagLookup={tagLookup} />
+        <div className="min-w-0 text-right">
+          <h3 className="line-clamp-2 text-[0.82rem] font-bold leading-tight text-amber-50">{entry.name}</h3>
+          <p className="mt-0.5 truncate text-[0.55rem] uppercase text-amber-700">{entry.id}</p>
+          <div className="mt-2 flex justify-end">
+            <EventRequirementCost value={data.defense_requirement || {}} tagLookup={tagLookup} />
+          </div>
         </div>
+      </div>
+      {eventImage ? <img alt="" className="mt-2 h-20 w-full rounded-md object-cover opacity-80" src={eventImage} /> : null}
+      <div className="flex flex-1 flex-col justify-end gap-2 pt-2">
+        {entry.summary && !eventImage ? <p className="line-clamp-3 text-center text-[0.62rem] leading-4 text-stone-300">{entry.summary}</p> : null}
         {successEffects.length || failureEffects.length ? (
           <div className={`grid gap-2 ${successEffects.length && failureEffects.length ? "sm:grid-cols-2" : ""}`}>
             <EventEffectRow title="Success" effects={successEffects} tone="success" eventMinistry={eventMinistry} ministryLookup={ministryLookup} effectIconLookup={effectIconLookup} pillarLookup={pillarLookup} tagLookup={tagLookup} imageLookup={imageLookup} />
             <EventEffectRow title="Failure" effects={failureEffects} tone="failure" eventMinistry={eventMinistry} ministryLookup={ministryLookup} effectIconLookup={effectIconLookup} pillarLookup={pillarLookup} tagLookup={tagLookup} imageLookup={imageLookup} />
           </div>
         ) : null}
-        {Array.isArray(data.thresholds) && data.thresholds.length ? (
-          <div className="space-y-2 border-t border-amber-900/40 pt-3">
+        {thresholds.length ? (
+          <div className="space-y-1 border-t border-amber-900/40 pt-2">
             <p className="text-[0.65rem] font-bold uppercase tracking-normal text-slate-500">Thresholds</p>
-            {data.thresholds.map((threshold, index) => (
+            {thresholds.map((threshold, index) => (
               <div key={index} className="flex flex-wrap items-center gap-1.5 text-xs text-slate-300">
-                <TagIcon tag={tagLookup[normalizeTagId(threshold.tag_id)]} label={threshold.tag_id} count={threshold.amount} />
+                <TagIcon tag={tagLookup[normalizeTagId(threshold.tag_id)]} label={threshold.tag_id} count={threshold.amount} size="sm" />
                 <span className="text-slate-600">:</span>
                 {(threshold.effects || []).map((effect, effectIndex) => (
                   <EventEffectToken key={effectIndex} effect={effect} eventMinistry={eventMinistry} ministryLookup={ministryLookup} effectIconLookup={effectIconLookup} pillarLookup={pillarLookup} tagLookup={tagLookup} imageLookup={imageLookup} />
@@ -482,6 +497,15 @@ const CatalogItemVisual = ({ entry, tags = [], cards = [], groups = [], ministri
         imageLookup={imageLookup}
         actions={actions}
       />
+    );
+  }
+
+  if (visualEntry.kind === "cards") {
+    return (
+      <div className="rounded-lg border border-slate-800 bg-slate-900 p-4">
+        <CardVisual card={visualEntry} tagLookup={tagLookup} size="table" />
+        {actions ? <div className="mt-4 flex flex-wrap gap-2">{actions}</div> : null}
+      </div>
     );
   }
 

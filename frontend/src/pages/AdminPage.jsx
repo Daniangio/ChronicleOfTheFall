@@ -10,6 +10,7 @@ import { buildApiUrl } from "../utils/connection.js";
 const sections = [
   { key: "users", label: "Users", to: "/admin/users" },
   { key: "audit", label: "Audit", to: "/admin/audit" },
+  { key: "catalog-inspector", label: "Catalog Inspector", to: "/admin/catalog-inspector" },
   { key: "tags", label: "Tags", to: "/admin/tags" },
   { key: "images", label: "Images", to: "/admin/images" },
   { key: "cards", label: "Cards", to: "/admin/cards" },
@@ -1192,6 +1193,17 @@ const effectIconCodeOptions = [
   ...eventEffectTypeOptions,
 ];
 
+const effectIconOptionLabel = (effectType) =>
+  effectIconCodeOptions.find((option) => option.value === effectType)?.label || tagLabel(effectType);
+
+const effectIconCatalogIdentity = (effectType) => {
+  const baseId = catalogIdFromText(effectType || "effect");
+  return {
+    id: `${baseId || "effect"}-icon`,
+    name: `${effectIconOptionLabel(effectType || "effect")} Icon`,
+  };
+};
+
 const EventEffectEditor = ({ effects, setEffects, resourceTags, allTags, ministryEntries, pillarEntries = [] }) => {
   const updateEffect = (index, patch) => {
     const next = [...effects];
@@ -1471,14 +1483,13 @@ const PillarGuidedFields = ({ data, setField, imageEntries }) => {
 };
 
 const EffectIconGuidedFields = ({ data, setField, imageEntries, editingEntry, setCatalogForm }) => {
-  const applyImageIdentity = (image) => {
-    if (!image) return;
-    const identitySource = image.name || image.id || "";
-    const generatedId = catalogIdFromText(identitySource);
+  const applyEffectIdentity = (effectType) => {
+    if (!effectType || editingEntry) return;
+    const identity = effectIconCatalogIdentity(effectType);
     setCatalogForm((state) => ({
       ...state,
-      id: editingEntry ? state.id : generatedId || state.id,
-      name: identitySource || state.name,
+      id: identity.id,
+      name: identity.name,
     }));
   };
 
@@ -1488,7 +1499,10 @@ const EffectIconGuidedFields = ({ data, setField, imageEntries, editingEntry, se
         label="Effect Code"
         value={data.effect_type || ""}
         options={[{ value: "", label: "Select effect code" }, ...effectIconCodeOptions]}
-        onChange={(value) => setField("effect_type", value)}
+        onChange={(value) => {
+          setField("effect_type", value);
+          applyEffectIdentity(value);
+        }}
       />
       <ImageAssetSelect
         label="Effect Icon"
@@ -1497,10 +1511,9 @@ const EffectIconGuidedFields = ({ data, setField, imageEntries, editingEntry, se
         onSelect={(image) => {
           setField("icon_image_id", image?.id || "");
           setField("icon", "");
-          applyImageIdentity(image);
         }}
       />
-      <p className="text-xs text-slate-500">Effect icon id and name are generated from the selected image.</p>
+      <p className="text-xs text-slate-500">Effect icon id and name are generated from the selected effect code.</p>
     </>
   );
 };
@@ -1712,6 +1725,7 @@ const AdminPage = () => {
   const [users, setUsers] = useState([]);
   const [selectedUser, setSelectedUser] = useState(null);
   const [auditLogs, setAuditLogs] = useState([]);
+  const [inspectorEntries, setInspectorEntries] = useState([]);
   const [catalogEntries, setCatalogEntries] = useState([]);
   const [tagEntries, setTagEntries] = useState([]);
   const [imageEntries, setImageEntries] = useState([]);
@@ -1785,6 +1799,17 @@ const AdminPage = () => {
       setAuditLogs(await request("/api/admin/audit-logs"));
     } catch (loadError) {
       setError(loadError.message || "Failed to load audit logs.");
+    }
+  };
+
+  const loadCatalogInspector = async () => {
+    if (!token) return;
+    setError("");
+    try {
+      setInspectorEntries(await request(`/api/admin/catalog/entries?query=${encodeURIComponent(query)}`));
+    } catch (loadError) {
+      setError(loadError.message || "Failed to load catalog entries.");
+      setInspectorEntries([]);
     }
   };
 
@@ -1884,6 +1909,8 @@ const AdminPage = () => {
       void loadUsers();
     } else if (activeSection === "audit") {
       void loadAudit();
+    } else if (activeSection === "catalog-inspector") {
+      void loadCatalogInspector();
     } else if (isCatalogSection) {
       void loadCatalog(activeCatalogKind);
     }
@@ -2000,20 +2027,12 @@ const AdminPage = () => {
     try {
       const parsedData = parseCatalogData();
       const tagResourceType = parsedData.resource_type === "volatile" ? "volatile" : "permanent";
-      const selectedEffectIconImage = activeCatalogKind === "effect-icons"
-        ? imageEntries.find((image) => image.id === parsedData.icon_image_id)
-        : null;
-      const effectIconIdentitySource =
-        selectedEffectIconImage?.name ||
-        selectedEffectIconImage?.id ||
-        catalogForm.name ||
-        parsedData.effect_type ||
-        "effect-icon";
+      const effectIconIdentity = effectIconCatalogIdentity(parsedData.effect_type || catalogForm.name || "effect");
       const effectIconName = activeCatalogKind === "effect-icons"
-        ? String(effectIconIdentitySource).trim()
+        ? (catalogForm.name || effectIconIdentity.name)
         : catalogForm.name;
       const effectIconId = activeCatalogKind === "effect-icons"
-        ? catalogForm.id || catalogIdFromText(effectIconIdentitySource) || catalogIdFromText(parsedData.effect_type) || "effect-icon"
+        ? catalogForm.id || effectIconIdentity.id
         : catalogForm.id;
       const imageIdentitySource = activeCatalogKind === "images"
         ? catalogForm.name || catalogForm.id || String(parsedData.src || "").split("/").pop() || "image"
@@ -2076,7 +2095,7 @@ const AdminPage = () => {
       const saved = await request(path, {
         method: editingEntry ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(editingEntry ? payload : { ...payload, id: catalogId }),
+        body: JSON.stringify({ ...payload, id: catalogId }),
       });
       setCatalogEntries((entries) => {
         const withoutSaved = entries.filter((entry) => entry.id !== saved.id);
@@ -2256,6 +2275,23 @@ const AdminPage = () => {
     }
   };
 
+  const deleteInspectorEntry = async (entry) => {
+    if (!entry?.id || !entry?.kind || busy) return;
+    const confirmed = window.confirm(`Delete ${entry.kind}:${entry.id}?`);
+    if (!confirmed) return;
+    setBusy(true);
+    setError("");
+    try {
+      await request(`/api/admin/${entry.kind}/${entry.id}`, { method: "DELETE" });
+      setInspectorEntries((entries) => entries.filter((candidate) => candidate.id !== entry.id));
+      setCatalogSummary(await request("/api/admin/catalog/summary"));
+    } catch (deleteError) {
+      setError(deleteError.message || "Failed to delete catalog entry.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const downloadJson = (payload, filename) => {
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -2353,17 +2389,23 @@ const AdminPage = () => {
             Manage accounts and prepare the Chronicle of the Fall game catalog.
           </p>
         </div>
-        {activeSection === "users" || isCatalogSection ? (
+        {activeSection === "users" || activeSection === "catalog-inspector" || isCatalogSection ? (
           <div className="flex min-w-[16rem] items-center gap-2 rounded-md border border-slate-700 bg-slate-950 px-3 py-2">
             <Search className="h-4 w-4 text-slate-500" aria-hidden="true" />
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               className="w-full bg-transparent text-sm text-white outline-none"
-              placeholder={activeSection === "users" ? "Search users" : `Search ${activeSection}`}
+              placeholder={
+                activeSection === "users"
+                  ? "Search users"
+                  : activeSection === "catalog-inspector"
+                    ? "Search id, kind, name"
+                    : `Search ${activeSection}`
+              }
             />
-            {activeSection === "users" ? (
-              <button className="text-sm font-semibold text-teal-300" onClick={loadUsers} type="button">
+            {activeSection === "users" || activeSection === "catalog-inspector" ? (
+              <button className="text-sm font-semibold text-teal-300" onClick={activeSection === "users" ? loadUsers : loadCatalogInspector} type="button">
                 Search
               </button>
             ) : null}
@@ -2443,6 +2485,65 @@ const AdminPage = () => {
               </div>
             ))}
             {auditLogs.length === 0 ? <p className="py-5 text-slate-400">No audit logs yet.</p> : null}
+          </div>
+        </section>
+      ) : null}
+
+      {activeSection === "catalog-inspector" ? (
+        <section className="rounded-lg border border-slate-800 bg-slate-900 p-5">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="font-semibold text-white">Catalog Inspector</h2>
+              <p className="mt-1 text-sm text-slate-500">Search all catalog kinds by id, kind, name, or category. Use this to remove stale entries blocking reused ids.</p>
+            </div>
+            <button
+              className="inline-flex items-center gap-2 rounded-md border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800 disabled:opacity-60"
+              disabled={busy}
+              onClick={loadCatalogInspector}
+              type="button"
+            >
+              <Search className="h-4 w-4" aria-hidden="true" />
+              Search
+            </button>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[48rem] text-left text-sm">
+              <thead className="border-b border-slate-800 text-xs uppercase tracking-normal text-slate-500">
+                <tr>
+                  <th className="py-2 pr-3">Kind</th>
+                  <th className="py-2 pr-3">Id</th>
+                  <th className="py-2 pr-3">Name</th>
+                  <th className="py-2 pr-3">Category</th>
+                  <th className="py-2 pr-3">Data</th>
+                  <th className="py-2 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800">
+                {inspectorEntries.map((entry) => (
+                  <tr key={`${entry.kind}:${entry.id}`} className="align-top">
+                    <td className="py-3 pr-3 text-slate-300">{entry.kind}</td>
+                    <td className="py-3 pr-3 font-mono text-xs text-white">{entry.id}</td>
+                    <td className="py-3 pr-3 text-slate-200">{entry.name}</td>
+                    <td className="py-3 pr-3 text-slate-400">{entry.category || "-"}</td>
+                    <td className="py-3 pr-3">
+                      <code className="line-clamp-2 break-all text-xs text-slate-500">{JSON.stringify(entry.data || {})}</code>
+                    </td>
+                    <td className="py-3 text-right">
+                      <button
+                        className="inline-flex items-center gap-2 rounded-md border border-rose-900/80 px-3 py-2 text-sm text-rose-200 hover:bg-rose-950/70 disabled:opacity-60"
+                        disabled={busy}
+                        onClick={() => deleteInspectorEntry(entry)}
+                        type="button"
+                      >
+                        <Trash2 className="h-4 w-4" aria-hidden="true" />
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {inspectorEntries.length === 0 ? <p className="py-5 text-slate-400">No catalog entries found.</p> : null}
           </div>
         </section>
       ) : null}
@@ -2637,8 +2738,7 @@ const AdminPage = () => {
                     <input
                       value={catalogForm.id}
                       onChange={(event) => setCatalogForm((state) => ({ ...state, id: event.target.value }))}
-                      className="mt-2 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none focus:border-teal-400 disabled:text-slate-500"
-                      disabled={Boolean(editingEntry)}
+                      className="mt-2 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none focus:border-teal-400"
                       placeholder="auto-from-name"
                     />
                   </label>

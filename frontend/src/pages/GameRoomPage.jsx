@@ -1,6 +1,7 @@
-import { Check, Eye, Hand, Hourglass, Landmark, LogOut, RotateCcw, ScrollText, Zap } from "lucide-react";
+import { Check, Eye, Hourglass, Landmark, LogOut, Minus, Plus, ScrollText, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import CardVisual from "../components/CardVisual.jsx";
 import CatalogItemVisual from "../components/CatalogItemVisual.jsx";
 import TagIcon from "../components/TagIcon.jsx";
 import { useStore } from "../store.js";
@@ -20,177 +21,6 @@ const withResolvedTagIcon = (tag, imageLookup = {}) => {
 const buildTagLookup = (tags = [], imageLookup = {}) =>
   Object.fromEntries((tags || []).map((tag) => [normalize(tag.id), withResolvedTagIcon(tag, imageLookup)]));
 
-const tagEntries = (value) => {
-  if (Array.isArray(value)) return value.map((tagId) => [tagId, null]);
-  return Object.entries(value || {});
-};
-
-const manualActionMana = (data = {}) => {
-  const node = (data.logic_nodes || []).find((entry) => ["manual", "manual_action"].includes(entry?.trigger));
-  if (!node) return {};
-  return (node.effects || []).reduce((mana, effect) => {
-    const payload = effect.payload || {};
-    if (effect?.effect_type === "modify_mana") {
-      const manaType = payload.mana_type || payload.tag_id;
-      if (!manaType) return mana;
-      return { ...mana, [manaType]: Number(mana[manaType] || 0) + Number(payload.amount || 0) };
-    }
-    if (effect?.effect_type === "add_resources") {
-      return (payload.resources || payload.mana || []).reduce((nextMana, tagId) => ({
-        ...nextMana,
-        [tagId]: Number(nextMana[tagId] || 0) + 1,
-      }), mana);
-    }
-    return mana;
-  }, {});
-};
-
-const manualActionEffects = (data = {}) => {
-  const node = (data.logic_nodes || []).find((entry) => ["manual", "manual_action"].includes(entry?.trigger));
-  if (!node) return [];
-  return node.effects || [];
-};
-
-const manualActionNode = (data = {}) => (data.logic_nodes || []).find((entry) => ["manual", "manual_action"].includes(entry?.trigger));
-
-const countRepeatedTags = (value) => {
-  if (Array.isArray(value)) {
-    return value.reduce((counts, tagId) => {
-      if (!tagId) return counts;
-      return { ...counts, [tagId]: Number(counts[tagId] || 0) + 1 };
-    }, {});
-  }
-  return value || {};
-};
-
-const IconPill = ({ children, title, tone = "slate" }) => {
-  const toneClass = tone === "amber"
-    ? "border-amber-700 text-amber-200"
-    : tone === "teal"
-      ? "border-teal-700 text-teal-200"
-      : "border-slate-700 text-slate-300";
-  return (
-    <span className={`inline-flex h-7 min-w-7 items-center justify-center rounded-md border px-2 text-[0.65rem] font-semibold ${toneClass}`} title={title}>
-      {children}
-    </span>
-  );
-};
-
-const CardMini = ({ card, tagLookup, exhausted = false, onExhaust, canExhaust = false, onPropose, canPropose = false }) => {
-  const data = card?.data || {};
-  const cost = data.cost || {};
-  const exhaust = manualActionMana(data);
-  const manualEffects = manualActionEffects(data);
-  const manualNode = manualActionNode(data);
-  const preconditions = manualNode?.preconditions || {};
-  const preconditionTags = countRepeatedTags(preconditions.empire_tags || preconditions.required_empire_tags);
-  const tags = data.tags || {};
-  const requirements = Array.isArray(data.requirements) ? data.requirements : [];
-  const hasExhaust = manualEffects.length > 0;
-  const exhaustStripClass = "mt-3 flex w-full flex-wrap items-center gap-2 border-t border-slate-800 pt-3 text-left";
-  const exhaustContents = (
-    <>
-      <div className="flex flex-wrap items-center gap-1.5">
-        {Object.entries(preconditionTags).map(([tagId, count]) => (
-          <TagIcon key={tagId} tag={tagLookup[normalize(tagId)]} label={tagId} count={count} />
-        ))}
-        {preconditions.exhaust ? (
-          <IconPill title={exhausted ? "Exhausted" : "Exhaust"} tone="amber">
-            <Zap className="h-3.5 w-3.5" aria-hidden="true" />
-          </IconPill>
-        ) : null}
-      </div>
-      <span className="text-sm font-semibold text-slate-500">:</span>
-      <div className="flex flex-wrap items-center gap-1.5">
-        {Object.entries(exhaust).map(([tagId, count]) => (
-          <TagIcon key={tagId} tag={tagLookup[normalize(tagId)]} label={tagId} count={count} />
-        ))}
-        {manualEffects.map((effect, index) => {
-          if (effect.effect_type === "draw_card") {
-            return (
-              <IconPill key={index} title={`Draw ${Number(effect.payload?.amount || 1)} card(s)`}>
-                <ScrollText className="h-3.5 w-3.5" aria-hidden="true" />
-                {Number(effect.payload?.amount || 1) > 1 ? <span className="ml-1">{Number(effect.payload?.amount || 1)}</span> : null}
-              </IconPill>
-            );
-          }
-          if (effect.effect_type === "ready_building") {
-            return (
-              <IconPill key={index} title="Ready a building" tone="teal">
-                <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
-              </IconPill>
-            );
-          }
-          return null;
-        })}
-      </div>
-    </>
-  );
-
-  return (
-    <article className={`flex min-h-[12rem] flex-col rounded-lg border bg-slate-950 p-3 ${exhausted ? "border-amber-600/70 opacity-70" : "border-slate-800"}`}>
-      <div className="flex flex-wrap items-center gap-1.5">
-        <span className="rounded-md border border-slate-700 px-2 py-1 text-[0.65rem] font-semibold text-slate-300">
-          T{data.tier || 0}
-        </span>
-        {Object.entries(cost).map(([tagId, count]) => (
-          <TagIcon key={tagId} tag={tagLookup[normalize(tagId)]} label={tagId} count={count} />
-        ))}
-      </div>
-
-      <h3 className="mt-3 text-sm font-semibold text-white">{card?.name || "Unknown Card"}</h3>
-      <p className="mt-1 text-[0.7rem] uppercase tracking-normal text-slate-500">{card?.category || "uncategorized"}</p>
-
-      <div className="mt-3 min-h-[2rem] space-y-1">
-        {requirements.map((requirement, index) => (
-          requirement?.type === "not_condition" ? (
-            <div key={index} className="flex flex-wrap items-center gap-1">
-              <span className="rounded-md border border-rose-700 px-2 py-1 text-[0.65rem] font-semibold text-rose-300">NO</span>
-              <TagIcon tag={tagLookup[normalize(requirement.tag_id)]} label={requirement.tag_id} />
-            </div>
-          ) : (
-            <span key={index} className="inline-flex rounded-md border border-slate-700 px-2 py-1 text-[0.65rem] font-semibold text-slate-300">
-              HAS {String(requirement.card_id || "").toUpperCase()}
-            </span>
-          )
-        ))}
-      </div>
-
-      <div className="mt-auto flex flex-wrap gap-1.5 pt-3">
-        {tagEntries(tags).map(([tagId, count]) => (
-          <TagIcon key={tagId} tag={tagLookup[normalize(tagId)]} label={tagId} count={count || null} />
-        ))}
-      </div>
-
-      {hasExhaust ? (
-        canExhaust ? (
-          <button
-            className={`${exhaustStripClass} rounded-md hover:bg-amber-300/10 disabled:cursor-not-allowed disabled:opacity-50`}
-            disabled={exhausted}
-            onClick={onExhaust}
-            type="button"
-          >
-            {exhaustContents}
-          </button>
-        ) : (
-          <div className={exhaustStripClass}>{exhaustContents}</div>
-        )
-      ) : null}
-
-      {canPropose ? (
-        <button
-          className="mt-3 inline-flex items-center justify-center gap-2 rounded-md bg-teal-400 px-3 py-2 text-xs font-semibold text-slate-950 hover:bg-teal-300"
-          onClick={onPropose}
-          type="button"
-        >
-          <Hand className="h-4 w-4" aria-hidden="true" />
-          Project
-        </button>
-      ) : null}
-    </article>
-  );
-};
-
 const ProjectCard = ({ project, card, tagLookup, focusedPlayer, onAssign, canAssign = () => false }) => {
   const cost = card?.data?.cost || {};
   const contributions = project.contributions || {};
@@ -206,11 +36,21 @@ const ProjectCard = ({ project, card, tagLookup, focusedPlayer, onAssign, canAss
       <div className="mt-3 flex flex-wrap gap-1.5">
         {Object.entries(cost).map(([tagId, required]) => {
           const current = Number(contributions[tagId] || 0);
+          const requiredCount = Math.max(0, Number(required) || 0);
           const available = Number(focusedPlayer?.mana?.[tagId] || 0);
-          const complete = current >= Number(required);
+          const complete = current >= requiredCount;
           return (
-            <span key={tagId} className="inline-flex items-center gap-1 rounded-md border border-slate-700 px-2 py-1">
-              <TagIcon tag={tagLookup[normalize(tagId)]} label={tagId} count={`${current}/${required}`} />
+            <span key={tagId} className="inline-flex items-center gap-1 rounded-md border border-slate-700 px-2 py-1" title={`${current}/${requiredCount} ${tagId}`}>
+              <span className="inline-flex items-center gap-0.5">
+                {Array.from({ length: requiredCount }).map((_, index) => (
+                  <TagIcon
+                    key={`${tagId}-${index}`}
+                    tag={tagLookup[normalize(tagId)]}
+                    label={tagId}
+                    className={index < current ? "opacity-100" : "opacity-35"}
+                  />
+                ))}
+              </span>
               <button
                 className="rounded bg-slate-800 px-1.5 py-0.5 text-[0.65rem] font-semibold text-slate-200 hover:bg-slate-700 disabled:opacity-35"
                 disabled={complete || available <= 0 || !canAssign(project.id, tagId)}
@@ -243,6 +83,140 @@ const BuildOptionCard = ({ card, cityName, onBuild, disabled = false }) => (
   </button>
 );
 
+const FaceDownEventCard = ({ canPeek = false, onPeek, disabled = false }) => (
+  <article className="flex aspect-[5/7] w-[clamp(12rem,16vw,15rem)] shrink-0 flex-col items-center justify-center rounded-lg border border-amber-900/70 bg-stone-950 p-4 text-center shadow-xl">
+    <div className="flex h-16 w-16 items-center justify-center rounded-full border border-amber-800 bg-stone-900">
+      <ScrollText className="h-8 w-8 text-amber-700" aria-hidden="true" />
+    </div>
+    <p className="mt-4 text-sm font-bold uppercase tracking-normal text-amber-100">Event</p>
+    <p className="mt-1 text-xs text-amber-800">Face down</p>
+    {canPeek ? (
+      <button
+        className="mt-5 inline-flex items-center gap-2 rounded-md border border-amber-700 px-2 py-1.5 text-xs font-semibold text-amber-100 hover:bg-amber-950/50 disabled:opacity-60"
+        disabled={disabled}
+        onClick={onPeek}
+        type="button"
+      >
+        <Eye className="h-3.5 w-3.5" aria-hidden="true" />
+        Reconnaissance
+      </button>
+    ) : null}
+  </article>
+);
+
+const slotPosition = (index, total) => {
+  const fixed = [
+    { x: 0, y: -1 },
+    { x: 1, y: 0 },
+    { x: 0, y: 1 },
+    { x: -1, y: 0 },
+    { x: 1, y: -1 },
+    { x: 1, y: 1 },
+    { x: -1, y: 1 },
+    { x: -1, y: -1 },
+  ];
+  if (index < fixed.length) return fixed[index];
+  const angle = ((index - fixed.length) / Math.max(1, total - fixed.length)) * Math.PI * 2 - Math.PI / 2;
+  return { x: Math.cos(angle) * 1.45, y: Math.sin(angle) * 1.45 };
+};
+
+const CityMapZone = ({
+  cityEntry,
+  cityCard,
+  cardLookup,
+  tagLookup,
+  buildActions,
+  activePlayer,
+  busy,
+  hasAction,
+  action,
+}) => {
+  const exhaustedIds = cityEntry.exhausted_card_ids || [];
+  const cityCardId = cityEntry.city_card_id || cityEntry.foundation_card_id;
+  const buildingSlots = Number(cityEntry.building_slots ?? cityCard?.data?.building_slots ?? 0);
+  const placedCards = (cityEntry.cards || []).map((cardId, index) => ({ type: "card", cardId, index }));
+  const buildOptions = (buildActions || []).map((entry, index) => ({ type: "build", entry, index }));
+  const slotItems = [...placedCards, ...buildOptions];
+  const visibleSlotCount = Math.max(buildingSlots, slotItems.length, 4);
+  const radiusX = 210;
+  const radiusY = 290;
+
+  return (
+    <section className="relative h-[54rem] w-[40rem] shrink-0 rounded-xl border border-amber-900/60 bg-stone-950/70 shadow-2xl">
+      <div className="absolute left-5 top-5 z-10 rounded-md border border-amber-900/70 bg-stone-950/90 px-3 py-2">
+        <div className="flex items-center gap-2">
+          <Landmark className="h-4 w-4 text-amber-300" aria-hidden="true" />
+          <h2 className="text-sm font-bold text-amber-50">{cityEntry.name || "City"}</h2>
+        </div>
+        <p className="mt-1 text-[0.68rem] text-amber-700">
+          Buildings {cityEntry.cards?.length || 0}/{buildingSlots || visibleSlotCount}
+        </p>
+      </div>
+
+      <div className="absolute left-1/2 top-1/2 z-20 -translate-x-1/2 -translate-y-1/2">
+        {cityCardId ? (
+          <div className="rounded-xl border border-amber-600/50 bg-amber-950/20 p-2">
+            <CardVisual
+              card={cityCard}
+              tagLookup={tagLookup}
+              exhausted={exhaustedIds.includes(cityCardId)}
+              canExhaust={hasAction("exhaust_card", (entry) => entry.card_id === cityCardId && entry.city_id === cityEntry.id)}
+              disabled={busy}
+              onExhaust={() => action("/actions/exhaust", {
+                player_id: activePlayer.id,
+                city_id: cityEntry.id,
+                card_id: cityCardId,
+              })}
+            />
+          </div>
+        ) : (
+          <div className="flex aspect-[5/7] w-[12rem] items-center justify-center rounded-xl border border-dashed border-amber-900/80 bg-stone-950 text-sm text-amber-800">
+            Empty City
+          </div>
+        )}
+      </div>
+
+      {Array.from({ length: visibleSlotCount }).map((_, index) => {
+        const position = slotPosition(index, visibleSlotCount);
+        const item = slotItems[index];
+        return (
+          <div
+            key={index}
+            className="absolute left-1/2 top-1/2 flex aspect-[5/7] w-[11rem] -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-xl border border-dashed border-amber-900/55 bg-stone-900/45 p-2"
+            style={{ transform: `translate(calc(-50% + ${position.x * radiusX}px), calc(-50% + ${position.y * radiusY}px))` }}
+          >
+            {item?.type === "card" ? (
+              <CardVisual
+                card={cardLookup[normalize(item.cardId)]}
+                tagLookup={tagLookup}
+                exhausted={exhaustedIds.includes(item.cardId)}
+                canExhaust={hasAction("exhaust_card", (entry) => entry.card_id === item.cardId && entry.city_id === cityEntry.id)}
+                disabled={busy}
+                onExhaust={() => action("/actions/exhaust", { player_id: activePlayer.id, city_id: cityEntry.id, card_id: item.cardId })}
+              />
+            ) : item?.type === "build" ? (
+              <div className="opacity-65 transition hover:opacity-100">
+                <BuildOptionCard
+                  card={cardLookup[normalize(item.entry.card_id)]}
+                  cityName={cityEntry.name || "city"}
+                  disabled={busy}
+                  onBuild={() => action("/actions/build-project", {
+                    player_id: activePlayer.id,
+                    project_id: item.entry.project_id,
+                    city_id: item.entry.city_id,
+                  })}
+                />
+              </div>
+            ) : (
+              <span className="text-xs font-semibold uppercase text-amber-900/80">Slot</span>
+            )}
+          </div>
+        );
+      })}
+    </section>
+  );
+};
+
 const GameRoomPage = () => {
   const { roomId } = useParams();
   const { token } = useStore();
@@ -253,6 +227,8 @@ const GameRoomPage = () => {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [ending, setEnding] = useState(false);
+  const [boardZoom, setBoardZoom] = useState(0.9);
+  const [peekedEventId, setPeekedEventId] = useState("");
 
   const loadGame = useCallback(async () => {
     if (!token || !roomId) return;
@@ -298,19 +274,13 @@ const GameRoomPage = () => {
   const selectedMinistries = gameState?.selected_ministries || {};
   const buildActions = possibleActions.filter((entry) => entry.type === "build_project");
   const newCityBuildActions = buildActions.filter((entry) => entry.city_id === "__new_city__");
-  const citiesWithGroups = useMemo(() => cities.map((cityEntry) => {
-    const groups = {};
-    for (const cardId of cityEntry.cards || []) {
-      const card = cardLookup[normalize(cardId)];
-      const category = card?.category || "uncategorized";
-      groups[category] = [...(groups[category] || []), cardId];
-    }
-    return {
-      city: cityEntry,
-      buildActions: buildActions.filter((entry) => entry.city_id === cityEntry.id),
-      groups: Object.entries(groups).sort(([left], [right]) => left.localeCompare(right)),
-    };
-  }), [buildActions, cardLookup, cities]);
+  const cityZones = useMemo(() => cities.map((cityEntry) => ({
+    city: cityEntry,
+    cityCard: cardLookup[normalize(cityEntry.city_card_id || cityEntry.foundation_card_id)],
+    buildActions: buildActions.filter((entry) => entry.city_id === cityEntry.id),
+  })), [buildActions, cardLookup, cities]);
+  const boardBaseWidth = Math.max(920, cityZones.length * 720);
+  const boardBaseHeight = 850;
 
   const action = async (path, payload) => {
     if (!token || busy) return;
@@ -329,8 +299,10 @@ const GameRoomPage = () => {
       if (!response.ok) throw new Error(nextState.detail || "Action failed.");
       setGameState(nextState);
       setFocusedPlayerId(nextState.active_player_id || nextState.players?.[0]?.id || "");
+      return nextState;
     } catch (actionError) {
       setError(actionError.message || "Action failed.");
+      return null;
     } finally {
       setBusy(false);
     }
@@ -341,6 +313,8 @@ const GameRoomPage = () => {
 
   const canContinuePhase = hasAction("continue_phase");
   const canPass = activePlayer && hasAction("pass", (entry) => entry.player_id === activePlayer.id);
+  const ministryChoiceActions = possibleActions.filter((entry) => entry.type === "choose_ministry" && entry.player_id === activePlayer?.id);
+  const peekedEvent = peekedEventId ? eventLookup[normalize(peekedEventId)] : null;
 
   const endGame = async () => {
     if (!token || !roomId || ending) return;
@@ -429,8 +403,27 @@ const GameRoomPage = () => {
               <div>
                 <p className="text-xs font-semibold uppercase tracking-normal text-slate-500">Current Phase</p>
                 <h1 className="mt-1 text-xl font-semibold capitalize text-white">{phase.replace(/_/g, " ")}</h1>
+                {phase === "crisis" ? <p className="mt-1 text-xs text-slate-500">Step {gameState.crisis_step || 1}</p> : null}
+                {phase === "council" ? <p className="mt-1 text-xs text-slate-500">Active choice: {activePlayer?.name || "None"}</p> : null}
               </div>
-              {canContinuePhase ? (
+              {phase === "council" && ministryChoiceActions.length ? (
+                <div className="flex flex-wrap gap-2">
+                  {ministryChoiceActions.map((choice) => {
+                    const ministry = ministryLookup[normalize(choice.ministry_id)];
+                    return (
+                      <button
+                        key={choice.ministry_id}
+                        className="rounded-md border border-amber-800 bg-stone-950 px-3 py-2 text-left text-sm font-semibold text-amber-100 hover:bg-amber-950/40 disabled:opacity-60"
+                        disabled={busy}
+                        onClick={() => action("/actions/choose-ministry", { player_id: choice.player_id, ministry_id: choice.ministry_id })}
+                        type="button"
+                      >
+                        {ministry?.name || choice.ministry_id}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : canContinuePhase ? (
                 <button
                   className="rounded-md bg-teal-400 px-3 py-2 text-sm font-semibold text-slate-950 hover:bg-teal-300 disabled:opacity-60"
                   disabled={busy}
@@ -444,7 +437,7 @@ const GameRoomPage = () => {
           ) : null}
 
           <div className="grid flex-1 gap-4 p-4 xl:grid-cols-[minmax(0,1fr)_20rem]">
-            <div className="space-y-4">
+            <div className="min-w-0 space-y-4">
               <section className="rounded-lg border border-slate-800 bg-slate-900 p-4">
                 <div className="flex items-center justify-between gap-3">
                   <div>
@@ -459,26 +452,28 @@ const GameRoomPage = () => {
                   {(gameState.event_queue || []).map((eventId, index) => {
                     const event = eventLookup[normalize(eventId)];
                     const canPeekEvent = hasAction("peek_event", (entry) => entry.event_id === eventId && entry.player_id === activePlayer?.id);
+                    const faceUp = phase === "crisis" && Number(gameState.crisis_step || 0) === 3 && gameState.face_up_event_id === eventId;
                     return (
-                      <CatalogItemVisual
-                        key={`${eventId}-${index}`}
-                        entry={event || { id: eventId, name: eventId, kind: "events", data: {} }}
-                        tags={gameState.catalog?.tags || []}
-                        ministries={ministries}
-                        pillars={gameState.catalog?.pillars || []}
-                        effectIcons={gameState.catalog?.effect_icons || []}
-                        actions={canPeekEvent ? (
-                          <button
-                            className="inline-flex items-center gap-2 rounded-md border border-amber-700 px-2 py-1.5 text-xs font-semibold text-amber-100 hover:bg-amber-950/50 disabled:opacity-60"
-                            disabled={busy}
-                            onClick={() => action("/actions/peek-event", { player_id: activePlayer.id, event_id: eventId })}
-                            type="button"
-                          >
-                            <Eye className="h-3.5 w-3.5" aria-hidden="true" />
-                            Reconnaissance
-                          </button>
-                        ) : null}
-                      />
+                      faceUp ? (
+                        <CatalogItemVisual
+                          key={`${eventId}-${index}`}
+                          entry={event || { id: eventId, name: eventId, kind: "events", data: {} }}
+                          tags={gameState.catalog?.tags || []}
+                          ministries={ministries}
+                          pillars={gameState.catalog?.pillars || []}
+                          effectIcons={gameState.catalog?.effect_icons || []}
+                        />
+                      ) : (
+                        <FaceDownEventCard
+                          key={`${eventId}-${index}`}
+                          canPeek={canPeekEvent}
+                          disabled={busy}
+                          onPeek={async () => {
+                            const nextState = await action("/actions/peek-event", { player_id: activePlayer.id, event_id: eventId });
+                            if (nextState) setPeekedEventId(eventId);
+                          }}
+                        />
+                      )
                     );
                   })}
                   {(gameState.event_queue || []).length === 0 ? (
@@ -487,76 +482,59 @@ const GameRoomPage = () => {
                 </div>
               </section>
 
-              {citiesWithGroups.map(({ city: cityEntry, buildActions: cityBuildActions, groups }) => {
-                const exhaustedIds = cityEntry.exhausted_card_ids || [];
-                const cityCardId = cityEntry.city_card_id || cityEntry.foundation_card_id;
-                const buildingSlots = Number(cityEntry.building_slots ?? cardLookup[normalize(cityCardId)]?.data?.building_slots ?? 0);
-                return (
-                  <section key={cityEntry.id} className="rounded-lg border border-slate-800 bg-slate-900 p-4">
-                    <div className="flex items-center gap-2">
-                      <Landmark className="h-5 w-5 text-teal-300" aria-hidden="true" />
-                      <div>
-                        <h1 className="text-xl font-semibold text-white">{cityEntry.name || "City"}</h1>
-                        <p className="text-xs text-slate-500">
-                          Active player: {activePlayer?.name || "None"}
-                          {buildingSlots ? ` · Buildings ${cityEntry.cards?.length || 0}/${buildingSlots}` : ""}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                      {cityCardId ? (
-                        <CardMini
-                          card={cardLookup[normalize(cityCardId)]}
+              <section className="overflow-hidden rounded-lg border border-slate-800 bg-slate-900">
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 p-4">
+                  <div>
+                    <h1 className="font-semibold text-white">Empire Map</h1>
+                    <p className="text-xs text-slate-500">Active player: {activePlayer?.name || "None"}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-700 text-slate-200 hover:bg-slate-800"
+                      onClick={() => setBoardZoom((value) => Math.max(0.6, Number((value - 0.1).toFixed(2))))}
+                      type="button"
+                    >
+                      <Minus className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                    <span className="w-12 text-center text-xs font-semibold text-slate-400">{Math.round(boardZoom * 100)}%</span>
+                    <button
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-700 text-slate-200 hover:bg-slate-800"
+                      onClick={() => setBoardZoom((value) => Math.min(1.25, Number((value + 0.1).toFixed(2))))}
+                      type="button"
+                    >
+                      <Plus className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                  </div>
+                </div>
+                <div className="h-[35rem] overflow-auto bg-stone-950/60 p-6">
+                  <div className="relative" style={{ width: boardBaseWidth * boardZoom, height: boardBaseHeight * boardZoom }}>
+                    <div
+                      className="absolute left-0 top-0 flex origin-top-left items-center gap-12 pr-12"
+                      style={{ transform: `scale(${boardZoom})`, width: boardBaseWidth, height: boardBaseHeight }}
+                    >
+                      {cityZones.map(({ city: cityEntry, cityCard, buildActions: cityBuildActions }) => (
+                        <CityMapZone
+                          key={cityEntry.id}
+                          cityEntry={cityEntry}
+                          cityCard={cityCard}
+                          cardLookup={cardLookup}
                           tagLookup={tagLookup}
-                          exhausted={exhaustedIds.includes(cityCardId)}
-                          canExhaust={hasAction("exhaust_card", (entry) => entry.card_id === cityCardId && entry.city_id === cityEntry.id)}
-                          onExhaust={() => action("/actions/exhaust", {
-                            player_id: activePlayer.id,
-                            city_id: cityEntry.id,
-                            card_id: cityCardId,
-                          })}
-                        />
-                      ) : null}
-                      {cityBuildActions.map((entry) => (
-                        <BuildOptionCard
-                          key={`${entry.project_id}-${entry.city_id}`}
-                          card={cardLookup[normalize(entry.card_id)]}
-                          cityName={cityEntry.name || "city"}
-                          disabled={busy}
-                          onBuild={() => action("/actions/build-project", {
-                            player_id: activePlayer.id,
-                            project_id: entry.project_id,
-                            city_id: entry.city_id,
-                          })}
+                          buildActions={cityBuildActions}
+                          activePlayer={activePlayer}
+                          busy={busy}
+                          hasAction={hasAction}
+                          action={action}
                         />
                       ))}
+                      {cityZones.length === 0 ? (
+                        <section className="rounded-lg border border-slate-800 bg-slate-900 p-6 text-sm text-slate-500">
+                          No city zones available.
+                        </section>
+                      ) : null}
                     </div>
-
-                    {groups.map(([category, cardIds]) => (
-                      <div key={category} className="mt-5 space-y-3">
-                        <h2 className="border-b border-slate-800 pb-2 text-sm font-semibold uppercase tracking-normal text-slate-400">{category}</h2>
-                        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                          {cardIds.map((cardId, index) => (
-                            <CardMini
-                              key={`${cardId}-${index}`}
-                              card={cardLookup[normalize(cardId)]}
-                              tagLookup={tagLookup}
-                              exhausted={exhaustedIds.includes(cardId)}
-                              canExhaust={hasAction("exhaust_card", (entry) => entry.card_id === cardId && entry.city_id === cityEntry.id)}
-                              onExhaust={() => action("/actions/exhaust", { player_id: activePlayer.id, city_id: cityEntry.id, card_id: cardId })}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </section>
-                );
-              })}
-              {citiesWithGroups.length === 0 ? (
-                <section className="rounded-lg border border-slate-800 bg-slate-900 p-6 text-sm text-slate-500">
-                  No city zones available.
-                </section>
-              ) : null}
+                  </div>
+                </div>
+              </section>
               {newCityBuildActions.length ? (
                 <section className="rounded-lg border border-teal-900/70 bg-teal-950/20 p-4">
                   <div className="flex items-center gap-2">
@@ -597,7 +575,6 @@ const GameRoomPage = () => {
                       project_id: projectId,
                       tag_id: tagId,
                       amount: 1,
-                      city_id: city?.id || "capital",
                     })}
                     canAssign={(projectId, tagId) => hasAction("assign_mana", (entry) => entry.project_id === projectId && entry.tag_id === tagId)}
                   />
@@ -662,12 +639,14 @@ const GameRoomPage = () => {
             <div className="mt-4 grid gap-5 xl:grid-cols-2">
               <section>
                 <h3 className="mb-2 text-sm font-semibold uppercase tracking-normal text-slate-500">Hand</h3>
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div className="flex flex-wrap gap-3">
                   {(focusedPlayer?.hand || []).map((cardId, index) => (
-                    <CardMini
+                    <CardVisual
                       key={`${cardId}-${index}`}
                       card={cardLookup[normalize(cardId)]}
                       tagLookup={tagLookup}
+                      size="hand"
+                      disabled={busy}
                       canPropose={hasAction("propose_project", (entry) => entry.card_id === cardId && entry.player_id === focusedPlayer?.id && entry.source === "hand")}
                       onPropose={() => action("/actions/propose", { player_id: focusedPlayer.id, card_id: cardId })}
                     />
@@ -679,12 +658,14 @@ const GameRoomPage = () => {
               </section>
               <section>
                 <h3 className="mb-2 text-sm font-semibold uppercase tracking-normal text-slate-500">Common Pool</h3>
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div className="flex flex-wrap gap-3">
                   {(gameState.common_pool || []).map((cardId, index) => (
-                    <CardMini
+                    <CardVisual
                       key={`${cardId}-${index}`}
                       card={cardLookup[normalize(cardId)]}
                       tagLookup={tagLookup}
+                      size="hand"
+                      disabled={busy}
                       canPropose={hasAction("propose_project", (entry) => entry.card_id === cardId && entry.player_id === focusedPlayer?.id && entry.source === "common_pool")}
                       onPropose={() => action("/actions/propose", { player_id: focusedPlayer.id, card_id: cardId })}
                     />
@@ -698,6 +679,27 @@ const GameRoomPage = () => {
           </section>
         </section>
       </div>
+      {peekedEventId ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-6">
+          <div className="relative max-h-full max-w-[min(92vw,36rem)] overflow-auto rounded-xl border border-amber-900 bg-stone-950 p-5 shadow-2xl">
+            <button
+              className="absolute right-3 top-3 inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-700 text-slate-200 hover:bg-slate-800"
+              onClick={() => setPeekedEventId("")}
+              type="button"
+            >
+              <X className="h-4 w-4" aria-hidden="true" />
+            </button>
+            <p className="mb-3 pr-10 text-xs font-semibold uppercase tracking-normal text-amber-700">Reconnaissance</p>
+            <CatalogItemVisual
+              entry={peekedEvent || { id: peekedEventId, name: peekedEventId, kind: "events", data: {} }}
+              tags={gameState.catalog?.tags || []}
+              ministries={ministries}
+              pillars={gameState.catalog?.pillars || []}
+              effectIcons={gameState.catalog?.effect_icons || []}
+            />
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 };

@@ -183,6 +183,8 @@ PHASE 1: THE COUNCIL & THE SHADOWS
 
 This phase establishes the year’s leadership, resources, and incoming threats.
 
+The Imperial Rotation: At the start of each new year, the Minister of the Empire role passes to the next player in turn order.
+
 The Event Scroll: The Event Queue advances.
 
 The face-down card sitting in Step 3 is moved into the Active Crisis Zone (it will be flipped and resolved in Phase 3).
@@ -191,11 +193,11 @@ The card in Step 2 slides to Step 3.
 
 The card in Step 1 slides to Step 2.
 
-A new card is drawn face-down from the Event Deck and placed into Step 1.
+A new card is drawn face-down from the Event Deck and placed into Step 1. Events in the queue remain face-down; only the event in Step 3 is flipped face-up during Crisis Resolution.
 
 The Imperial Block: The player holding the Minister of the Empire role selects one player. That player is blocked from the Council for the year. They cannot draft a Ministry and operate as a standard Citizen.
 
-The Ministry Draft: Starting clockwise from the Minister of the Empire, all eligible players (excluding the blocked Citizen) select one available Ministry role card.
+The Ministry Draft: Starting with the next player after the Minister of the Empire and proceeding in turn order, all eligible players (excluding the blocked Citizen) select one available Ministry role card.
 
 The Draw: All players (including the Citizen) draw exactly 1 card from the Empire Deck into their private hand.
 

@@ -12,6 +12,7 @@ from backend.app.admin_router import (
     admin_export_catalog,
     admin_import_catalog,
     admin_get_user_detail,
+    admin_search_catalog_entries,
     admin_list_agendas,
     admin_list_audit_logs,
     admin_list_cards,
@@ -308,14 +309,126 @@ def test_admin_can_create_update_and_delete_catalog_entries(tmp_path):
         assert updated.category == "volatile"
         assert updated.data["scope"] == "global"
 
-        deleted = asyncio.run(admin_delete_catalog_entry("tags", "naval", _admin=admin, db=db))
+        renamed = asyncio.run(
+            admin_update_catalog_entry(
+                "tags",
+                "naval",
+                AdminCatalogEntryUpdate(
+                    id="fleet-power",
+                    name="Fleet Power",
+                    category="ignored",
+                    color="#1d4ed8",
+                    data={"resource_type": "volatile"},
+                ),
+                _admin=admin,
+                db=db,
+            )
+        )
+        assert renamed.id == "fleet-power"
+        assert renamed.name == "Fleet Power"
+
+        derived = asyncio.run(
+            admin_update_catalog_entry(
+                "tags",
+                "fleet-power",
+                AdminCatalogEntryUpdate(
+                    id="",
+                    name="Fleet Command",
+                    category="ignored",
+                    color="#1d4ed8",
+                    data={"resource_type": "volatile"},
+                ),
+                _admin=admin,
+                db=db,
+            )
+        )
+        assert derived.id == "fleet-command"
+
+        asyncio.run(
+            admin_create_catalog_entry(
+                "images",
+                AdminCatalogEntryCreate(id="occupied-id", name="Occupied", category="image", data={}),
+                _admin=admin,
+                db=db,
+            )
+        )
+        with pytest.raises(HTTPException) as exc_info:
+            asyncio.run(
+                admin_update_catalog_entry(
+                    "tags",
+                    "fleet-command",
+                    AdminCatalogEntryUpdate(
+                        id="occupied-id",
+                        name="Fleet Command",
+                        category="ignored",
+                        color="#1d4ed8",
+                        data={"resource_type": "volatile"},
+                    ),
+                    _admin=admin,
+                    db=db,
+                )
+            )
+        assert exc_info.value.status_code == 400
+        assert "images:occupied-id" in exc_info.value.detail
+
+        deleted = asyncio.run(admin_delete_catalog_entry("tags", "fleet-command", _admin=admin, db=db))
         assert deleted.status == "ok"
 
         tags = asyncio.run(admin_list_tags(_admin=admin, db=db))
-        assert all(entry.id != "naval" for entry in tags)
+        assert all(entry.id != "fleet-command" for entry in tags)
 
         logs = asyncio.run(admin_list_audit_logs(query="catalog_entry", _admin=admin, db=db))
-        assert len(logs) == 3
+        assert len(logs) == 6
+
+
+def test_catalog_inspector_finds_cross_kind_id_conflicts(tmp_path):
+    session_factory = build_test_session(f"sqlite:///{tmp_path / 'catalog_inspector.db'}")
+    with session_factory() as db:
+        admin = ensure_user_bootstrap(
+            db,
+            create_registered_user(db, "admin@test.local", "verysecurepassword"),
+            force_admin=True,
+        )
+
+        asyncio.run(
+            admin_create_catalog_entry(
+                "tags",
+                AdminCatalogEntryCreate(
+                    id="pillar-of-morale",
+                    name="Pillar of Morale",
+                    category="permanent",
+                    color="#64748b",
+                    data={"resource_type": "permanent"},
+                ),
+                _admin=admin,
+                db=db,
+            )
+        )
+
+        with pytest.raises(HTTPException) as exc_info:
+            asyncio.run(
+                admin_create_catalog_entry(
+                    "pillars",
+                    AdminCatalogEntryCreate(
+                        id="pillar-of-morale",
+                        name="Pillar of Morale",
+                        category="pillar",
+                        data={"min": 0, "max": 10},
+                    ),
+                    _admin=admin,
+                    db=db,
+                )
+            )
+
+        assert exc_info.value.status_code == 400
+        assert "tags:pillar-of-morale" in exc_info.value.detail
+
+        matches = asyncio.run(admin_search_catalog_entries(query="pillar-of-morale", _admin=admin, db=db))
+        assert [(entry.kind, entry.id) for entry in matches] == [("tags", "pillar-of-morale")]
+
+        deleted = asyncio.run(admin_delete_catalog_entry("tags", "pillar-of-morale", _admin=admin, db=db))
+        assert deleted.status == "ok"
+        assert asyncio.run(admin_search_catalog_entries(query="pillar-of-morale", _admin=admin, db=db)) == []
 
 
 def test_admin_can_export_and_import_catalog_entries(tmp_path):
