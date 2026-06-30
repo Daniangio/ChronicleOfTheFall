@@ -25,6 +25,8 @@ class Settings(BaseSettings):
     CHAT_HISTORY_LIMIT: int = 80
 
     CORS_ALLOW_ORIGINS: str = "*"
+    IMAGE_STORAGE_DIR: str = "backend/data/images"
+    IMAGE_PUBLIC_PATH: str = "/media/images"
 
 
 settings = Settings()

@@ -25,6 +25,7 @@ from backend.app.admin_router import (
     admin_list_pillars,
     admin_list_tags,
     admin_list_users,
+    admin_upload_image_asset,
     admin_update_catalog_entry,
     admin_update_user_admin_flag,
     require_admin,
@@ -37,6 +38,7 @@ from backend.app.schemas import (
     AdminCatalogImportPayload,
     AdminUserAdminUpdate,
 )
+from backend.app.server_models import User
 from backend.app.user_repository import create_registered_user
 
 
@@ -150,6 +152,63 @@ def test_new_database_catalog_starts_empty(tmp_path):
         assert decks == []
 
 
+def test_admin_can_manage_effect_icons(tmp_path):
+    session_factory = build_test_session(f"sqlite:///{tmp_path / 'effect_icons.db'}")
+    with session_factory() as db:
+        admin = ensure_user_bootstrap(
+            db,
+            create_registered_user(db, "admin@test.local", "verysecurepassword"),
+            force_admin=True,
+        )
+
+        created = asyncio.run(
+            admin_create_catalog_entry(
+                "effect-icons",
+                AdminCatalogEntryCreate(
+                    id="discard-card",
+                    name="discard-card.png",
+                    category="effect-icon",
+                    summary="",
+                    data={
+                        "effect_type": "discard_card",
+                        "icon_image_id": "discard-card",
+                        "icon": "data:image/png;base64,AA==",
+                    },
+                ),
+                _admin=admin,
+                db=db,
+            )
+        )
+        assert created.id == "discard-card"
+        assert created.kind == "effect-icons"
+        assert created.name == "discard-card.png"
+        assert created.category == "effect-icon"
+
+        effect_icons = asyncio.run(admin_list_effect_icons(_admin=admin, db=db))
+        assert [entry.id for entry in effect_icons] == ["discard-card"]
+
+        updated = asyncio.run(
+            admin_update_catalog_entry(
+                "effect-icons",
+                "discard-card",
+                AdminCatalogEntryUpdate(
+                    name="discard-card-updated.png",
+                    category="effect-icon",
+                    summary="Shared event effect icon.",
+                    data={"effect_type": "discard_card", "icon_image_id": "discard-card-updated"},
+                ),
+                _admin=admin,
+                db=db,
+            )
+        )
+        assert updated.name == "discard-card-updated.png"
+        assert updated.summary == "Shared event effect icon."
+
+        deleted = asyncio.run(admin_delete_catalog_entry("effect-icons", "discard-card", _admin=admin, db=db))
+        assert deleted.status == "ok"
+        assert asyncio.run(admin_list_effect_icons(_admin=admin, db=db)) == []
+
+
 def test_admin_can_create_update_and_delete_catalog_entries(tmp_path):
     session_factory = build_test_session(f"sqlite:///{tmp_path / 'catalog_mutation.db'}")
     with session_factory() as db:
@@ -257,6 +316,91 @@ def test_admin_can_export_and_import_catalog_entries(tmp_path):
         assert next(entry for entry in tags if entry.id == "labor").name == "Labor Pool"
         assert next(entry for entry in tags if entry.id == "labor").category == "volatile"
         assert next(entry for entry in tags if entry.id == "stone").category == "permanent"
+
+
+def test_catalog_import_skips_unknown_kinds_and_strips_image_payloads(tmp_path):
+    session_factory = build_test_session(f"sqlite:///{tmp_path / 'catalog_sanitize.db'}")
+    with session_factory() as db:
+        admin = ensure_user_bootstrap(
+            db,
+            create_registered_user(db, "admin@test.local", "verysecurepassword"),
+            force_admin=True,
+        )
+
+        result = asyncio.run(
+            admin_import_catalog(
+                AdminCatalogImportPayload(
+                    kind="all",
+                    entries=[
+                        AdminCatalogImportEntry(
+                            id="legacy-domain",
+                            kind="event-types",
+                            name="Legacy Domain",
+                            data={},
+                        ),
+                        AdminCatalogImportEntry(
+                            id="war-icon",
+                            kind="images",
+                            name="war.png",
+                            category="image",
+                            data={"src": "data:image/png;base64,AA==", "path": "/tmp/war.png", "notes": "keep"},
+                        ),
+                        AdminCatalogImportEntry(
+                            id="war",
+                            kind="tags",
+                            name="War",
+                            category="permanent",
+                            color="#991b1b",
+                            data={
+                                "resource_type": "permanent",
+                                "icon": "/media/images/war.png",
+                                "domain_icon": "data:image/png;base64,AA==",
+                                "icon_image_id": "war-icon",
+                            },
+                        ),
+                    ],
+                ),
+                _admin=admin,
+                db=db,
+            )
+        )
+
+        assert result.created == 2
+        assert result.skipped == 1
+        images = asyncio.run(admin_list_images(_admin=admin, db=db))
+        tags = asyncio.run(admin_list_tags(_admin=admin, db=db))
+        assert images[0].data == {"notes": "keep"}
+        assert next(entry for entry in tags if entry.id == "war").data == {
+            "resource_type": "permanent",
+            "icon_image_id": "war-icon",
+        }
+
+        exported = asyncio.run(admin_export_catalog(kind="", _admin=admin, db=db))
+        exported_by_id = {entry["id"]: entry for entry in exported["entries"]}
+        assert exported_by_id["war-icon"]["data"] == {"notes": "keep"}
+        assert "icon" not in exported_by_id["war"]["data"]
+
+
+def test_admin_can_upload_image_asset(tmp_path, monkeypatch):
+    monkeypatch.setattr("backend.app.admin_router.settings.IMAGE_STORAGE_DIR", str(tmp_path / "images"))
+    monkeypatch.setattr("backend.app.admin_router.settings.IMAGE_PUBLIC_PATH", "/media/images")
+    admin = User(id="admin", username="admin@test.local", is_admin=True)
+
+    uploaded = asyncio.run(
+        admin_upload_image_asset(
+            payload={
+                "id": "Minister War",
+                "filename": "war-symbol.png",
+                "data_url": "data:image/png;base64,iVBORw0KGgo=",
+            },
+            _admin=admin,
+        )
+    )
+
+    assert uploaded["id"] == "minister-war"
+    assert uploaded["name"] == "war-symbol.png"
+    assert uploaded["src"] == "/media/images/minister-war.png"
+    assert (tmp_path / "images" / "minister-war.png").exists()
 
 
 def test_ministry_symbols_are_plain_metadata(tmp_path):

@@ -10,6 +10,16 @@ const normalize = (value) => String(value || "").trim().toLowerCase().replace(/[
 
 const buildLookup = (entries = []) => Object.fromEntries(entries.map((entry) => [normalize(entry.id), entry]));
 
+const withResolvedTagIcon = (tag, imageLookup = {}) => {
+  const imageId = tag?.data?.icon_image_id;
+  const imageSrc = imageLookup?.[imageId]?.data?.src;
+  if (!imageSrc || tag?.data?.icon) return tag;
+  return { ...tag, data: { ...(tag.data || {}), icon: imageSrc } };
+};
+
+const buildTagLookup = (tags = [], imageLookup = {}) =>
+  Object.fromEntries((tags || []).map((tag) => [normalize(tag.id), withResolvedTagIcon(tag, imageLookup)]));
+
 const tagEntries = (value) => {
   if (Array.isArray(value)) return value.map((tagId) => [tagId, null]);
   return Object.entries(value || {});
@@ -274,7 +284,8 @@ const GameRoomPage = () => {
   }, [loadGame]);
 
   const cardLookup = useMemo(() => buildLookup(gameState?.catalog?.cards || []), [gameState]);
-  const tagLookup = useMemo(() => buildLookup(gameState?.catalog?.tags || []), [gameState]);
+  const imageLookup = useMemo(() => buildLookup(gameState?.catalog?.images || []), [gameState]);
+  const tagLookup = useMemo(() => buildTagLookup(gameState?.catalog?.tags || [], imageLookup), [gameState, imageLookup]);
   const ministryLookup = useMemo(() => buildLookup(gameState?.catalog?.ministries || []), [gameState]);
   const ministries = gameState?.catalog?.ministries || [];
   const players = gameState?.players || [];

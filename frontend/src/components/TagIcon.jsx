@@ -1,4 +1,5 @@
 import { AlertTriangle, Badge, CircleDollarSign, Landmark, Sparkles } from "lucide-react";
+import { buildApiUrl } from "../utils/connection.js";
 
 const fallbackTagColor = "#64748b";
 
@@ -16,11 +17,17 @@ const normalizeLabel = (value) =>
     .trim()
     .toUpperCase();
 
+const assetSrc = (value) => {
+  const src = String(value || "");
+  if (!src || src.startsWith("data:") || /^https?:\/\//i.test(src)) return src;
+  return buildApiUrl(src);
+};
+
 const TagIcon = ({ tag, label, count = null, className = "" }) => {
   const color = tag?.color || fallbackTagColor;
   const text = normalizeLabel(tag?.name || label || tag?.id);
   const Icon = categoryIcons[String(tag?.category || "").toLowerCase()] || Sparkles;
-  const icon = tag?.data?.icon || "";
+  const icon = assetSrc(tag?.data?.icon || "");
   const numericCount = Number(count);
   const iconCount = Number.isFinite(numericCount) && numericCount > 0 ? Math.min(12, Math.floor(numericCount)) : 1;
   const countLabel = count !== null && count !== undefined && String(count) !== "1" ? String(count) : "";

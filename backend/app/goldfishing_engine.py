@@ -56,6 +56,7 @@ def build_goldfishing_state(
     ministry_entries: list[dict[str, Any]] | None = None,
     pillar_entries: list[dict[str, Any]] | None = None,
     effect_icon_entries: list[dict[str, Any]] | None = None,
+    image_entries: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     card_by_id = {entry["id"]: entry for entry in card_entries}
     draw_deck = Deck([
@@ -118,6 +119,7 @@ def build_goldfishing_state(
             "ministries": ministries,
             "pillars": pillar_entries or [],
             "effect_icons": effect_icon_entries or [],
+            "images": image_entries or [],
         },
         "decks": {
             "cards": card_deck_id,
@@ -409,6 +411,7 @@ def _ensure_state_defaults(state: dict[str, Any]) -> None:
     state.setdefault("catalog", {}).setdefault("ministries", [])
     state.setdefault("catalog", {}).setdefault("pillars", [])
     state.setdefault("catalog", {}).setdefault("effect_icons", [])
+    state.setdefault("catalog", {}).setdefault("images", [])
     state.setdefault("pillars", {"treasury": 5, "stability": 5, "morale": 5})
     if "minister_of_empire_player_id" not in state and state.get("players"):
         state["minister_of_empire_player_id"] = state["players"][0].get("id", "")

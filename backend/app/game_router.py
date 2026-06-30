@@ -48,6 +48,7 @@ async def create_game_room(
         ministries = [public_catalog_entry(entry) for entry in list_catalog_records(db, "ministries")]
         pillars = [public_catalog_entry(entry) for entry in list_catalog_records(db, "pillars")]
         effect_icons = [public_catalog_entry(entry) for entry in list_catalog_records(db, "effect-icons")]
+        images = [public_catalog_entry(entry) for entry in list_catalog_records(db, "images")]
         deck_records = list_catalog_records(db, "decks")
         card_deck = _deck_by_id(deck_records, payload.empire_deck_id) or _latest_deck(deck_records, "empire")
         event_deck = _deck_by_id(deck_records, payload.event_deck_id) or _latest_deck(deck_records, "events")
@@ -67,6 +68,7 @@ async def create_game_room(
             ministry_entries=ministries,
             pillar_entries=pillars,
             effect_icon_entries=effect_icons,
+            image_entries=images,
         )
         return await service.create_room(
             user=current_user,

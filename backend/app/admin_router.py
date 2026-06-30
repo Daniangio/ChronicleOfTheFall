@@ -1,10 +1,17 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+import base64
+import binascii
+import re
+from pathlib import Path
+from typing import Any
+
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 from fastapi.encoders import jsonable_encoder
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from .config import settings
 from .database import get_db
 from .db_models import AdminAuditLogRecord, GameCatalogEntryRecord, UserProfileRecord
 from .empire_catalog import (
@@ -39,6 +46,16 @@ from .user_repository import get_registered_user_by_id, list_registered_users
 
 
 router = APIRouter()
+
+IMAGE_DATA_URL_RE = re.compile(r"^data:(image/[a-zA-Z0-9.+-]+);base64,(.*)$", re.DOTALL)
+IMAGE_EXTENSIONS = {
+    "image/gif": ".gif",
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/svg+xml": ".svg",
+    "image/webp": ".webp",
+}
+IMAGE_METADATA_KEYS = {"src", "path", "file_path", "url", "icon", "image"}
 
 
 def require_admin(current_user: User = Depends(get_current_user)) -> User:
@@ -89,6 +106,74 @@ def _query_int(value, default: int) -> int:
         if fallback is not None:
             return int(fallback)
     return int(default)
+
+
+def _sanitize_image_metadata(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {
+            key: _sanitize_image_metadata(child)
+            for key, child in value.items()
+            if key not in IMAGE_METADATA_KEYS and not (str(key).endswith("_icon") and key != "icon_image_id")
+        }
+    if isinstance(value, list):
+        return [_sanitize_image_metadata(child) for child in value]
+    return value
+
+
+def _catalog_export_entry(entry) -> dict:
+    payload = _catalog_entry_response(entry).model_dump()
+    payload["data"] = _sanitize_image_metadata(payload.get("data") or {})
+    return payload
+
+
+def _catalog_import_data(data: dict[str, Any]) -> dict[str, Any]:
+    sanitized = _sanitize_image_metadata(data or {})
+    return sanitized if isinstance(sanitized, dict) else {}
+
+
+def _image_storage_dir() -> Path:
+    directory = Path(settings.IMAGE_STORAGE_DIR)
+    directory.mkdir(parents=True, exist_ok=True)
+    return directory
+
+
+def _image_public_src(filename: str) -> str:
+    return f"{str(settings.IMAGE_PUBLIC_PATH).rstrip('/')}/{filename}"
+
+
+def _decode_image_data_url(data_url: str) -> tuple[str, bytes]:
+    match = IMAGE_DATA_URL_RE.match(str(data_url or "").strip())
+    if not match:
+        raise ValueError("Image upload must be a base64 image data URL.")
+    mime_type = match.group(1).lower()
+    if mime_type not in IMAGE_EXTENSIONS:
+        raise ValueError("Unsupported image type.")
+    try:
+        payload = base64.b64decode(match.group(2), validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise ValueError("Image upload data is not valid base64.") from exc
+    if not payload:
+        raise ValueError("Image upload is empty.")
+    return mime_type, payload
+
+
+def _store_uploaded_image_asset(payload: dict) -> dict:
+    data_url = str((payload or {}).get("data_url") or "")
+    requested_id = str((payload or {}).get("id") or "").strip()
+    original_name = str((payload or {}).get("filename") or requested_id or "image").strip()
+    mime_type, image_bytes = _decode_image_data_url(data_url)
+    fallback_name = Path(original_name).stem or "image"
+    image_id = normalize_catalog_id(requested_id or fallback_name)
+    extension = IMAGE_EXTENSIONS[mime_type]
+    filename = f"{image_id}{extension}"
+    path = _image_storage_dir() / filename
+    path.write_bytes(image_bytes)
+    return {
+        "id": image_id,
+        "name": original_name or image_id,
+        "src": _image_public_src(filename),
+        "mime_type": mime_type,
+    }
 
 
 async def _is_online(user_id: str) -> bool:
@@ -321,7 +406,7 @@ async def admin_export_catalog(
         catalog_kind = validate_catalog_kind(kind) if str(kind or "").strip() else None
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-    entries = [_catalog_entry_response(entry).model_dump() for entry in list_catalog_records(db, catalog_kind)]
+    entries = [_catalog_export_entry(entry) for entry in list_catalog_records(db, catalog_kind)]
     return {
         "version": 1,
         "kind": catalog_kind or "all",
@@ -346,7 +431,11 @@ async def admin_import_catalog(
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     try:
         for entry in payload.entries:
-            catalog_kind = forced_kind or validate_catalog_kind(entry.kind)
+            try:
+                catalog_kind = forced_kind or validate_catalog_kind(entry.kind)
+            except ValueError:
+                skipped += 1
+                continue
             if forced_kind is not None and entry.kind != forced_kind:
                 skipped += 1
                 continue
@@ -364,7 +453,7 @@ async def admin_import_catalog(
                     category=entry.category,
                     summary=entry.summary,
                     color=entry.color,
-                    data=entry.data,
+                    data=_catalog_import_data(entry.data),
                 )
                 created += 1
             else:
@@ -376,7 +465,7 @@ async def admin_import_catalog(
                     category=entry.category,
                     summary=entry.summary,
                     color=entry.color,
-                    data=entry.data,
+                    data=_catalog_import_data(entry.data),
                 )
                 updated += 1
     except ValueError as exc:
@@ -390,6 +479,23 @@ async def admin_import_catalog(
         payload={"created": created, "updated": updated, "skipped": skipped},
     )
     return AdminCatalogImportResult(status="ok", created=created, updated=updated, skipped=skipped)
+
+
+@router.post("/admin/images/upload")
+async def admin_upload_image_asset(
+    payload: dict = Body(...),
+    _admin: User = Depends(require_admin),
+):
+    return _store_uploaded_image_asset(payload)
+
+
+@router.post("/admin/images/{entry_id}/upload")
+async def admin_upload_image_asset_for_entry(
+    entry_id: str,
+    payload: dict = Body(...),
+    _admin: User = Depends(require_admin),
+):
+    return _store_uploaded_image_asset({**(payload or {}), "id": entry_id})
 
 
 @router.post("/admin/{kind}", response_model=AdminCatalogEntry)

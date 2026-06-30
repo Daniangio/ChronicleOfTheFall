@@ -1,5 +1,6 @@
 import { Ban, Hammer, RotateCcw, ScrollText, ShieldX, Snowflake, Users, UserX, Zap } from "lucide-react";
 import TagIcon from "./TagIcon.jsx";
+import { buildApiUrl } from "../utils/connection.js";
 
 const fallbackColor = "#64748b";
 const tagKeyNames = new Set([
@@ -20,19 +21,32 @@ const normalizeTagId = (value) =>
     .toLowerCase()
     .replace(/[\s_]+/g, "-");
 
-const buildTagLookup = (tags = []) =>
-  Object.fromEntries((tags || []).map((tag) => [normalizeTagId(tag.id || tag.name), tag]));
+const withResolvedTagIcon = (tag, imageLookup = {}) => {
+  const imageId = tag?.data?.icon_image_id;
+  const imageSrc = imageLookup?.[imageId]?.data?.src;
+  if (!imageSrc || tag?.data?.icon) return tag;
+  return { ...tag, data: { ...(tag.data || {}), icon: imageSrc } };
+};
+
+const buildTagLookup = (tags = [], imageLookup = {}) =>
+  Object.fromEntries((tags || []).map((tag) => [normalizeTagId(tag.id || tag.name), withResolvedTagIcon(tag, imageLookup)]));
 
 const ministrySymbol = (ministry) => ministry?.data?.symbol || "";
 
+const assetSrc = (value) => {
+  const src = String(value || "");
+  if (!src || src.startsWith("data:") || /^https?:\/\//i.test(src)) return src;
+  return buildApiUrl(src);
+};
+
 const ministryIcon = (ministry, imageLookup) => {
   const imageId = ministry?.data?.icon_image_id;
-  return ministry?.data?.icon || imageLookup?.[imageId]?.data?.src || "";
+  return assetSrc(ministry?.data?.icon || imageLookup?.[imageId]?.data?.src || "");
 };
 
 const catalogIcon = (entry, imageLookup) => {
   const imageId = entry?.data?.icon_image_id || entry?.data?.image_id;
-  return entry?.data?.icon || entry?.data?.image || imageLookup?.[imageId]?.data?.src || "";
+  return assetSrc(entry?.data?.icon || entry?.data?.image || imageLookup?.[imageId]?.data?.src || "");
 };
 
 const humanizeKey = (value) =>
@@ -57,8 +71,8 @@ const SmallIcon = ({ src, fallback, label, tone = "slate" }) => {
         : "border-slate-700 text-slate-300";
   const Fallback = fallback;
   return (
-    <span className={`inline-flex h-7 min-w-7 items-center justify-center rounded-md border bg-stone-950/60 px-1.5 text-[0.65rem] font-semibold ${toneClass}`} title={label}>
-      {src ? <img alt="" className="h-5 w-5 object-contain" src={src} /> : Fallback ? <Fallback className="h-4 w-4" aria-hidden="true" /> : String(label || "").slice(0, 3).toUpperCase()}
+    <span>
+      {src ? <img alt="" className="h-12 w-12 object-contain" src={src} /> : Fallback ? <Fallback className="h-4 w-4" aria-hidden="true" /> : String(label || "").slice(0, 3).toUpperCase()}
     </span>
   );
 };
@@ -392,7 +406,7 @@ const EventEffectRow = ({ title, effects, tone, eventMinistry, ministryLookup, e
 
 const EventCardVisual = ({ entry, eventMinistry, ministryLookup, effectIconLookup, pillarLookup, tagLookup, imageLookup, actions }) => {
   const data = entry?.data || {};
-  const eventImage = data.image || imageLookup[data.image_id]?.data?.src || "";
+  const eventImage = assetSrc(data.image || imageLookup[data.image_id]?.data?.src || "");
   const successEffects = Array.isArray(data.success_effects) ? data.success_effects : [];
   const failureEffects = Array.isArray(data.failure_effects) ? data.failure_effects : [];
   return (
@@ -439,26 +453,27 @@ const EventCardVisual = ({ entry, eventMinistry, ministryLookup, effectIconLooku
 
 const CatalogItemVisual = ({ entry, tags = [], cards = [], groups = [], ministries = [], images = [], pillars = [], effectIcons = [], actions = null }) => {
   const color = entry?.color || fallbackColor;
-  const tagLookup = buildTagLookup(tags);
   const cardLookup = Object.fromEntries((cards || []).map((card) => [normalizeTagId(card.id || card.name), card]));
   const groupLookup = Object.fromEntries((groups || []).map((group) => [normalizeTagId(group.id || group.name), group]));
   const imageLookup = Object.fromEntries((images || []).map((image) => [image.id, image]));
+  const tagLookup = buildTagLookup(tags, imageLookup);
+  const visualEntry = entry?.kind === "tags" ? withResolvedTagIcon(entry, imageLookup) : entry;
   const ministryLookup = Object.fromEntries((ministries || []).map((ministry) => [normalizeTagId(ministry.id || ministry.name), ministry]));
   const pillarLookup = Object.fromEntries((pillars || []).map((pillar) => [normalizeTagId(pillar.id || pillar.name), pillar]));
   const effectIconLookup = Object.fromEntries((effectIcons || []).flatMap((effectIcon) => {
     const keys = [effectIcon.id, effectIcon.data?.effect_type].filter(Boolean).map(normalizeTagId);
     return keys.map((key) => [key, effectIcon]);
   }));
-  const eventMinistry = (ministries || []).find((ministry) => ministry.id === entry?.data?.ministry_id);
+  const eventMinistry = (ministries || []).find((ministry) => ministry.id === visualEntry?.data?.ministry_id);
   const eventMinistryIcon = ministryIcon(eventMinistry, imageLookup);
-  const currentMinistryIcon = ministryIcon(entry, imageLookup);
-  const currentCatalogIcon = catalogIcon(entry, imageLookup);
-  const dataEntries = Object.entries(entry?.data || {}).filter(([key]) => !["src", "icon", "image"].includes(key)).slice(0, 6);
+  const currentMinistryIcon = ministryIcon(visualEntry, imageLookup);
+  const currentCatalogIcon = catalogIcon(visualEntry, imageLookup);
+  const dataEntries = Object.entries(visualEntry?.data || {}).filter(([key]) => !["src", "icon", "image"].includes(key)).slice(0, 6);
 
-  if (entry.kind === "events") {
+  if (visualEntry.kind === "events") {
     return (
       <EventCardVisual
-        entry={entry}
+        entry={visualEntry}
         eventMinistry={eventMinistry}
         ministryLookup={ministryLookup}
         effectIconLookup={effectIconLookup}
@@ -477,10 +492,10 @@ const CatalogItemVisual = ({ entry, tags = [], cards = [], groups = [], ministri
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <h3 className="truncate text-base font-semibold text-white">{entry.name}</h3>
-              {entry.kind === "tags" ? (
-                <TagIcon tag={entry} />
-              ) : ["pillars", "effect-icons"].includes(entry.kind) ? (
+              <h3 className="truncate text-base font-semibold text-white">{visualEntry.name}</h3>
+              {visualEntry.kind === "tags" ? (
+                <TagIcon tag={visualEntry} />
+              ) : ["pillars", "effect-icons"].includes(visualEntry.kind) ? (
                 <SmallIcon src={currentCatalogIcon} label={entry.name} tone="amber" />
               ) : entry.kind === "ministries" ? (
                 <span className="inline-flex items-center gap-1 rounded bg-stone-950/70 px-2 py-1 text-xs font-medium text-amber-100">
@@ -518,7 +533,7 @@ const CatalogItemVisual = ({ entry, tags = [], cards = [], groups = [], ministri
 
         {entry.kind === "images" && entry.data?.src ? (
           <div className="mt-4 flex h-32 items-center justify-center rounded-md border border-slate-800 bg-slate-950 p-3">
-            <img alt="" className="max-h-full max-w-full object-contain" src={entry.data.src} />
+            <img alt="" className="max-h-full max-w-full object-contain" src={assetSrc(entry.data.src)} />
           </div>
         ) : null}
 

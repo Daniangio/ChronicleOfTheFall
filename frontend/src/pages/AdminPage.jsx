@@ -123,6 +123,20 @@ const orderedGroupedTagEntries = (tags) =>
 
 const tagLabel = (value) => String(value || "").replace(/_/g, " ");
 
+const catalogIdFromText = (value) =>
+  String(value || "")
+    .trim()
+    .replace(/\.[a-z0-9]+$/i, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+const assetSrc = (value) => {
+  const src = String(value || "");
+  if (!src || src.startsWith("data:") || /^https?:\/\//i.test(src)) return src;
+  return buildApiUrl(src);
+};
+
 const tagIsVolatileResource = (tag) => tag?.data?.resource_type === "volatile";
 
 const volatileResourceTags = (tags) => (tags || []).filter(tagIsVolatileResource);
@@ -258,9 +272,11 @@ const removeBackground = (image, crop, outputSize = 96) => {
 const IconImageEditor = ({ label, value, onChange }) => {
   const imageRef = useRef(null);
   const [source, setSource] = useState("");
+  const [sourceName, setSourceName] = useState("");
   const [mode, setMode] = useState("choose");
   const [crop, setCrop] = useState({ x: 16, y: 16, width: 96, height: 96 });
   const [dragStart, setDragStart] = useState(null);
+  const [saving, setSaving] = useState(false);
 
   const imageRect = () => imageRef.current?.getBoundingClientRect();
   const pointFromEvent = (event) => {
@@ -290,6 +306,19 @@ const IconImageEditor = ({ label, value, onChange }) => {
     });
   };
 
+  const commitImage = async (dataUrl) => {
+    setSaving(true);
+    try {
+      await onChange(dataUrl, sourceName);
+      setSource("");
+      setSourceName("");
+      setMode("choose");
+      setDragStart(null);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const saveCrop = () => {
     const image = imageRef.current;
     const rect = imageRect();
@@ -300,21 +329,18 @@ const IconImageEditor = ({ label, value, onChange }) => {
       width: Math.max(1, Math.round((crop.width / rect.width) * image.naturalWidth)),
       height: Math.max(1, Math.round((crop.height / rect.height) * image.naturalHeight)),
     };
-    onChange(removeBackground(image, naturalCrop));
-    setSource("");
-    setMode("choose");
-    setDragStart(null);
+    void commitImage(removeBackground(image, naturalCrop));
   };
 
   const closePanel = () => {
     setSource("");
+    setSourceName("");
     setMode("choose");
     setDragStart(null);
   };
 
   const saveOriginal = () => {
-    onChange(source);
-    closePanel();
+    void commitImage(source);
   };
 
   return (
@@ -324,7 +350,7 @@ const IconImageEditor = ({ label, value, onChange }) => {
           <h3 className="font-semibold text-white">{label}</h3>
           <p className="mt-1 text-xs text-slate-500">Upload an image as-is, or crop it and remove the crop background.</p>
         </div>
-        {value ? <img alt="" className="h-10 w-10 rounded-md border border-slate-700 object-contain" src={value} /> : null}
+        {value ? <img alt="" className="h-10 w-10 rounded-md border border-slate-700 object-contain" src={assetSrc(value)} /> : null}
       </div>
       <div className="mt-3 flex flex-wrap gap-2">
         <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800">
@@ -343,6 +369,7 @@ const IconImageEditor = ({ label, value, onChange }) => {
                 reader.readAsDataURL(file);
               });
               setSource(dataUrl);
+              setSourceName(file.name || "");
               setMode("choose");
               event.target.value = "";
             }}
@@ -408,8 +435,13 @@ const IconImageEditor = ({ label, value, onChange }) => {
               <button className="rounded-md border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800" onClick={closePanel} type="button">
                 Cancel
               </button>
-              <button className="rounded-md bg-teal-400 px-3 py-2 text-sm font-semibold text-slate-950 hover:bg-teal-300" onClick={mode === "crop" ? saveCrop : saveOriginal} type="button">
-                {mode === "crop" ? "Save Cropped Icon" : "Use Original Image"}
+              <button
+                className="rounded-md bg-teal-400 px-3 py-2 text-sm font-semibold text-slate-950 hover:bg-teal-300 disabled:opacity-60"
+                disabled={saving}
+                onClick={mode === "crop" ? saveCrop : saveOriginal}
+                type="button"
+              >
+                {saving ? "Saving..." : mode === "crop" ? "Save Cropped Icon" : "Use Original Image"}
               </button>
             </div>
           </div>
@@ -428,7 +460,7 @@ const ImageAssetSelect = ({ label, images, selectedId, onSelect }) => {
           <h3 className="font-semibold text-white">{label}</h3>
           <p className="mt-1 text-xs text-slate-500">Select one of the images uploaded in the Images page.</p>
         </div>
-        {selected?.data?.src ? <img alt="" className="h-12 w-12 rounded-md object-contain" src={selected.data.src} /> : null}
+        {selected?.data?.src ? <img alt="" className="h-12 w-12 rounded-md object-contain" src={assetSrc(selected.data.src)} /> : null}
       </div>
       <div className="mt-3 grid gap-2 sm:grid-cols-3">
         {(images || []).map((image) => {
@@ -443,7 +475,7 @@ const ImageAssetSelect = ({ label, images, selectedId, onSelect }) => {
               type="button"
             >
               {image.data?.src ? (
-                <img alt="" className="h-14 w-full object-contain" src={image.data.src} />
+                <img alt="" className="h-14 w-full object-contain" src={assetSrc(image.data.src)} />
               ) : (
                 <span className="flex h-14 w-full items-center justify-center rounded bg-slate-900 text-slate-600">No preview</span>
               )}
@@ -462,8 +494,28 @@ const ImageAssetSelect = ({ label, images, selectedId, onSelect }) => {
   );
 };
 
-const ImageGuidedFields = ({ data, setField }) => (
-  <IconImageEditor label="Image Asset" value={data.src || ""} onChange={(src) => setField("src", src)} />
+const ImageGuidedFields = ({ data, setField, catalogForm, setCatalogForm, uploadImageAsset }) => (
+  <IconImageEditor
+    label="Image Asset"
+    value={data.src || ""}
+    onChange={async (dataUrl, filename) => {
+      if (!dataUrl) {
+        setField("src", "");
+        return;
+      }
+      const uploaded = await uploadImageAsset({
+        dataUrl,
+        filename,
+        requestedId: catalogForm.id,
+      });
+      setCatalogForm((state) => ({
+        ...state,
+        id: state.id || uploaded.id,
+        name: state.name || uploaded.name || uploaded.id,
+      }));
+      setField("src", uploaded.src);
+    }}
+  />
 );
 
 const TagResourceFields = ({ data, setField, imageEntries }) => (
@@ -474,7 +526,7 @@ const TagResourceFields = ({ data, setField, imageEntries }) => (
       selectedId={data.icon_image_id || ""}
       onSelect={(image) => {
         setField("icon_image_id", image?.id || "");
-        setField("icon", image?.data?.src || "");
+        setField("icon", "");
       }}
     />
   </div>
@@ -1051,7 +1103,7 @@ const MinistryGuidedFields = ({ data, setField, tagEntries, imageEntries }) => {
         selectedId={ministerIconImageId}
         onSelect={(image) => {
           setField("icon_image_id", image?.id || "");
-          setField("icon", image?.data?.src || "");
+          setField("icon", "");
         }}
       />
 
@@ -1096,6 +1148,18 @@ const MinistryGuidedFields = ({ data, setField, tagEntries, imageEntries }) => {
 
 const emptyEventEffect = { effect_type: "modify_pillar", payload: { pillar: "treasury", amount: -1 } };
 const emptyEventThreshold = { tag_id: "unrest", amount: 1, effects: [emptyEventEffect] };
+const eventEffectTypeOptions = [
+  { value: "generate_resource", label: "Generate resource" },
+  { value: "modify_pillar", label: "Modify pillar" },
+  { value: "destroy_building_with_tag", label: "Destroy building" },
+  { value: "discard_card", label: "Discard card" },
+  { value: "freeze_resource_generation", label: "Freeze resource" },
+  { value: "block_minister_next_year", label: "Block minister" },
+];
+const effectIconCodeOptions = [
+  { value: "all_players", label: "All players" },
+  ...eventEffectTypeOptions,
+];
 
 const EventEffectEditor = ({ effects, setEffects, resourceTags, allTags, ministryEntries, pillarEntries = [] }) => {
   const updateEffect = (index, patch) => {
@@ -1115,14 +1179,7 @@ const EventEffectEditor = ({ effects, setEffects, resourceTags, allTags, ministr
           <SelectField
             label="Effect"
             value={effect.effect_type || "modify_pillar"}
-            options={[
-              { value: "generate_resource", label: "Generate resource" },
-              { value: "modify_pillar", label: "Modify pillar" },
-              { value: "destroy_building_with_tag", label: "Destroy building" },
-              { value: "discard_card", label: "Discard card" },
-              { value: "freeze_resource_generation", label: "Freeze resource" },
-              { value: "block_minister_next_year", label: "Block minister" },
-            ]}
+            options={eventEffectTypeOptions}
             onChange={(value) => updateEffect(index, { effect_type: value, payload: {} })}
           />
           {effect.effect_type === "generate_resource" ? (
@@ -1260,7 +1317,7 @@ const EventGuidedFields = ({ data, setField, tagEntries, ministryEntries, imageE
         selectedId={data.image_id || ""}
         onSelect={(image) => {
           setField("image_id", image?.id || "");
-          setField("image", image?.data?.src || "");
+          setField("image", "");
         }}
       />
       <TagCounterGroup
@@ -1354,7 +1411,7 @@ const PillarGuidedFields = ({ data, setField, imageEntries }) => {
         selectedId={data.icon_image_id || ""}
         onSelect={(image) => {
           setField("icon_image_id", image?.id || "");
-          setField("icon", image?.data?.src || "");
+          setField("icon", "");
         }}
       />
       <div className="grid gap-3 sm:grid-cols-3">
@@ -1382,33 +1439,47 @@ const PillarGuidedFields = ({ data, setField, imageEntries }) => {
   );
 };
 
-const EffectIconGuidedFields = ({ data, setField, imageEntries }) => (
-  <>
-    <label className="block">
-      <span className="text-sm font-medium text-slate-300">Effect Code</span>
-      <input
+const EffectIconGuidedFields = ({ data, setField, imageEntries, editingEntry, setCatalogForm }) => {
+  const applyImageIdentity = (image) => {
+    if (!image) return;
+    const identitySource = image.name || image.id || "";
+    const generatedId = catalogIdFromText(identitySource);
+    setCatalogForm((state) => ({
+      ...state,
+      id: editingEntry ? state.id : generatedId || state.id,
+      name: identitySource || state.name,
+    }));
+  };
+
+  return (
+    <>
+      <SelectField
+        label="Effect Code"
         value={data.effect_type || ""}
-        onChange={(event) => setField("effect_type", event.target.value)}
-        className="mt-2 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none focus:border-teal-400"
-        placeholder="discard_card"
+        options={[{ value: "", label: "Select effect code" }, ...effectIconCodeOptions]}
+        onChange={(value) => setField("effect_type", value)}
       />
-    </label>
-    <ImageAssetSelect
-      label="Effect Icon"
-      images={imageEntries}
-      selectedId={data.icon_image_id || ""}
-      onSelect={(image) => {
-        setField("icon_image_id", image?.id || "");
-        setField("icon", image?.data?.src || "");
-      }}
-    />
-  </>
-);
+      <ImageAssetSelect
+        label="Effect Icon"
+        images={imageEntries}
+        selectedId={data.icon_image_id || ""}
+        onSelect={(image) => {
+          setField("icon_image_id", image?.id || "");
+          setField("icon", "");
+          applyImageIdentity(image);
+        }}
+      />
+      <p className="text-xs text-slate-500">Effect icon id and name are generated from the selected image.</p>
+    </>
+  );
+};
 
 const GuidedMetadataEditor = ({
   activeSection,
   catalogForm,
   setCatalogForm,
+  isEditing,
+  uploadImageAsset,
   tagEntries,
   cardEntries,
   groupEntries,
@@ -1433,7 +1504,17 @@ const GuidedMetadataEditor = ({
         return { ...state, dataText: stringifyData(nextData) };
       });
     };
-    if (activeSection === "images") return <ImageGuidedFields data={data} setField={setField} />;
+    if (activeSection === "images") {
+      return (
+        <ImageGuidedFields
+          data={data}
+          setField={setField}
+          catalogForm={catalogForm}
+          setCatalogForm={setCatalogForm}
+          uploadImageAsset={uploadImageAsset}
+        />
+      );
+    }
     return <TagResourceFields data={data} setField={setField} imageEntries={imageEntries} />;
   }
 
@@ -1538,7 +1619,13 @@ const GuidedMetadataEditor = ({
         <PillarGuidedFields data={data} setField={setField} imageEntries={imageEntries} />
       ) : null}
       {hasEffectIconGuidance ? (
-        <EffectIconGuidedFields data={data} setField={setField} imageEntries={imageEntries} />
+        <EffectIconGuidedFields
+          data={data}
+          setField={setField}
+          imageEntries={imageEntries}
+          editingEntry={isEditing}
+          setCatalogForm={setCatalogForm}
+        />
       ) : null}
       {countFields.map((field) => (
         <TagCounterGroup
@@ -1613,6 +1700,22 @@ const AdminPage = () => {
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(payload.detail || "Admin request failed.");
     return payload;
+  };
+
+  const uploadImageAsset = async ({ dataUrl, filename, requestedId }) => {
+    const normalizedId = catalogIdFromText(requestedId);
+    const path = normalizedId
+      ? `/api/admin/images/${encodeURIComponent(normalizedId)}/upload`
+      : "/api/admin/images/upload";
+    return request(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        data_url: dataUrl,
+        filename,
+        id: normalizedId,
+      }),
+    });
   };
 
   const loadUsers = async () => {
@@ -1824,8 +1927,36 @@ const AdminPage = () => {
     try {
       const parsedData = parseCatalogData();
       const tagResourceType = parsedData.resource_type === "volatile" ? "volatile" : "permanent";
+      const selectedEffectIconImage = activeCatalogKind === "effect-icons"
+        ? imageEntries.find((image) => image.id === parsedData.icon_image_id)
+        : null;
+      const effectIconIdentitySource =
+        selectedEffectIconImage?.name ||
+        selectedEffectIconImage?.id ||
+        catalogForm.name ||
+        parsedData.effect_type ||
+        "effect-icon";
+      const effectIconName = activeCatalogKind === "effect-icons"
+        ? String(effectIconIdentitySource).trim()
+        : catalogForm.name;
+      const effectIconId = activeCatalogKind === "effect-icons"
+        ? catalogForm.id || catalogIdFromText(effectIconIdentitySource) || catalogIdFromText(parsedData.effect_type) || "effect-icon"
+        : catalogForm.id;
+      const imageIdentitySource = activeCatalogKind === "images"
+        ? catalogForm.name || catalogForm.id || String(parsedData.src || "").split("/").pop() || "image"
+        : "";
+      const catalogName = activeCatalogKind === "effect-icons"
+        ? effectIconName
+        : activeCatalogKind === "images"
+          ? String(imageIdentitySource).trim()
+          : catalogForm.name;
+      const catalogId = activeCatalogKind === "effect-icons"
+        ? effectIconId
+        : activeCatalogKind === "images"
+          ? catalogForm.id || catalogIdFromText(imageIdentitySource) || "image"
+          : catalogForm.id;
       const payload = {
-        name: catalogForm.name,
+        name: catalogName,
         category:
           activeCatalogKind === "groups"
             ? "mutually-exclusive"
@@ -1858,7 +1989,7 @@ const AdminPage = () => {
       const saved = await request(path, {
         method: editingEntry ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(editingEntry ? payload : { ...payload, id: catalogForm.id }),
+        body: JSON.stringify(editingEntry ? payload : { ...payload, id: catalogId }),
       });
       setCatalogEntries((entries) => {
         const withoutSaved = entries.filter((entry) => entry.id !== saved.id);
@@ -2379,26 +2510,28 @@ const AdminPage = () => {
             </div>
 
             <div className="space-y-5 p-5">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <label className="block">
-                  <span className="text-sm font-medium text-slate-300">Id</span>
-                  <input
-                    value={catalogForm.id}
-                    onChange={(event) => setCatalogForm((state) => ({ ...state, id: event.target.value }))}
-                    className="mt-2 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none focus:border-teal-400 disabled:text-slate-500"
-                    disabled={Boolean(editingEntry)}
-                    placeholder="auto-from-name"
-                  />
-                </label>
-                <label className="block">
-                  <span className="text-sm font-medium text-slate-300">Name</span>
-                  <input
-                    value={catalogForm.name}
-                    onChange={(event) => setCatalogForm((state) => ({ ...state, name: event.target.value }))}
-                    className="mt-2 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none focus:border-teal-400"
-                  />
-                </label>
-              </div>
+              {activeCatalogKind === "effect-icons" ? null : (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <label className="block">
+                    <span className="text-sm font-medium text-slate-300">Id</span>
+                    <input
+                      value={catalogForm.id}
+                      onChange={(event) => setCatalogForm((state) => ({ ...state, id: event.target.value }))}
+                      className="mt-2 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none focus:border-teal-400 disabled:text-slate-500"
+                      disabled={Boolean(editingEntry)}
+                      placeholder="auto-from-name"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="text-sm font-medium text-slate-300">Name</span>
+                    <input
+                      value={catalogForm.name}
+                      onChange={(event) => setCatalogForm((state) => ({ ...state, name: event.target.value }))}
+                      className="mt-2 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none focus:border-teal-400"
+                    />
+                  </label>
+                </div>
+              )}
 
               <div className={`grid gap-4 ${activeCatalogKind === "events" ? "" : "sm:grid-cols-2"}`}>
                 {activeCatalogKind === "cards" ? (
@@ -2486,6 +2619,8 @@ const AdminPage = () => {
                 activeSection={activeCatalogKind}
                 catalogForm={catalogForm}
                 setCatalogForm={setCatalogForm}
+                isEditing={Boolean(editingEntry)}
+                uploadImageAsset={uploadImageAsset}
                 tagEntries={tagEntries}
                 cardEntries={cardEntries}
                 groupEntries={groupEntries}
