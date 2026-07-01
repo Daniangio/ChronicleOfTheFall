@@ -400,7 +400,7 @@ class TestGameRoomService(unittest.IsolatedAsyncioTestCase):
             ],
             "projects": [
                 {"id": "project-1", "card_id": "lumber-camp", "contributions": {"labor": 1}},
-                {"id": "project-2", "card_id": "militia-garrison", "contributions": {"wealth": 0}},
+                {"id": "project-2", "card_id": "militia-garrison", "contributions": {"wealth": 1}},
             ],
             "cities": [
                 {
@@ -429,7 +429,7 @@ class TestGameRoomService(unittest.IsolatedAsyncioTestCase):
                         "category": "institution",
                         "summary": "",
                         "color": None,
-                        "data": {"cost": {"wealth": 1}},
+                        "data": {"cost": {"wealth": 2}},
                     },
                 ],
                 "tags": [],
@@ -453,7 +453,7 @@ class TestGameRoomService(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(after_first_pass["cities"][0]["exhausted_card_ids"], [])
         self.assertEqual(after_first_pass["projects"], [
             {"id": "project-1", "card_id": "lumber-camp", "contributions": {"labor": 1}},
-            {"id": "project-2", "card_id": "militia-garrison", "contributions": {}},
+            {"id": "project-2", "card_id": "militia-garrison", "contributions": {"wealth": 1}},
         ])
 
     async def test_completed_project_can_be_built_as_free_action(self):
@@ -720,7 +720,7 @@ class TestGameRoomService(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(updated["players"][0]["mana"], {"labor": 1})
 
-    async def test_continue_phase_reveals_event_and_returns_to_administration(self):
+    async def test_continue_phase_enters_council_without_advancing_events(self):
         service = GameRoomService()
         user = User(id="user_1", username="Player One")
         state = {
@@ -770,14 +770,15 @@ class TestGameRoomService(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(event_phase["epoch"], 2)
         self.assertEqual(event_phase["phase"], "council")
-        self.assertEqual(event_phase["event_queue"], ["black-year"])
+        self.assertEqual(event_phase["event_queue"], [])
+        self.assertEqual(event_phase["event_deck"], ["black-year"])
 
         administration = await service.apply_goldfishing_action(room_id=room["id"], user=user, action="continue_phase", payload={})
         self.assertEqual(administration["phase"], "administration")
         self.assertFalse(administration["players"][0]["passed"])
         self.assertTrue(any(action["type"] == "propose_project" for action in administration["possible_actions"]))
 
-    async def test_crisis_event_is_face_up_only_on_step_three(self):
+    async def test_crisis_advances_event_queue_before_pitch(self):
         service = GameRoomService()
         user = User(id="user_1", username="Player One")
         state = {
@@ -787,7 +788,8 @@ class TestGameRoomService(unittest.IsolatedAsyncioTestCase):
             "face_up_event_id": "",
             "active_player_id": "player-1",
             "players": [{"id": "player-1", "name": "Player 1", "hand": [], "mana": {}, "passed": False}],
-            "event_queue": ["black-year"],
+            "event_deck": ["third-year"],
+            "event_queue": ["first-year", "second-year"],
             "projects": [],
             "cities": [{"id": "capital", "name": "Capital", "cards": [], "exhausted_card_ids": []}],
             "catalog": {"cards": [], "events": [], "tags": []},
@@ -795,19 +797,41 @@ class TestGameRoomService(unittest.IsolatedAsyncioTestCase):
         }
 
         room = await service.create_room(user=user, game_type="chronicle_solo", game_state=state)
-        step_two = await service.apply_goldfishing_action(room_id=room["id"], user=user, action="continue_phase", payload={})
-        self.assertEqual(step_two["phase"], "crisis")
-        self.assertEqual(step_two["crisis_step"], 2)
-        self.assertEqual(step_two["face_up_event_id"], "")
-
-        step_three = await service.apply_goldfishing_action(room_id=room["id"], user=user, action="continue_phase", payload={})
-        self.assertEqual(step_three["phase"], "crisis")
-        self.assertEqual(step_three["crisis_step"], 3)
-        self.assertEqual(step_three["face_up_event_id"], "black-year")
+        pitch = await service.apply_goldfishing_action(room_id=room["id"], user=user, action="continue_phase", payload={})
+        self.assertEqual(pitch["phase"], "crisis")
+        self.assertEqual(pitch["crisis_step"], 2)
+        self.assertEqual(pitch["face_up_event_id"], "first-year")
+        self.assertEqual(pitch["event_queue"], ["first-year", "second-year", "third-year"])
 
         decay = await service.apply_goldfishing_action(room_id=room["id"], user=user, action="continue_phase", payload={})
         self.assertEqual(decay["phase"], "decay")
         self.assertEqual(decay["face_up_event_id"], "")
+        self.assertEqual(decay["event_queue"], ["second-year", "third-year"])
+
+    async def test_crisis_skips_pitch_when_no_event_reaches_step_three(self):
+        service = GameRoomService()
+        user = User(id="user_1", username="Player One")
+        state = {
+            "mode": "goldfishing",
+            "phase": "crisis",
+            "crisis_step": 1,
+            "face_up_event_id": "",
+            "active_player_id": "player-1",
+            "players": [{"id": "player-1", "name": "Player 1", "hand": [], "mana": {}, "passed": False}],
+            "event_deck": ["first-year"],
+            "event_queue": [],
+            "projects": [],
+            "cities": [{"id": "capital", "name": "Capital", "cards": [], "exhausted_card_ids": []}],
+            "catalog": {"cards": [], "events": [], "tags": []},
+            "log": [],
+        }
+
+        room = await service.create_room(user=user, game_type="chronicle_solo", game_state=state)
+        decay = await service.apply_goldfishing_action(room_id=room["id"], user=user, action="continue_phase", payload={})
+        self.assertEqual(decay["phase"], "decay")
+        self.assertEqual(decay["crisis_step"], 0)
+        self.assertEqual(decay["face_up_event_id"], "")
+        self.assertEqual(decay["event_queue"], ["first-year"])
 
     async def test_minister_can_peek_event_queue_once_per_year(self):
         service = GameRoomService()

@@ -136,7 +136,7 @@ def build_goldfishing_state(
         "level_id": level_id,
         "log": [f"Goldfishing setup complete. Capital placed. Each player drew {INITIAL_HAND_SIZE} cards. Player 1 is Minister of the Empire."],
     }
-    _begin_council(state, draw_cards=False, queue_event=False)
+    _begin_council(state, draw_cards=False)
     return _prepare_state(state)
 
 
@@ -402,7 +402,7 @@ def continue_phase(state: dict[str, Any]) -> dict[str, Any]:
     if phase == "decay":
         state["epoch"] = int(state.get("epoch") or 1) + 1
         _rotate_minister_of_empire(state)
-        _begin_council(state, draw_cards=True, queue_event=True)
+        _begin_council(state, draw_cards=True)
         state.setdefault("log", []).append("Council phase began.")
     elif phase == "council":
         if not _council_complete(state):
@@ -420,11 +420,20 @@ def continue_phase(state: dict[str, Any]) -> dict[str, Any]:
         state.setdefault("log", []).append("Administration phase began.")
     elif phase == "crisis":
         step = int(state.get("crisis_step") or 1)
-        if step < 3:
-            state["crisis_step"] = step + 1
-            state["face_up_event_id"] = _current_crisis_event_id(state) if state["crisis_step"] == 3 else ""
-            state.setdefault("log", []).append(f"Crisis advanced to step {state['crisis_step']}.")
+        if step <= 1:
+            active_event_id = _advance_event_queue(state)
+            if active_event_id:
+                state["crisis_step"] = 2
+                state["face_up_event_id"] = active_event_id
+                state.setdefault("log", []).append("Crisis pitch began.")
+            else:
+                state["phase"] = "decay"
+                state["year_phase"] = "decay"
+                state["crisis_step"] = 0
+                state["face_up_event_id"] = ""
+                state.setdefault("log", []).append("No Event reached Step 3. Crisis ended.")
         else:
+            _resolve_current_crisis_event(state)
             state["phase"] = "decay"
             state["year_phase"] = "decay"
             state["crisis_step"] = 0
@@ -610,15 +619,13 @@ def _require_phase(state: dict[str, Any], phase: str) -> None:
         raise ValueError(f"Action is only available during the {phase} phase.")
 
 
-def _reveal_event(state: dict[str, Any]) -> None:
+def _draw_event_to_queue(state: dict[str, Any]) -> None:
     event_deck = state.setdefault("event_deck", [])
     if not event_deck:
         state.setdefault("log", []).append("Event deck is empty.")
         return
     event_id = event_deck.pop(0)
     queue = state.setdefault("event_queue", [])
-    if len(queue) >= EVENT_QUEUE_LIMIT:
-        queue.pop(0)
     queue.append(event_id)
     try:
         event = event_by_id(state, event_id)
@@ -627,7 +634,27 @@ def _reveal_event(state: dict[str, Any]) -> None:
         state.setdefault("log", []).append(f"Event queued: {event_id}.")
 
 
-def _begin_council(state: dict[str, Any], *, draw_cards: bool, queue_event: bool) -> None:
+def _advance_event_queue(state: dict[str, Any]) -> str:
+    queue = state.setdefault("event_queue", [])
+    active_event_id = str(queue[0]) if len(queue) >= EVENT_QUEUE_LIMIT - 1 else ""
+    _draw_event_to_queue(state)
+    if not active_event_id and len(queue) > EVENT_QUEUE_LIMIT:
+        del queue[EVENT_QUEUE_LIMIT:]
+    return active_event_id
+
+
+def _resolve_current_crisis_event(state: dict[str, Any]) -> None:
+    event_id = str(state.get("face_up_event_id") or "")
+    queue = state.setdefault("event_queue", [])
+    if event_id and queue and queue[0] == event_id:
+        queue.pop(0)
+    elif event_id in queue:
+        queue.remove(event_id)
+    if len(queue) > EVENT_QUEUE_LIMIT:
+        del queue[EVENT_QUEUE_LIMIT:]
+
+
+def _begin_council(state: dict[str, Any], *, draw_cards: bool) -> None:
     state["phase"] = "council"
     state["year_phase"] = "council"
     state["crisis_step"] = 0
@@ -635,8 +662,6 @@ def _begin_council(state: dict[str, Any], *, draw_cards: bool, queue_event: bool
     state["blocked_player_id"] = state.get("blocked_player_id", "")
     if draw_cards:
         _draw_for_all_players(state, 1)
-    if queue_event:
-        _reveal_event(state)
     empire_player_id = str(state.get("minister_of_empire_player_id") or "")
     state["selected_ministries"] = {empire_player_id: _empire_ministry_id(state)} if empire_player_id else {}
     state["council_order"] = _council_order(state)
@@ -703,24 +728,7 @@ def _ministry_by_id(state: dict[str, Any], ministry_id: str) -> dict[str, Any]:
     raise ValueError("Ministry not found.")
 
 
-def _current_crisis_event_id(state: dict[str, Any]) -> str:
-    queue = state.get("event_queue") or []
-    return str(queue[0]) if queue else ""
-
-
 def _decay_phase(state: dict[str, Any]) -> None:
-    remaining_projects = []
-    for project in state.get("projects", []):
-        try:
-            card = card_by_id(state, project.get("card_id", ""))
-        except ValueError:
-            continue
-        if _project_complete(card, project):
-            remaining_projects.append(project)
-        else:
-            project["contributions"] = {}
-            remaining_projects.append(project)
-    state["projects"] = remaining_projects
     for city_entry in state.get("cities", []):
         city_entry["exhausted_card_ids"] = []
     for player in state.get("players", []):

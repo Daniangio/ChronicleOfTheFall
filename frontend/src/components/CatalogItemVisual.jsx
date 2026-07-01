@@ -168,6 +168,11 @@ const countRepeatedTags = (value) => {
   return value || {};
 };
 
+const tagEntries = (value) => {
+  if (Array.isArray(value)) return value.map((tagId) => [tagId, null]);
+  return Object.entries(value || {});
+};
+
 const LogicIconPill = ({ children, title, tone = "slate" }) => {
   const toneClass = tone === "amber"
     ? "border-amber-700 text-amber-200"

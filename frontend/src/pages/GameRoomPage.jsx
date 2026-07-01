@@ -452,7 +452,7 @@ const GameRoomPage = () => {
                   {(gameState.event_queue || []).map((eventId, index) => {
                     const event = eventLookup[normalize(eventId)];
                     const canPeekEvent = hasAction("peek_event", (entry) => entry.event_id === eventId && entry.player_id === activePlayer?.id);
-                    const faceUp = phase === "crisis" && Number(gameState.crisis_step || 0) === 3 && gameState.face_up_event_id === eventId;
+                    const faceUp = phase === "crisis" && Number(gameState.crisis_step || 0) === 2 && gameState.face_up_event_id === eventId;
                     return (
                       faceUp ? (
                         <CatalogItemVisual

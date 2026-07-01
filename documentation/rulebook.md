@@ -141,7 +141,7 @@ Shuffle the Empire Deck and deal 3 cards face-down to each player as their start
 
 Shuffle the Event Deck. Select one random Final Epoch card, place it face-down at the bottom of the deck, and place the rest of the Event Deck on top of it.
 
-Build the Event Queue: Draw 3 Event cards from the top of the Event Deck and place them face-down into Step 1, Step 2, and Step 3 of the Event Queue. (Note: During Years 1 and 2, the Active Crisis Zone remains empty).
+Build the Event Queue: The Event Queue starts empty in the current prototype. During each Crisis phase, queued Events advance one step and one new Event card is drawn face-down into Step 1. During Years 1 and 2, no Event has reached Step 3 yet, so no Pitch phase occurs.
 
 Distribute Agendas: Deal 1 Hidden Agenda card secretly to each player.
 
@@ -185,15 +185,9 @@ This phase establishes the year’s leadership, resources, and incoming threats.
 
 The Imperial Rotation: At the start of each new year, the Minister of the Empire role passes to the next player in turn order.
 
-The Event Scroll: The Event Queue advances.
+The Council phase establishes the year’s leadership and resources. Event Queue movement happens later, during Crisis step 1.
 
-The face-down card sitting in Step 3 is moved into the Active Crisis Zone (it will be flipped and resolved in Phase 3).
-
-The card in Step 2 slides to Step 3.
-
-The card in Step 1 slides to Step 2.
-
-A new card is drawn face-down from the Event Deck and placed into Step 1. Events in the queue remain face-down; only the event in Step 3 is flipped face-up during Crisis Resolution.
+Events in the queue remain face-down during Council and Administration.
 
 The Imperial Block: The player holding the Minister of the Empire role selects one player. That player is blocked from the Council for the year. They cannot draft a Ministry and operate as a standard Citizen.
 
@@ -227,6 +221,8 @@ Free Actions (May execute at any point during your turn):
 
 Allocate Resources: Spend Volatile Resources currently in your temporary pool and place them onto a Project card in the Queue. You may only place matching resource types (e.g., you cannot place [Labor] on a slot requiring [Wealth]).
 
+Allocated resources remain on Projects across years until that Project is finalized or removed.
+
 Finalize a Project: Only available to the Minister of the Empire and the Minister of Infrastructure. If a Project card in the Queue has accumulated resources matching its build cost, you may pay a Free Action to move it onto the board.
 
 City cards create separate city zones. Buildings are placed into an eligible city zone with an open building slot; roads and spatial connections are not used in the current prototype.
@@ -237,7 +233,9 @@ The Administration Phase ends immediately when all players pass consecutively.
 
 PHASE 3: THE CRISIS RESOLUTION
 
-If there is an Event card in the Active Crisis Zone, it must be resolved now. Flip the card face-up.
+Step 1, Event Scroll: The Event Queue advances. The card in Step 2 moves to Step 3, the card in Step 1 moves to Step 2, and a new card is drawn face-down from the Event Deck into Step 1. If no Event reaches Step 3, the Crisis phase ends immediately and there is no Pitch phase.
+
+Step 2, Pitch and Resolution: If an Event reaches Step 3, flip it face-up and resolve the Pitch phase.
 
 The Public Defense: Evaluate the built, active cards in the City Graph. Tally all matching permanent defense tags (e.g., [Military] for invasions, [Sanitary] for plagues). This is your starting defense pool. (Exhausted buildings still count).
 
