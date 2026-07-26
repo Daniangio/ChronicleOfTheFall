@@ -1,157 +1,86 @@
-# Chronicle of the Fall: Goldfishing Rules v0
+# Goldfishing Engine
 
-This document tracks the playable rules implemented in the prototype. It is the development reference for current behavior, not the final board-game rulebook.
+Goldfishing controls all four prototype players from one browser, but all legality,
+phase transitions, shuffling, costs, placement checks, effects, storage, and cleanup
+are resolved by the backend.
 
-## Mode
-
-Goldfishing mode is a four-player solo simulation of the empire engine.
-
-Version 0 intentionally excludes hidden agendas, roads or city connections, full event resolution, and multiplayer permissions. All game mutations are executed by the backend; the frontend only displays state and sends action requests.
+The rules source is [`../game_rules.md`](../game_rules.md). This file documents the
+digital implementation.
 
 ## Setup
 
-1. The backend creates a room in `chronicle_solo` mode.
-2. The player chooses an Empire deck and Event deck when starting a room. If no Empire deck exists, the backend falls back to available catalog cards. The Event deck may be empty.
-3. One capital city is created and its capital foundation card is placed in play.
-4. Four players are created in fixed turn order.
-5. Each player draws three cards from the selected card deck.
-6. Player 1 becomes active and starts as Minister of the Empire.
+- The selected Level provides the initial City, Empire Deck, Crisis Deck, and Base
+  Card Pool.
+- Each player receives three random Base cards and two random Empire cards.
+- Each player receives one configured Hidden Agenda when enough Agenda cards exist.
+- The initial City enters play without consuming one of its own building slots.
+- Pillars use their configured starting values, with Treasury, Stability, and Morale
+  defaulting to five when no Pillar catalog exists.
 
-Events are loaded into an event deck. The first epoch starts directly in Administration; later epochs enter Council, reveal one event if available, rotate the Minister of the Empire, select ministries, and draw one card per player.
+## Runtime Contract
 
-## Board Zones
-
-The central board shows city zones. Each city zone is created by a city card, starting with the capital city card. City cards are normal project cards with costs, requirements, tags, and manual actions, plus a `building_slots` value.
-
-Buildings are placed into a city zone's building slots. City cards do not occupy building slots and are shown separately from buildings. Roads and connections are not part of v0.
-
-The project zone can hold up to three projects. A project is a card from a player's hand or the common pool that is waiting for its cost to be paid, then built into an eligible city zone or founded as a new city if it is a city card.
-
-The common pool is a shared set of cards loaded from the latest deck whose `deck_type` is `common-pool`. Cards in the common pool are shown next to the focused player's hand and can be proposed by the active player.
-
-The focused player board appears at the bottom of the screen. The focused player can be changed by clicking a player in the left turn-order panel. The active player is the player whose turn is currently being resolved.
-
-## Cards
-
-Cards display:
-
-- Tier and cost chips at the top.
-- Requirements below the title.
-- Counted permanent tags in the body.
-- Manual action production at the bottom.
-
-City cards and building cards can define counted permanent tags, volatile resource costs, required tags, pitch tags, and stackable manual effects. Building requirements that check city tags only inspect the target city where the building would be placed. Requirements are enforced when a completed project is built. A completed building only shows build options in city zones where its requirements are satisfied and at least one building slot is open.
-
-## Turn Actions
-
-Each epoch moves through explicit phases tracked by the backend and shown by the UI:
-
-1. Council: rotate the Minister of the Empire, select ministries, reveal one event if the event deck is not empty, and draw one card per player.
-2. Administration: players act in turn order, starting from the Minister of the Empire.
-3. Crisis: event cards are visual only and have no effects in v0.
-4. Decay cleanup: unfinished contributions are wiped, completed unbuilt projects remain available, exhausted cards refresh, and volatile mana is cleared.
-
-## Turn Actions
-
-During a player's Administration turn, the backend returns every legal action for the UI to render.
-
-Limited action:
-
-- Exhaust a ready card in the capital city to execute a manual logic node whose preconditions include `exhaust`. Exhausting is a built-in cost, not an explicit effect. This can be performed at most once per player turn and does not end the turn.
-
-Free actions:
-
-- Assign volatile mana from the active player's pool onto a project.
-- Build a completed project. City projects create a new city zone. Building projects are built into an eligible city zone with an open building slot. This is available to the Minister of the Empire and any ministry configured with `can_finalize_projects`. The backend returns one build action per valid target, and the UI shows those targets as semi-transparent build options in the matching zones.
-- Use a configured ministry resource action, such as the Minister of Infrastructure producing an admin-selected volatile resource. This is once per year for that ministry action.
-
-Turn-ending action:
-
-- Propose a project by moving one card from hand or from the common pool into the project zone. If the project zone is full, the oldest project is discarded.
-- Pass.
-
-Proposing a project and Pass end the current player's turn. In both cases, the player's volatile mana pool is emptied and active player advances to the next non-passed player in turn order.
-
-If the backend calculates that a player has no legal action except Pass, that player is auto-passed. The Administration phase ends when all players pass across the round robin.
-
-## Mana And Projects
-
-Mana tokens are volatile and are stored on player boards only during that player's current turn.
-
-Players can assign stored mana tokens to projects through backend action endpoints. Projects do not build automatically. Once a project is complete, any active player can use the free Build Project action. City projects create new city zones; building projects are placed into a city where their requirements are satisfied and a slot is available.
-
-During Decay:
-
-- Completed projects remain in the project zone if nobody built them.
-- All unfinished project contributions are wiped to zero.
-- All exhausted cards refresh.
-
-Newly built cards are ready immediately, though the current player may already have used their once-per-turn Exhaust action.
-
-## Card Logic Nodes
-
-Cards can define dynamic behavior with `logic_nodes`, using the Trigger-Precondition-Effect model.
-
-Supported v0 triggers:
-
-- `manual_action`: a player-triggered action.
-- `persistent`: a passive effect marker. Persistent effects are stored in catalog data but are not yet resolved by v0 runtime logic.
-
-Supported v0 preconditions:
-
-- `exhaust`: if true, the card must be ready and becomes exhausted as the action cost.
-- `empire_tags`: a repeated list of permanent tag ids required across the empire. Multiple copies mean multiple required instances.
+The game state exposes `possible_actions`. The client may render only those actions
+and submits one through `POST /api/game/rooms/{room_id}/actions`:
 
 ```json
 {
-  "exhaust": true,
-  "empire_tags": ["industry", "industry", "food"]
+  "action": "commit_card",
+  "payload": {
+    "player_id": "player-2",
+    "source": "hand",
+    "index": 0
+  }
 }
 ```
 
-Supported v0 effect types:
+The engine supports Ministry drafting, Suspicion placement, Production, queued
+project resolution, anonymous commitments, reveal and placement, stalled-project
+voting, Crisis defense, resource storage, Scheme management, drawing, and cleanup.
 
-- `draw_card`, used for drawing from the Empire deck into the active player's hand.
-- `add_resources`, used for adding volatile resources to the active player's pool. Resources are stored as a repeated list of resource tag ids.
-- `ready_building`, which removes exhaustion from the acting building.
+## Catalog Data
 
-Cards must define manual actions with `logic_nodes`; shortcut `exhaust` metadata is not supported in the clean catalog schema.
-
-## Admin Catalog
-
-Decks are catalog entries with kind `decks`.
-
-The backend does not create default game items from Python. A new database starts with an empty catalog. Reusable defaults and templates live under `catalog/` as JSON files and are loaded through the admin console import controls.
-
-An Empire deck uses:
+Cards retain the existing catalog schema and add:
 
 ```json
 {
-  "deck_type": "empire",
-  "item_ids": ["lumber-camp", "militia-garrison"]
+  "storage": {
+    "capacity": 2,
+    "mode": "generic"
+  },
+  "built_pillar_modifiers": [
+    {
+      "pillar_id": "morale",
+      "amount": 1
+    }
+  ]
 }
 ```
 
-An event deck uses:
+Specific storage uses `"mode": "specific"` plus `resource_id`. Production can be
+stored in `production` or in persistent logic nodes that add resources.
+
+Event effects may have an optional condition:
 
 ```json
 {
-  "deck_type": "events",
-  "item_ids": ["black-year", "barbarian-incursion"]
+  "effect_type": "modify_pillar",
+  "payload": {
+    "pillar": "stability",
+    "amount": -1
+  },
+  "condition": {
+    "source_type": "tag",
+    "source_id": "military",
+    "operator": "lt",
+    "amount": 2
+  }
 }
 ```
 
-A common pool deck uses:
+Condition sources are `tag`, `resource`, or `pillar`; operators are `gt`, `gte`,
+`lt`, `lte`, and `eq`. Effects resolve in listed order, so an earlier resource
+effect can change whether a later condition is satisfied.
 
-```json
-{
-  "deck_type": "common-pool",
-  "item_ids": ["lumber-camp", "market-hub"]
-}
-```
-
-The admin console exposes deck creation, modification, deletion, export, and import alongside the other catalog pages.
-
-Tags can be marked as permanent tags or volatile resources. Cards can be configured with counted permanent tags, volatile costs, required city tags, pitch tags, and `logic_nodes` from the guided card editor.
-
-Ministries are catalog entries with configurable event-type jurisdictions. The Minister of Infrastructure-style resource list is admin-editable through `infrastructure_resources`, stored as a list of volatile resource tag ids; project finalization and Politics/Economy proposal permissions are also ministry metadata.
+Hidden Agendas use the same `conditions` shape and may set `condition_mode` to
+`all` (the default) or `any`. When a Pillar reaches zero, the backend reveals all
+Agendas and records every player whose Agenda is satisfied in `winner_player_ids`.

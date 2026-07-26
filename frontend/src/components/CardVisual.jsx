@@ -1,4 +1,4 @@
-import { Hand, RotateCcw, ScrollText, Zap } from "lucide-react";
+import { Archive, Hand, RotateCcw, Scale, ScrollText, Zap } from "lucide-react";
 import TagIcon from "./TagIcon.jsx";
 
 const normalize = (value) => String(value || "").trim().toLowerCase().replace(/[\s_]+/g, "-");
@@ -18,7 +18,9 @@ const tagEntries = (value) => {
   return Object.entries(value || {});
 };
 
-const manualActionNode = (data = {}) => (data.logic_nodes || []).find((entry) => ["manual", "manual_action"].includes(entry?.trigger));
+const productionLogicEffects = (data = {}) => (data.logic_nodes || [])
+  .flatMap((entry) => entry.effects || [])
+  .filter((effect) => ["add_resources", "modify_mana"].includes(effect?.effect_type));
 
 const IconPill = ({ children, title, tone = "slate", compact = false }) => {
   const toneClass = tone === "amber"
@@ -96,35 +98,32 @@ const CardVisual = ({
   onExhaust,
   canPropose = false,
   onPropose,
+  canAct = false,
+  actionLabel = "",
+  onAction,
   disabled = false,
   size = "table",
   className = "",
+  pillarLookup = {},
 }) => {
   const data = card?.data || {};
   const cost = data.cost || {};
   const requiredCityTags = data.required_city_tags || {};
   const tags = data.tags || {};
-  const manualNode = manualActionNode(data);
-  const preconditions = manualNode?.preconditions || {};
-  const effects = manualNode?.effects || [];
-  const preconditionTags = countRepeatedTags(preconditions.empire_tags || preconditions.required_empire_tags);
+  const productionEffects = [
+    ...(Object.keys(data.production || {}).length
+      ? [{ effect_type: "add_resources", payload: { resources: data.production } }]
+      : []),
+    ...productionLogicEffects(data),
+  ];
+  const storage = data.storage && typeof data.storage === "object"
+    ? data.storage
+    : Number(data.storage || 0) > 0
+      ? { capacity: Number(data.storage), mode: "generic" }
+      : null;
+  const pillarModifiers = Array.isArray(data.built_pillar_modifiers) ? data.built_pillar_modifiers : [];
   const compact = size === "hand";
   const widthClass = compact ? "w-[clamp(9rem,13vw,11rem)]" : "w-[clamp(10.5rem,12vw,13rem)]";
-
-  const effectStrip = (
-    <div className="flex min-h-8 flex-wrap items-center justify-center gap-1 border-t border-amber-900/50 pt-2">
-      {Object.entries(preconditionTags).map(([tagId, count]) => (
-        <TagIcon key={tagId} tag={tagLookup[normalize(tagId)]} label={tagId} count={count} size={compact ? "xs" : "sm"} />
-      ))}
-      {preconditions.exhaust ? (
-        <IconPill title={exhausted ? "Exhausted" : "Exhaust"} tone="amber" compact={compact}>
-          <Zap className={compact ? "h-3 w-3" : "h-3.5 w-3.5"} aria-hidden="true" />
-        </IconPill>
-      ) : null}
-      {(Object.keys(preconditionTags).length || preconditions.exhaust) && effects.length ? <span className="text-xs font-semibold text-amber-700">:</span> : null}
-      <EffectIcons effects={effects} tagLookup={tagLookup} compact={compact} />
-    </div>
-  );
 
   return (
     <article
@@ -169,18 +168,48 @@ const CardVisual = ({
         </div>
       ) : null}
 
-      {effects.length ? (
-        canExhaust ? (
-          <button
-            className="rounded-md text-left transition hover:bg-amber-400/10 disabled:cursor-not-allowed disabled:opacity-50"
-            disabled={disabled || exhausted}
-            onClick={onExhaust}
-            type="button"
-          >
-            {effectStrip}
-          </button>
-        ) : effectStrip
-      ) : <div className="min-h-8 border-t border-amber-900/50 pt-2" />}
+      {storage || pillarModifiers.length ? (
+        <div className="mb-1 flex flex-wrap items-center justify-center gap-1">
+          {storage ? (
+            <IconPill
+              title={`Stores ${Number(storage.capacity || 0)} ${storage.mode === "specific" ? storage.resource_id || "selected resource" : "resources"}`}
+              tone="teal"
+              compact={compact}
+            >
+              <Archive className={compact ? "h-3 w-3" : "h-3.5 w-3.5"} aria-hidden="true" />
+              <span className="ml-1">{Number(storage.capacity || 0)}</span>
+              {storage.mode === "specific" && storage.resource_id ? (
+                <span className="ml-1">
+                  <TagIcon tag={tagLookup[normalize(storage.resource_id)]} label={storage.resource_id} size="xs" />
+                </span>
+              ) : null}
+            </IconPill>
+          ) : null}
+          {pillarModifiers.map((modifier, index) => {
+            const pillarId = modifier.pillar_id || modifier.pillar;
+            const amount = Number(modifier.amount || 0);
+            return (
+              <IconPill
+                key={`${pillarId}-${index}`}
+                title={`${amount >= 0 ? "+" : ""}${amount} ${pillarLookup[normalize(pillarId)]?.name || pillarId} when built`}
+                tone={amount >= 0 ? "teal" : "amber"}
+                compact={compact}
+              >
+                <Scale className={compact ? "h-3 w-3" : "h-3.5 w-3.5"} aria-hidden="true" />
+                <span className="ml-1">{amount >= 0 ? `+${amount}` : amount}</span>
+              </IconPill>
+            );
+          })}
+        </div>
+      ) : null}
+
+      {productionEffects.length ? (
+        <div className="mb-1 flex min-h-7 flex-wrap items-center justify-center gap-1 border-t border-teal-900/50 pt-1" title="Production">
+          <EffectIcons effects={productionEffects} tagLookup={tagLookup} compact={compact} />
+        </div>
+      ) : null}
+
+      <div className="min-h-2 border-t border-amber-900/50 pt-1" />
 
       {canPropose ? (
         <button
@@ -191,6 +220,17 @@ const CardVisual = ({
         >
           <Hand className="h-3.5 w-3.5" aria-hidden="true" />
           Project
+        </button>
+      ) : null}
+      {canAct ? (
+        <button
+          className="mt-2 inline-flex items-center justify-center gap-1 rounded-md bg-amber-300 px-2 py-1.5 text-[0.68rem] font-bold text-stone-950 hover:bg-amber-200 disabled:opacity-60"
+          disabled={disabled}
+          onClick={onAction}
+          type="button"
+        >
+          <Hand className="h-3.5 w-3.5" aria-hidden="true" />
+          {actionLabel || "Choose"}
         </button>
       ) : null}
     </article>

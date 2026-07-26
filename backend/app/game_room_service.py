@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 
 from .server_models import User
-from .goldfishing_engine import assign_mana, build_project, choose_ministry, continue_phase, exhaust_card, pass_turn, peek_event, propose_project, use_ministry_resource
+from .goldfishing_engine import perform_action
 
 
 ROOM_STATE_IN_GAME = "IN_GAME"
@@ -114,59 +114,7 @@ class GameRoomService:
         state = _decode_state(room.get("game_state"))
         if state.get("mode") != "goldfishing":
             raise ValueError("This room is not a goldfishing game.")
-        if action == "propose_project":
-            state = propose_project(
-                state,
-                player_id=str(payload.get("player_id") or ""),
-                card_id=str(payload.get("card_id") or ""),
-            )
-        elif action == "exhaust_card":
-            state = exhaust_card(
-                state,
-                player_id=str(payload.get("player_id") or ""),
-                city_id=str(payload.get("city_id") or ""),
-                card_id=str(payload.get("card_id") or ""),
-            )
-        elif action == "assign_mana":
-            state = assign_mana(
-                state,
-                player_id=str(payload.get("player_id") or ""),
-                project_id=str(payload.get("project_id") or ""),
-                tag_id=str(payload.get("tag_id") or ""),
-                amount=int(payload.get("amount") or 1),
-                city_id=str(payload.get("city_id") or "capital"),
-            )
-        elif action == "build_project":
-            state = build_project(
-                state,
-                player_id=str(payload.get("player_id") or ""),
-                project_id=str(payload.get("project_id") or ""),
-                city_id=str(payload.get("city_id") or "capital"),
-            )
-        elif action == "use_ministry_resource":
-            state = use_ministry_resource(
-                state,
-                player_id=str(payload.get("player_id") or ""),
-                tag_id=str(payload.get("tag_id") or ""),
-            )
-        elif action == "peek_event":
-            state = peek_event(
-                state,
-                player_id=str(payload.get("player_id") or ""),
-                event_id=str(payload.get("event_id") or ""),
-            )
-        elif action == "choose_ministry":
-            state = choose_ministry(
-                state,
-                player_id=str(payload.get("player_id") or ""),
-                ministry_id=str(payload.get("ministry_id") or ""),
-            )
-        elif action == "pass_turn":
-            state = pass_turn(state, player_id=str(payload.get("player_id") or ""))
-        elif action == "continue_phase":
-            state = continue_phase(state)
-        else:
-            raise ValueError("Unknown game action.")
+        state = perform_action(state, action, payload)
         room["game_state"] = json.dumps(state)
         if self.redis is None:
             self._memory_rooms[room_id] = room

@@ -12,8 +12,17 @@
       "data": {
         "card_type": "city",
         "placement": "city",
-        "building_slots": 3,
-        "tags": {}
+        "building_slots": 4,
+        "tags": {},
+        "production": {
+          "labor": 2,
+          "material": 1,
+          "wealth": 1
+        },
+        "storage": {
+          "capacity": 2,
+          "mode": "generic"
+        }
       }
     },
     {
@@ -705,7 +714,7 @@
       "summary": "A military invasion tests the Empire's permanent defenses.",
       "color": null,
       "data": {
-        "domain_id": "military",
+        "ministry_id": "minister-of-war",
         "defense_requirement": {
           "military": 5
         },
@@ -713,7 +722,7 @@
           {
             "effect_type": "generate_resource",
             "payload": {
-              "target": "domain_minister",
+              "target": "event_minister",
               "resource_id": "labor",
               "amount": 3
             }
@@ -745,7 +754,7 @@
                 "payload": {
                   "tag_id": "industry",
                   "amount": 1,
-                  "decider": "minister-of-infrastructure"
+                  "decider": "minister-of-cities"
                 }
               }
             ]
@@ -774,7 +783,7 @@
       "summary": "Disease punishes weak public health and low food reserves.",
       "color": null,
       "data": {
-        "domain_id": "provision",
+        "ministry_id": "minister-of-health-and-harvest",
         "defense_requirement": {
           "sanitary": 4,
           "food": 2
@@ -842,7 +851,7 @@
       "summary": "Diplomatic isolation freezes commercial production.",
       "color": null,
       "data": {
-        "domain_id": "diplomacy",
+        "ministry_id": "minister-of-state",
         "defense_requirement": {
           "diplomacy": 4
         },
@@ -1163,40 +1172,22 @@
       "summary": "The provider. Controls provisioning and public health events.",
       "color": null,
       "data": {
-        "domain_id": "provision",
-        "domain_symbol": "HLT",
-        "abilities": [
-          "provision_event_edicts"
-        ],
-        "domain_icon_image_id": "minister-health-harvest",
+        "role": "health",
         "symbol": "H&H",
         "icon_image_id": "minister-health-harvest"
       }
     },
     {
-      "id": "minister-of-infrastructure",
-      "name": "Minister of Infrastructure",
+      "id": "minister-of-cities",
+      "name": "Minister of Cities",
       "kind": "ministries",
       "category": "ministry",
-      "summary": "The builder. Finalizes projects and decides which building is destroyed by infrastructure damage.",
+      "summary": "Places Buildings and Cities and chooses which leftover resources are stored.",
       "color": null,
       "data": {
-        "domain_id": "infrastructure",
-        "domain_symbol": "INF",
-        "can_finalize_projects": true,
-        "infrastructure_resources": {
-          "labor": 1,
-          "material": 1,
-          "wealth": 1
-        },
-        "abilities": [
-          "finalize_projects",
-          "once_per_year_generate_configured_resource",
-          "decide_destroyed_building"
-        ],
-        "domain_icon_image_id": "minister-infrastructure",
+        "role": "cities",
         "icon_image_id": "minister-infrastructure",
-        "symbol": "INF"
+        "symbol": "CTY"
       }
     },
     {
@@ -1204,17 +1195,10 @@
       "name": "Minister of State",
       "kind": "ministries",
       "category": "ministry",
-      "summary": "The diplomat. Controls diplomacy events and may propose Politics or Economy cards.",
+      "summary": "Draws up to two cards during Cleanup without exceeding the hand limit.",
       "color": null,
       "data": {
-        "domain_id": "diplomacy",
-        "domain_symbol": "DIP",
-        "can_propose_politics_economy": true,
-        "abilities": [
-          "diplomacy_event_edicts",
-          "propose_politics_and_economy"
-        ],
-        "domain_icon_image_id": "minister-state",
+        "role": "state",
         "icon_image_id": "minister-state",
         "symbol": "STA"
       }
@@ -1224,19 +1208,12 @@
       "name": "Minister of War",
       "kind": "ministries",
       "category": "ministry",
-      "summary": "The defender. Controls military event edicts and reconnaissance.",
+      "summary": "May add defense to one Crisis resolution each Era.",
       "color": null,
       "data": {
-        "domain_id": "military",
-        "domain_symbol": "WAR",
-        "abilities": [
-          "military_event_edicts",
-          "peek_event_queue"
-        ],
-        "domain_icon_image_id": "minister-war",
+        "role": "war",
         "icon_image_id": "minister-war",
-        "symbol": "WAR",
-        "can_peek_event_queue": true
+        "symbol": "WAR"
       }
     },
     {
@@ -1244,24 +1221,11 @@
       "name": "Minister of the Empire",
       "kind": "ministries",
       "category": "ministry",
-      "summary": "The sovereign. Acts first, blocks one player during Council, and decides unassigned edicts.",
+      "summary": "Leads turn order, breaks ties, and decides for missing Ministers.",
       "color": null,
       "data": {
-        "domain_id": "sovereign",
-        "domain_symbol": "EMP",
-        "is_minister_of_empire": true,
-        "can_finalize_projects": true,
-        "abilities": [
-          "select_blocked_player",
-          "administration_first_turn",
-          "finalize_projects",
-          "fallback_event_decider"
-        ],
-        "domain_icon_image_id": "minister-empire",
+        "role": "empire",
         "icon_image_id": "minister-empire",
-        "first_administration_turn": true,
-        "can_block_player_council": true,
-        "fallback_event_decider": true,
         "symbol": "EMP"
       }
     },
@@ -1447,13 +1411,22 @@
     },
     {
       "id": "default-common-pool",
-      "name": "Default Common Pool",
+      "name": "Default Base Card Pool",
       "kind": "empire-decks",
-      "category": "common-pool",
-      "summary": "Starter shared project pool.",
+      "category": "base-pool",
+      "summary": "Twelve Base cards dealt during four-player setup.",
       "color": null,
       "data": {
         "item_ids": [
+          "basic-farm",
+          "stone-quarry",
+          "grand-garrison",
+          "basic-farm",
+          "stone-quarry",
+          "grand-garrison",
+          "basic-farm",
+          "stone-quarry",
+          "grand-garrison",
           "basic-farm",
           "stone-quarry",
           "grand-garrison"

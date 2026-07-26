@@ -4,7 +4,9 @@ This folder stores human-readable catalog setup files for Chronicle of the Fall.
 
 The backend does not seed default game items from Python. A new database starts with an empty game catalog. Admins can import one of these JSON files from the admin console with `Import All` or import per-page files with `Import Page`.
 
-Use this folder for new default cards, tags, images, decks, events, ministries, event types, agendas, groups, and card categories.
+Use this folder for default cards, tags/resources, images, Empire decks, Crisis
+decks, Events, Ministries, Pillars, effect icons, agendas, groups, categories, and
+Levels.
 
 Expected JSON shape:
 
@@ -28,10 +30,13 @@ Expected JSON shape:
 }
 ```
 
-For a per-page file, set `kind` to a catalog kind such as `cards`, `tags`, `images`, `events`, or `decks`.
+For a per-page file, set `kind` to a catalog kind such as `cards`, `tags`,
+`images`, `events`, `empire-decks`, or `event-decks`.
 
-Deck entries use `data.deck_type` to define their gameplay purpose:
+Deck entries store repeated item ids in `data.item_ids`:
 
-- `empire`: player draw deck.
-- `events`: event deck.
-- `common-pool`: shared cards available for project proposals.
+- `empire-decks` can be selected as the Empire Deck or the Base Card Pool.
+- The Base Card Pool deals three cards to each player during setup.
+- The Empire Deck deals two cards to each player and can contain Buildings,
+  Cities, Events, and Political cards.
+- `event-decks` are Crisis Decks resolved from Era 2 onward.

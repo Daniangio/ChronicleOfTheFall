@@ -62,7 +62,13 @@ const primitiveText = (value) => {
   return String(value);
 };
 
-const SmallIcon = ({ src, fallback, label, tone = "slate" }) => {
+const smallIconSizes = {
+  xs: "h-5 w-5",
+  sm: "h-7 w-7",
+  md: "h-12 w-12",
+};
+
+const SmallIcon = ({ src, fallback, label, tone = "slate", size = "md" }) => {
   const toneClass = tone === "rose"
     ? "border-rose-800/70 text-rose-200"
     : tone === "emerald"
@@ -71,9 +77,10 @@ const SmallIcon = ({ src, fallback, label, tone = "slate" }) => {
         ? "border-amber-800/70 text-amber-200"
         : "border-slate-700 text-slate-300";
   const Fallback = fallback;
+  const iconSize = smallIconSizes[size] || smallIconSizes.md;
   return (
     <span>
-      {src ? <img alt="" className="h-12 w-12 object-contain" src={src} /> : Fallback ? <Fallback className="h-4 w-4" aria-hidden="true" /> : String(label || "").slice(0, 3).toUpperCase()}
+      {src ? <img alt="" className={`${iconSize} object-contain`} src={src} /> : Fallback ? <Fallback className={size === "xs" ? "h-3.5 w-3.5" : size === "sm" ? "h-4 w-4" : "h-5 w-5"} aria-hidden="true" /> : String(label || "").slice(0, 3).toUpperCase()}
     </span>
   );
 };
@@ -275,21 +282,32 @@ const DataValue = ({ itemKey, value, tagLookup, cardLookup, groupLookup }) => {
 
 const MinisterAbilities = ({ entry, tagLookup }) => {
   const data = entry?.data || {};
-  const abilities = [
-    data.can_finalize_projects ? "Can finalize projects." : null,
-    data.can_block_player_council ? "Can decide to block a player during Council." : null,
-    data.first_administration_turn ? "Is first during the Administration phase." : null,
-    data.fallback_event_decider ? "Takes decisions when the responsible minister is missing." : null,
-    data.can_decide_destroyed_building ? "Chooses destroyed buildings for matching Event effects." : null,
-    data.can_propose_politics_economy ? "Can propose Politics and Economy projects." : null,
-    data.can_peek_event_queue ? "Can secretly look at one queued Event once per Year during their Administration turn." : null,
-  ].filter(Boolean);
-  const infrastructureResources = Array.isArray(data.infrastructure_resources)
-    ? data.infrastructure_resources
-    : Object.keys(data.infrastructure_resources || {});
+  const identity = `${data.role || ""} ${entry?.id || ""} ${entry?.name || ""}`.toLowerCase();
+  const role = data.role
+    || (identity.includes("empire") ? "empire"
+      : identity.includes("cities") || identity.includes("infrastructure") ? "cities"
+        : identity.includes("state") ? "state"
+          : identity.includes("health") || identity.includes("harvest") ? "health"
+            : identity.includes("war") ? "war"
+              : "");
+  const abilitiesByRole = {
+    empire: [
+      "Leads turn order and breaks ties.",
+      "Decides for a missing Minister.",
+      "Chooses the order of simultaneous effects.",
+    ],
+    cities: [
+      "Places all Buildings and Cities.",
+      "Chooses which leftover resources the Empire stores.",
+    ],
+    state: ["Draws up to two cards during Cleanup without exceeding the hand limit."],
+    health: ["Cannot be forced to discard cards from hand or Scheme Slots."],
+    war: ["May add +1 Crisis defense, or +2 while the Empire has a Military tag, once per Era."],
+  };
+  const abilities = abilitiesByRole[role] || [];
 
-  if (!abilities.length && !infrastructureResources.length) {
-    return <p className="mt-4 text-sm text-slate-600">No flagged game abilities.</p>;
+  if (!abilities.length) {
+    return <p className="mt-4 text-sm text-slate-600">No Ministry office selected.</p>;
   }
 
   return (
@@ -299,31 +317,21 @@ const MinisterAbilities = ({ entry, tagLookup }) => {
           {ability}
         </div>
       ))}
-      {infrastructureResources.length ? (
-        <div className="rounded-md border border-amber-900/60 bg-stone-950/40 px-3 py-2 text-sm text-amber-100">
-          <span>Can produce one Infrastructure resource each Year:</span>
-          <span className="ml-2 inline-flex flex-wrap items-center gap-1.5 align-middle">
-            {infrastructureResources.map((resourceId) => (
-              <TagIcon key={resourceId} tag={tagLookup[normalizeTagId(resourceId)]} label={resourceId} />
-            ))}
-          </span>
-        </div>
-      ) : null}
     </div>
   );
 };
 
-const EventEffectIcon = ({ effectType, effectIconLookup, imageLookup, fallback, label, tone }) => {
+const EventEffectIcon = ({ effectType, effectIconLookup, imageLookup, fallback, label, tone, size = "sm" }) => {
   const entry = effectIconLookup[normalizeTagId(effectType)];
-  return <SmallIcon src={catalogIcon(entry, imageLookup)} fallback={fallback} label={label || entry?.name || effectType} tone={tone} />;
+  return <SmallIcon src={catalogIcon(entry, imageLookup)} fallback={fallback} label={label || entry?.name || effectType} tone={tone} size={size} />;
 };
 
 const EventTargetIcon = ({ target, eventMinistry, ministryLookup, effectIconLookup, imageLookup }) => {
   if (target === "all_players") {
-    return <EventEffectIcon effectType="all_players" effectIconLookup={effectIconLookup} imageLookup={imageLookup} fallback={Users} label="All players" tone="amber" />;
+    return <EventEffectIcon effectType="all_players" effectIconLookup={effectIconLookup} imageLookup={imageLookup} fallback={Users} label="All players" tone="amber" size="sm" />;
   }
   const ministry = target === "event_minister" || !target ? eventMinistry : ministryLookup[normalizeTagId(target)];
-  return <SmallIcon src={ministryIcon(ministry, imageLookup)} label={ministry?.name || target || "Minister"} tone="amber" />;
+  return <SmallIcon src={ministryIcon(ministry, imageLookup)} label={ministry?.name || target || "Minister"} tone="amber" size="sm" />;
 };
 
 const EventEffectToken = ({ effect, eventMinistry, ministryLookup, effectIconLookup, pillarLookup, tagLookup, imageLookup }) => {
@@ -333,16 +341,20 @@ const EventEffectToken = ({ effect, eventMinistry, ministryLookup, effectIconLoo
     const pillar = pillarLookup[normalizeTagId(payload.pillar)];
     return (
       <span className="inline-flex items-center gap-1">
-        <SmallIcon src={catalogIcon(pillar, imageLookup)} label={pillar?.name || payload.pillar || "Pillar"} tone={amount >= 0 ? "emerald" : "rose"} />
+        <SmallIcon src={catalogIcon(pillar, imageLookup)} label={pillar?.name || payload.pillar || "Pillar"} tone={amount >= 0 ? "emerald" : "rose"} size="sm" />
         <span className={`text-xs font-bold ${amount >= 0 ? "text-emerald-200" : "text-rose-200"}`}>{amount >= 0 ? `+${amount}` : amount}</span>
       </span>
     );
   }
-  if (effect?.effect_type === "generate_resource") {
+  if (["generate_resource", "modify_resource"].includes(effect?.effect_type)) {
     return (
       <span className="inline-flex items-center gap-1">
-        <EventTargetIcon target={payload.target || "event_minister"} eventMinistry={eventMinistry} ministryLookup={ministryLookup} effectIconLookup={effectIconLookup} imageLookup={imageLookup} />
-        <TagIcon tag={tagLookup[normalizeTagId(payload.resource_id)]} label={payload.resource_id} count={amount} />
+        <TagIcon tag={tagLookup[normalizeTagId(payload.resource_id)]} label={payload.resource_id} count={Math.abs(amount)} size="sm" />
+        {effect?.effect_type === "modify_resource" ? (
+          <span className={`text-xs font-bold ${amount >= 0 ? "text-emerald-200" : "text-rose-200"}`}>
+            {amount >= 0 ? `+${amount}` : amount}
+          </span>
+        ) : null}
       </span>
     );
   }
@@ -367,7 +379,7 @@ const EventEffectToken = ({ effect, eventMinistry, ministryLookup, effectIconLoo
     return (
       <span className="inline-flex items-center gap-1">
         <EventEffectIcon effectType="freeze_resource_generation" effectIconLookup={effectIconLookup} imageLookup={imageLookup} fallback={Snowflake} label="Freeze resource" tone="rose" />
-        <TagIcon tag={tagLookup[normalizeTagId(payload.resource_id)]} label={payload.resource_id} />
+        <TagIcon tag={tagLookup[normalizeTagId(payload.resource_id)]} label={payload.resource_id} size="sm" />
       </span>
     );
   }
@@ -375,7 +387,7 @@ const EventEffectToken = ({ effect, eventMinistry, ministryLookup, effectIconLoo
     const ministry = ministryLookup[normalizeTagId(payload.ministry_id || eventMinistry?.id)];
     return (
       <span className="inline-flex items-center gap-1">
-        <SmallIcon src={ministryIcon(ministry, imageLookup)} fallback={UserX} label={ministry?.name || "Minister"} tone="amber" />
+        <SmallIcon src={ministryIcon(ministry, imageLookup)} fallback={UserX} label={ministry?.name || "Minister"} tone="amber" size="sm" />
         <EventEffectIcon effectType="block_minister_next_year" effectIconLookup={effectIconLookup} imageLookup={imageLookup} fallback={Ban} label="Block minister" tone="rose" />
       </span>
     );
@@ -394,7 +406,7 @@ const EventRequirementCost = ({ value, tagLookup }) => {
     <div className="grid max-w-[11rem] grid-cols-5 gap-1">
       {entries.flatMap(([tagId, count]) => (
         Array.from({ length: Math.max(1, Number(count) || 1) }).map((_, index) => (
-          <TagIcon key={`${tagId}-${index}`} tag={tagLookup[normalizeTagId(tagId)]} label={tagId} size="sm" />
+          <TagIcon key={`${tagId}-${index}`} tag={tagLookup[normalizeTagId(tagId)]} label={tagId} size="xs" />
         ))
       ))}
     </div>
@@ -404,20 +416,45 @@ const EventRequirementCost = ({ value, tagLookup }) => {
 const EventEffectRow = ({ title, effects, tone, eventMinistry, ministryLookup, effectIconLookup, pillarLookup, tagLookup, imageLookup }) => {
   if (!effects?.length) return null;
   return (
-    <div className={`min-h-[5.5rem] rounded-md border ${tone === "success" ? "border-emerald-900/70 bg-emerald-950/15" : "border-rose-900/70 bg-rose-950/15"} p-2`}>
+    <div className={`min-h-[4.25rem] rounded-md border ${tone === "success" ? "border-emerald-900/70 bg-emerald-950/15" : "border-rose-900/70 bg-rose-950/15"} p-1.5`}>
       <p className={`mb-2 text-[0.65rem] font-bold uppercase tracking-normal ${tone === "success" ? "text-emerald-200" : "text-rose-200"}`}>{title}</p>
-      <div className="flex flex-wrap gap-1.5">
+      <div className="flex flex-wrap gap-1">
         {effects.map((effect, index) => (
-          <EventEffectToken
-            key={index}
-            effect={effect}
-            eventMinistry={eventMinistry}
-            ministryLookup={ministryLookup}
-            effectIconLookup={effectIconLookup}
-            pillarLookup={pillarLookup}
-            tagLookup={tagLookup}
-            imageLookup={imageLookup}
-          />
+          <span key={index} className="inline-flex items-center gap-1" title={effect.condition ? "Conditional effect" : undefined}>
+            {effect.condition ? (
+              <>
+                <span className="text-[0.58rem] font-bold uppercase text-amber-300">IF</span>
+                {effect.condition.source_type === "pillar" ? (
+                  <SmallIcon
+                    src={catalogIcon(pillarLookup[normalizeTagId(effect.condition.source_id)], imageLookup)}
+                    label={pillarLookup[normalizeTagId(effect.condition.source_id)]?.name || effect.condition.source_id}
+                    tone="amber"
+                    size="sm"
+                  />
+                ) : (
+                  <TagIcon
+                    tag={tagLookup[normalizeTagId(effect.condition.source_id)]}
+                    label={effect.condition.source_id}
+                    size="xs"
+                  />
+                )}
+                <span className="text-[0.58rem] font-bold text-amber-200">
+                  {{ gt: ">", gte: ">=", lt: "<", lte: "<=", eq: "=" }[effect.condition.operator] || ">="}
+                  {Number(effect.condition.amount || 0)}
+                </span>
+                <span className="text-amber-800">:</span>
+              </>
+            ) : null}
+            <EventEffectToken
+              effect={effect}
+              eventMinistry={eventMinistry}
+              ministryLookup={ministryLookup}
+              effectIconLookup={effectIconLookup}
+              pillarLookup={pillarLookup}
+              tagLookup={tagLookup}
+              imageLookup={imageLookup}
+            />
+          </span>
         ))}
       </div>
     </div>
@@ -429,11 +466,12 @@ const EventCardVisual = ({ entry, eventMinistry, ministryLookup, effectIconLooku
   const eventImage = assetSrc(data.image || imageLookup[data.image_id]?.data?.src || "");
   const successEffects = Array.isArray(data.success_effects) ? data.success_effects : [];
   const failureEffects = Array.isArray(data.failure_effects) ? data.failure_effects : [];
+  const immediateEffects = Array.isArray(data.effects) ? data.effects : [];
   const thresholds = Array.isArray(data.thresholds) ? data.thresholds : [];
   return (
     <article className="flex aspect-[5/7] w-[clamp(12rem,16vw,15rem)] shrink-0 flex-col overflow-hidden rounded-lg border border-amber-900/70 bg-stone-950 p-3 shadow-xl">
       <div className="grid grid-cols-[3rem_minmax(0,1fr)] gap-2">
-        <SmallIcon src={ministryIcon(eventMinistry, imageLookup)} label={eventMinistry?.name || data.ministry_symbol || "Minister"} tone="amber" />
+        <SmallIcon src={ministryIcon(eventMinistry, imageLookup)} label={eventMinistry?.name || data.ministry_symbol || "Minister"} tone="amber" size="sm" />
         <div className="min-w-0 text-right">
           <h3 className="line-clamp-2 text-[0.82rem] font-bold leading-tight text-amber-50">{entry.name}</h3>
           <p className="mt-0.5 truncate text-[0.55rem] uppercase text-amber-700">{entry.id}</p>
@@ -445,6 +483,9 @@ const EventCardVisual = ({ entry, eventMinistry, ministryLookup, effectIconLooku
       {eventImage ? <img alt="" className="mt-2 h-20 w-full rounded-md object-cover opacity-80" src={eventImage} /> : null}
       <div className="flex flex-1 flex-col justify-end gap-2 pt-2">
         {entry.summary && !eventImage ? <p className="line-clamp-3 text-center text-[0.62rem] leading-4 text-stone-300">{entry.summary}</p> : null}
+        {immediateEffects.length ? (
+          <EventEffectRow title="Effect" effects={immediateEffects} tone="success" eventMinistry={eventMinistry} ministryLookup={ministryLookup} effectIconLookup={effectIconLookup} pillarLookup={pillarLookup} tagLookup={tagLookup} imageLookup={imageLookup} />
+        ) : null}
         {successEffects.length || failureEffects.length ? (
           <div className={`grid gap-2 ${successEffects.length && failureEffects.length ? "sm:grid-cols-2" : ""}`}>
             <EventEffectRow title="Success" effects={successEffects} tone="success" eventMinistry={eventMinistry} ministryLookup={ministryLookup} effectIconLookup={effectIconLookup} pillarLookup={pillarLookup} tagLookup={tagLookup} imageLookup={imageLookup} />
@@ -456,7 +497,7 @@ const EventCardVisual = ({ entry, eventMinistry, ministryLookup, effectIconLooku
             <p className="text-[0.65rem] font-bold uppercase tracking-normal text-slate-500">Thresholds</p>
             {thresholds.map((threshold, index) => (
               <div key={index} className="flex flex-wrap items-center gap-1.5 text-xs text-slate-300">
-                <TagIcon tag={tagLookup[normalizeTagId(threshold.tag_id)]} label={threshold.tag_id} count={threshold.amount} size="sm" />
+                <TagIcon tag={tagLookup[normalizeTagId(threshold.tag_id)]} label={threshold.tag_id} count={threshold.amount} size="xs" />
                 <span className="text-slate-600">:</span>
                 {(threshold.effects || []).map((effect, effectIndex) => (
                   <EventEffectToken key={effectIndex} effect={effect} eventMinistry={eventMinistry} ministryLookup={ministryLookup} effectIconLookup={effectIconLookup} pillarLookup={pillarLookup} tagLookup={tagLookup} imageLookup={imageLookup} />
@@ -508,7 +549,7 @@ const CatalogItemVisual = ({ entry, tags = [], cards = [], groups = [], ministri
   if (visualEntry.kind === "cards") {
     return (
       <div className="rounded-lg border border-slate-800 bg-slate-900 p-4">
-        <CardVisual card={visualEntry} tagLookup={tagLookup} size="table" />
+        <CardVisual card={visualEntry} tagLookup={tagLookup} pillarLookup={pillarLookup} size="table" />
         {actions ? <div className="mt-4 flex flex-wrap gap-2">{actions}</div> : null}
       </div>
     );

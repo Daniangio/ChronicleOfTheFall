@@ -21,7 +21,7 @@ const sections = [
   { key: "events", label: "Events", to: "/admin/events" },
   { key: "groups", label: "Groups", to: "/admin/groups" },
   { key: "empire-decks", label: "Empire Decks", to: "/admin/empire-decks" },
-  { key: "event-decks", label: "Event Decks", to: "/admin/event-decks" },
+  { key: "event-decks", label: "Crisis Decks", to: "/admin/event-decks" },
   { key: "levels", label: "Levels", to: "/admin/levels" },
 ];
 
@@ -773,7 +773,7 @@ const LogicNodeEditor = ({ logicNodes, setLogicNodes, tagEntries }) => {
   );
 };
 
-const CardGuidedFields = ({ data, setField, tagEntries, cardEntries, groupEntries }) => {
+const CardGuidedFields = ({ data, setField, tagEntries, cardEntries, groupEntries, pillarEntries }) => {
   const conditionTags = tagEntries.filter((tag) => tag.category === "condition");
   const resourceTags = volatileResourceTags(tagEntries);
   const permanentTags = permanentOnlyTags(tagEntries);
@@ -782,6 +782,10 @@ const CardGuidedFields = ({ data, setField, tagEntries, cardEntries, groupEntrie
   const requirements = Array.isArray(data.requirements) ? data.requirements : [];
   const replacementEffects = Array.isArray(data.replacement_effects) ? data.replacement_effects : [];
   const logicNodes = Array.isArray(data.logic_nodes) ? data.logic_nodes : [];
+  const storage = data.storage && typeof data.storage === "object"
+    ? data.storage
+    : { capacity: Number(data.storage || 0), mode: "generic", resource_id: "" };
+  const pillarModifiers = Array.isArray(data.built_pillar_modifiers) ? data.built_pillar_modifiers : [];
 
   const updateRequirement = (index, patch) => {
     const next = [...requirements];
@@ -823,6 +827,80 @@ const CardGuidedFields = ({ data, setField, tagEntries, cardEntries, groupEntrie
           onChange={(value) => setField("building_slots", Math.max(0, value))}
         />
       ) : null}
+
+      <div className="space-y-3 rounded-md border border-slate-800 bg-slate-950 p-3">
+        <h4 className="text-sm font-semibold text-slate-300">Resource Storage</h4>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <NumberField
+            label="Capacity"
+            value={storage.capacity || 0}
+            onChange={(value) => {
+              const capacity = Math.max(0, value);
+              setField("storage", capacity ? { ...storage, capacity } : null);
+            }}
+          />
+          <SelectField
+            label="Storage Type"
+            value={storage.mode || "generic"}
+            options={[
+              { value: "generic", label: "Any resource" },
+              { value: "specific", label: "Specific resource" },
+            ]}
+            onChange={(mode) => setField("storage", { ...storage, capacity: Math.max(1, Number(storage.capacity || 1)), mode, resource_id: mode === "specific" ? storage.resource_id || "" : "" })}
+          />
+          {storage.mode === "specific" ? (
+            <SelectField
+              label="Resource"
+              value={storage.resource_id || ""}
+              options={[{ value: "", label: "Select resource" }, ...resourceTags.map((tag) => ({ value: tag.id, label: tag.name }))]}
+              onChange={(resourceId) => setField("storage", { ...storage, capacity: Math.max(1, Number(storage.capacity || 1)), mode: "specific", resource_id: resourceId })}
+            />
+          ) : <span />}
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <h4 className="text-sm font-semibold text-slate-300">Pillar Changes When Built</h4>
+          <button
+            className="rounded-md border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800"
+            onClick={() => setField("built_pillar_modifiers", [...pillarModifiers, { pillar_id: "", amount: 1 }])}
+            type="button"
+          >
+            Add change
+          </button>
+        </div>
+        {pillarModifiers.map((modifier, index) => (
+          <div key={index} className="grid gap-2 rounded-md border border-slate-800 bg-slate-950 p-3 sm:grid-cols-[1fr_8rem_auto]">
+            <SelectField
+              label="Pillar"
+              value={modifier.pillar_id || ""}
+              options={[{ value: "", label: "Select pillar" }, ...pillarEntries.map((pillar) => ({ value: pillar.id, label: pillar.name }))]}
+              onChange={(pillarId) => {
+                const next = [...pillarModifiers];
+                next[index] = { ...modifier, pillar_id: pillarId };
+                setField("built_pillar_modifiers", next);
+              }}
+            />
+            <NumberField
+              label="Change"
+              value={modifier.amount || 0}
+              onChange={(amount) => {
+                const next = [...pillarModifiers];
+                next[index] = { ...modifier, amount };
+                setField("built_pillar_modifiers", next);
+              }}
+            />
+            <button
+              className="mt-7 text-xs font-semibold text-rose-300 hover:text-rose-200"
+              onClick={() => setField("built_pillar_modifiers", pillarModifiers.filter((_, itemIndex) => itemIndex !== index))}
+              type="button"
+            >
+              Remove
+            </button>
+          </div>
+        ))}
+      </div>
 
       <TagCounterGroup
         label="Permanent Tags"
@@ -1095,26 +1173,22 @@ const LevelGuidedFields = ({ data, setField, cardEntries, empireDeckEntries, eve
         onChange={(value) => setField("empire_deck_id", value)}
       />
       <SelectField
-        label="Event Deck"
+        label="Crisis Deck"
         value={data.event_deck_id || ""}
         options={[{ value: "", label: "Select event deck" }, ...eventDeckEntries.map((deck) => ({ value: deck.id, label: deck.name }))]}
         onChange={(value) => setField("event_deck_id", value)}
       />
       <SelectField
-        label="Common Pool Deck"
+        label="Base Card Pool"
         value={data.common_pool_deck_id || ""}
-        options={[{ value: "", label: "Select common pool deck" }, ...empireDeckEntries.map((deck) => ({ value: deck.id, label: deck.name }))]}
+        options={[{ value: "", label: "Select base card pool" }, ...empireDeckEntries.map((deck) => ({ value: deck.id, label: deck.name }))]}
         onChange={(value) => setField("common_pool_deck_id", value)}
       />
     </>
   );
 };
 
-const MinistryGuidedFields = ({ data, setField, tagEntries, imageEntries }) => {
-  const resourceTags = volatileResourceTags(tagEntries);
-  const infrastructureResources = Array.isArray(data.infrastructure_resources)
-    ? data.infrastructure_resources
-    : Object.keys(data.infrastructure_resources || {});
+const MinistryGuidedFields = ({ data, setField, imageEntries }) => {
   const ministerSymbol = data.symbol ?? "";
   const ministerIconImageId = data.icon_image_id ?? "";
 
@@ -1139,40 +1213,18 @@ const MinistryGuidedFields = ({ data, setField, tagEntries, imageEntries }) => {
         }}
       />
 
-      <div className="grid gap-2 sm:grid-cols-2">
-        {[
-          ["is_minister_of_empire", "Minister of the Empire"],
-          ["can_finalize_projects", "Can finalize projects"],
-          ["can_block_player_council", "Can block a player during Council"],
-          ["first_administration_turn", "First during Administration"],
-          ["fallback_event_decider", "Decides if responsible minister is missing"],
-          ["can_decide_destroyed_building", "Chooses destroyed buildings"],
-          ["can_propose_politics_economy", "Can propose Politics and Economy cards"],
-          ["can_peek_event_queue", "Can look at one queued Event once per Year"],
-        ].map(([field, label]) => (
-          <label key={field} className="flex items-center gap-2 text-sm font-medium text-slate-300">
-            <input
-              checked={Boolean(data[field])}
-              onChange={(event) => setField(field, event.target.checked)}
-              type="checkbox"
-            />
-            {label}
-          </label>
-        ))}
-      </div>
-
-      <TagToggleGroup
-        label="Infrastructure Resources"
-        tags={resourceTags}
-        selectedIds={infrastructureResources}
-        onToggle={(tagId) => {
-          setField(
-            "infrastructure_resources",
-            infrastructureResources.includes(tagId)
-              ? infrastructureResources.filter((item) => item !== tagId)
-              : [...infrastructureResources, tagId]
-          );
-        }}
+      <SelectField
+        label="Ministry Office"
+        value={data.role || ""}
+        options={[
+          { value: "", label: "Select office" },
+          { value: "empire", label: "Minister of the Empire" },
+          { value: "cities", label: "Minister of Cities" },
+          { value: "state", label: "Minister of State" },
+          { value: "health", label: "Minister of Health & Harvest" },
+          { value: "war", label: "Minister of War" },
+        ]}
+        onChange={(value) => setField("role", value)}
       />
     </>
   );
@@ -1182,6 +1234,7 @@ const emptyEventEffect = { effect_type: "modify_pillar", payload: { pillar: "tre
 const emptyEventThreshold = { tag_id: "unrest", amount: 1, effects: [emptyEventEffect] };
 const eventEffectTypeOptions = [
   { value: "generate_resource", label: "Generate resource" },
+  { value: "modify_resource", label: "Modify global resource" },
   { value: "modify_pillar", label: "Modify pillar" },
   { value: "destroy_building_with_tag", label: "Destroy building" },
   { value: "discard_card", label: "Discard card" },
@@ -1225,15 +1278,15 @@ const EventEffectEditor = ({ effects, setEffects, resourceTags, allTags, ministr
             options={eventEffectTypeOptions}
             onChange={(value) => updateEffect(index, { effect_type: value, payload: {} })}
           />
-          {effect.effect_type === "generate_resource" ? (
+          {["generate_resource", "modify_resource"].includes(effect.effect_type) ? (
             <>
               <SelectField
                 label="Resource"
                 value={effect.payload?.resource_id || ""}
                 options={[{ value: "", label: "Select resource" }, ...resourceTags.map((tag) => ({ value: tag.id, label: tag.name }))]}
-                onChange={(value) => updatePayload(index, { resource_id: value, target: "event_minister" })}
+                onChange={(value) => updatePayload(index, { resource_id: value })}
               />
-              <NumberField label="Amount" value={effect.payload?.amount || 1} onChange={(value) => updatePayload(index, { amount: value })} />
+              <NumberField label="Change" value={effect.payload?.amount || 1} onChange={(value) => updatePayload(index, { amount: value })} />
             </>
           ) : effect.effect_type === "modify_pillar" ? (
             <>
@@ -1254,7 +1307,7 @@ const EventEffectEditor = ({ effects, setEffects, resourceTags, allTags, ministr
                 label="Tag"
                 value={effect.payload?.tag_id || ""}
                 options={[{ value: "", label: "Select tag" }, ...permanentOnlyTags(allTags).map((tag) => ({ value: tag.id, label: tag.name }))]}
-                onChange={(value) => updatePayload(index, { tag_id: value, decider: "minister-of-infrastructure" })}
+                onChange={(value) => updatePayload(index, { tag_id: value, decider: "minister-of-cities" })}
               />
               <NumberField label="Amount" value={effect.payload?.amount || 1} onChange={(value) => updatePayload(index, { amount: value })} />
             </>
@@ -1300,6 +1353,67 @@ const EventEffectEditor = ({ effects, setEffects, resourceTags, allTags, ministr
           >
             Remove
           </button>
+          <div className="space-y-2 border-t border-slate-800 pt-3 sm:col-span-4">
+            <label className="flex items-center gap-2 text-sm font-medium text-slate-300">
+              <input
+                checked={Boolean(effect.condition)}
+                onChange={(event) => updateEffect(index, {
+                  condition: event.target.checked
+                    ? { source_type: "tag", source_id: "", operator: "gte", amount: 1 }
+                    : null,
+                })}
+                type="checkbox"
+              />
+              Apply only when an Empire condition is met
+            </label>
+            {effect.condition ? (
+              <div className="grid gap-2 sm:grid-cols-4">
+                <SelectField
+                  label="Count"
+                  value={effect.condition.source_type || "tag"}
+                  options={[
+                    { value: "tag", label: "Permanent tag" },
+                    { value: "resource", label: "Global resource" },
+                    { value: "pillar", label: "Pillar value" },
+                  ]}
+                  onChange={(sourceType) => updateEffect(index, {
+                    condition: { ...effect.condition, source_type: sourceType, source_id: "" },
+                  })}
+                />
+                <SelectField
+                  label="Item"
+                  value={effect.condition.source_id || ""}
+                  options={[
+                    { value: "", label: "Select item" },
+                    ...(effect.condition.source_type === "resource"
+                      ? resourceTags
+                      : effect.condition.source_type === "pillar"
+                        ? pillarEntries
+                        : permanentOnlyTags(allTags)
+                    ).map((entry) => ({ value: entry.id, label: entry.name })),
+                  ]}
+                  onChange={(sourceId) => updateEffect(index, { condition: { ...effect.condition, source_id: sourceId } })}
+                />
+                <SelectField
+                  label="Comparison"
+                  value={effect.condition.operator || "gte"}
+                  options={[
+                    { value: "gt", label: "More than" },
+                    { value: "gte", label: "At least" },
+                    { value: "lt", label: "Less than" },
+                    { value: "lte", label: "At most" },
+                    { value: "eq", label: "Exactly" },
+                  ]}
+                  onChange={(operator) => updateEffect(index, { condition: { ...effect.condition, operator } })}
+                />
+                <NumberField
+                  label="Value"
+                  value={effect.condition.amount ?? 1}
+                  onChange={(amount) => updateEffect(index, { condition: { ...effect.condition, amount } })}
+                />
+              </div>
+            ) : null}
+          </div>
         </div>
       ))}
       <button
@@ -1371,6 +1485,18 @@ const EventGuidedFields = ({ data, setField, tagEntries, ministryEntries, imageE
       />
 
       <div className="space-y-3">
+        <h4 className="text-sm font-semibold text-slate-300">Immediate Event Effects</h4>
+        <EventEffectEditor
+          effects={Array.isArray(data.effects) ? data.effects : []}
+          setEffects={(effects) => setField("effects", effects)}
+          resourceTags={resourceTags}
+          allTags={tagEntries}
+          ministryEntries={ministryEntries}
+          pillarEntries={pillarEntries}
+        />
+      </div>
+
+      <div className="space-y-3">
         <h4 className="text-sm font-semibold text-slate-300">Success Effects</h4>
         <EventEffectEditor
           effects={Array.isArray(data.success_effects) ? data.success_effects : []}
@@ -1435,6 +1561,85 @@ const EventGuidedFields = ({ data, setField, tagEntries, ministryEntries, imageE
                 type="button"
               >
                 Remove threshold
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </>
+  );
+};
+
+const AgendaGuidedFields = ({ data, setField, tagEntries, pillarEntries }) => {
+  const conditions = Array.isArray(data.conditions) ? data.conditions : [];
+  const resourceTags = volatileResourceTags(tagEntries);
+  const permanentTags = permanentOnlyTags(tagEntries);
+  const updateCondition = (index, patch) => {
+    const next = [...conditions];
+    next[index] = { ...next[index], ...patch };
+    setField("conditions", next);
+  };
+  return (
+    <>
+      <SelectField
+        label="Condition Mode"
+        value={data.condition_mode || "all"}
+        options={[
+          { value: "all", label: "All conditions" },
+          { value: "any", label: "Any condition" },
+        ]}
+        onChange={(value) => setField("condition_mode", value)}
+      />
+      <div className="space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <h4 className="text-sm font-semibold text-slate-300">Victory Conditions</h4>
+          <button
+            className="rounded-md border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800"
+            onClick={() => setField("conditions", [...conditions, { source_type: "tag", source_id: "", operator: "gte", amount: 1 }])}
+            type="button"
+          >
+            Add condition
+          </button>
+        </div>
+        {conditions.map((condition, index) => {
+          const options = condition.source_type === "resource"
+            ? resourceTags
+            : condition.source_type === "pillar"
+              ? pillarEntries
+              : permanentTags;
+          return (
+            <div key={index} className="grid gap-2 rounded-md border border-slate-800 bg-slate-950 p-3 sm:grid-cols-[9rem_1fr_9rem_7rem_auto]">
+              <SelectField
+                label="Measure"
+                value={condition.source_type || "tag"}
+                options={[
+                  { value: "tag", label: "Empire tag" },
+                  { value: "resource", label: "Resource" },
+                  { value: "pillar", label: "Pillar" },
+                ]}
+                onChange={(sourceType) => updateCondition(index, { source_type: sourceType, source_id: "" })}
+              />
+              <SelectField
+                label="Item"
+                value={condition.source_id || ""}
+                options={[{ value: "", label: "Select item" }, ...options.map((entry) => ({ value: entry.id, label: entry.name }))]}
+                onChange={(sourceId) => updateCondition(index, { source_id: sourceId })}
+              />
+              <SelectField
+                label="Comparison"
+                value={condition.operator || "gte"}
+                options={[
+                  { value: "gt", label: "More than" },
+                  { value: "gte", label: "At least" },
+                  { value: "lt", label: "Less than" },
+                  { value: "lte", label: "At most" },
+                  { value: "eq", label: "Exactly" },
+                ]}
+                onChange={(operator) => updateCondition(index, { operator })}
+              />
+              <NumberField label="Value" value={condition.amount ?? 1} onChange={(amount) => updateCondition(index, { amount })} />
+              <button className="mt-7 text-xs font-semibold text-rose-300 hover:text-rose-200" onClick={() => setField("conditions", conditions.filter((_, itemIndex) => itemIndex !== index))} type="button">
+                Remove
               </button>
             </div>
           );
@@ -1573,9 +1778,10 @@ const GuidedMetadataEditor = ({
   const hasLevelGuidance = activeSection === "levels";
   const hasMinistryGuidance = activeSection === "ministries";
   const hasEventGuidance = activeSection === "events";
+  const hasAgendaGuidance = activeSection === "agendas";
   const hasPillarGuidance = activeSection === "pillars";
   const hasEffectIconGuidance = activeSection === "effect-icons";
-  if (!usefulFields.length && !hasCardGuidance && !hasDeckGuidance && !hasLevelGuidance && !hasMinistryGuidance && !hasEventGuidance && !hasPillarGuidance && !hasEffectIconGuidance) return null;
+  if (!usefulFields.length && !hasCardGuidance && !hasDeckGuidance && !hasLevelGuidance && !hasMinistryGuidance && !hasEventGuidance && !hasAgendaGuidance && !hasPillarGuidance && !hasEffectIconGuidance) return null;
 
   const setField = (field, value) => {
     setCatalogForm((state) => {
@@ -1634,6 +1840,7 @@ const GuidedMetadataEditor = ({
           tagEntries={tagEntries}
           cardEntries={cardEntries}
           groupEntries={groupEntries}
+          pillarEntries={pillarEntries}
         />
       ) : null}
       {hasDeckGuidance ? (
@@ -1643,9 +1850,12 @@ const GuidedMetadataEditor = ({
           items={
             activeSection === "event-decks"
               ? eventEntries
-              : cardEntries.filter((entry) => String(entry.data?.card_type || entry.category || "").toLowerCase() !== "city")
+              : [
+                  ...cardEntries.filter((entry) => String(entry.data?.card_type || entry.category || "").toLowerCase() !== "city"),
+                  ...eventEntries,
+                ]
           }
-          title={activeSection === "event-decks" ? "Event Cards" : "Empire Cards"}
+          title={activeSection === "event-decks" ? "Crisis Cards" : "Empire Cards and Events"}
         />
       ) : null}
       {hasLevelGuidance ? (
@@ -1661,7 +1871,6 @@ const GuidedMetadataEditor = ({
         <MinistryGuidedFields
           data={data}
           setField={setField}
-          tagEntries={tagEntries}
           imageEntries={imageEntries}
         />
       ) : null}
@@ -1672,6 +1881,14 @@ const GuidedMetadataEditor = ({
           tagEntries={tagEntries}
           ministryEntries={ministryEntries}
           imageEntries={imageEntries}
+          pillarEntries={pillarEntries}
+        />
+      ) : null}
+      {hasAgendaGuidance ? (
+        <AgendaGuidedFields
+          data={data}
+          setField={setField}
+          tagEntries={tagEntries}
           pillarEntries={pillarEntries}
         />
       ) : null}
@@ -2665,39 +2882,48 @@ const AdminPage = () => {
                   </h2>
                 ) : null}
                 <div className="grid gap-4 md:grid-cols-2">
-                  {entries.map((entry) => (
-                    <CatalogItemVisual
-                      key={entry.id}
-                      entry={entry}
-                      tags={tagEntries}
-                      cards={cardEntries}
-                      groups={groupEntries}
-                      ministries={ministryEntries}
-                      images={imageEntries}
-                      pillars={pillarEntries}
-                      effectIcons={effectIconEntries}
-                      actions={
-                        <>
-                          <button
-                            className="inline-flex items-center gap-2 rounded-md border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800"
-                            onClick={() => beginEditCatalogEntry(entry)}
-                            type="button"
-                          >
-                            <Edit3 className="h-4 w-4" aria-hidden="true" />
-                            Edit
-                          </button>
-                          <button
-                            className="inline-flex items-center gap-2 rounded-md border border-rose-900/80 px-3 py-2 text-sm text-rose-200 hover:bg-rose-950/70"
-                            onClick={() => deleteCatalogEntry(entry)}
-                            type="button"
-                          >
-                            <Trash2 className="h-4 w-4" aria-hidden="true" />
-                            Delete
-                          </button>
-                        </>
-                      }
-                    />
-                  ))}
+                  {entries.map((entry) => {
+                    const actionButtons = (
+                      <>
+                        <button
+                          className="inline-flex items-center gap-2 rounded-md border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800"
+                          onClick={() => beginEditCatalogEntry(entry)}
+                          type="button"
+                        >
+                          <Edit3 className="h-4 w-4" aria-hidden="true" />
+                          Edit
+                        </button>
+                        <button
+                          className="inline-flex items-center gap-2 rounded-md border border-rose-900/80 px-3 py-2 text-sm text-rose-200 hover:bg-rose-950/70"
+                          onClick={() => deleteCatalogEntry(entry)}
+                          type="button"
+                        >
+                          <Trash2 className="h-4 w-4" aria-hidden="true" />
+                          Delete
+                        </button>
+                      </>
+                    );
+                    return (
+                      <div key={entry.id} className="space-y-3">
+                        <CatalogItemVisual
+                          entry={entry}
+                          tags={tagEntries}
+                          cards={cardEntries}
+                          groups={groupEntries}
+                          ministries={ministryEntries}
+                          images={imageEntries}
+                          pillars={pillarEntries}
+                          effectIcons={effectIconEntries}
+                          actions={entry.kind === "events" ? null : actionButtons}
+                        />
+                        {entry.kind === "events" ? (
+                          <div className="flex flex-wrap gap-2 rounded-lg border border-slate-800 bg-slate-900 p-3">
+                            {actionButtons}
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })}
                 </div>
               </section>
             ))}

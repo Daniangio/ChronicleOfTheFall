@@ -90,8 +90,8 @@ const SoloPlayPage = () => {
               <div className="rounded-md border border-slate-800 bg-slate-950 p-3 text-left text-xs text-slate-400">
                 <p><span className="font-semibold text-slate-300">Initial City:</span> {selectedLevel.initial_city_name || selectedLevel.initial_city_card_id || "Missing"}</p>
                 <p className="mt-1"><span className="font-semibold text-slate-300">Empire Deck:</span> {selectedLevel.empire_deck_name || selectedLevel.empire_deck_id || "Missing"}</p>
-                <p className="mt-1"><span className="font-semibold text-slate-300">Event Deck:</span> {selectedLevel.event_deck_name || selectedLevel.event_deck_id || "Missing"}</p>
-                <p className="mt-1"><span className="font-semibold text-slate-300">Common Pool:</span> {selectedLevel.common_pool_deck_name || selectedLevel.common_pool_deck_id || "Missing"}</p>
+                <p className="mt-1"><span className="font-semibold text-slate-300">Crisis Deck:</span> {selectedLevel.event_deck_name || selectedLevel.event_deck_id || "Missing"}</p>
+                <p className="mt-1"><span className="font-semibold text-slate-300">Base Card Pool:</span> {selectedLevel.common_pool_deck_name || selectedLevel.common_pool_deck_id || "Missing"}</p>
               </div>
             ) : null}
           </div>

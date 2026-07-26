@@ -12,14 +12,7 @@ from .schemas import (
     GameResultResponse,
     GameRoomCreateRequest,
     GameRoomResponse,
-    GoldfishingAssignManaRequest,
-    GoldfishingBuildProjectRequest,
-    GoldfishingChooseMinistryRequest,
-    GoldfishingExhaustRequest,
-    GoldfishingMinistryResourceRequest,
-    GoldfishingPassRequest,
-    GoldfishingPeekEventRequest,
-    GoldfishingProposeRequest,
+    GoldfishingActionRequest,
 )
 from .security import get_current_user
 from .server_models import User
@@ -50,39 +43,31 @@ async def create_game_room(
         pillars = [public_catalog_entry(entry) for entry in list_catalog_records(db, "pillars")]
         effect_icons = [public_catalog_entry(entry) for entry in list_catalog_records(db, "effect-icons")]
         images = [public_catalog_entry(entry) for entry in list_catalog_records(db, "images")]
+        agendas = [public_catalog_entry(entry) for entry in list_catalog_records(db, "agendas")]
         empire_decks = list_catalog_records(db, "empire-decks")
         event_decks = list_catalog_records(db, "event-decks")
         levels = list_catalog_records(db, "levels")
-        legacy_decks = list_catalog_records(db, "decks")
         level = _deck_by_id(levels, payload.level_id) or _latest_record(levels)
         level_data = getattr(level, "data", {}) or {}
         card_deck = (
             _deck_by_id(empire_decks, payload.empire_deck_id)
             or _deck_by_id(empire_decks, level_data.get("empire_deck_id"))
             or _latest_record(empire_decks)
-            or _deck_by_id(legacy_decks, payload.empire_deck_id)
-            or _latest_deck(legacy_decks, "empire")
         )
         event_deck = (
             _deck_by_id(event_decks, payload.event_deck_id)
             or _deck_by_id(event_decks, level_data.get("event_deck_id"))
             or _latest_record(event_decks)
-            or _deck_by_id(legacy_decks, payload.event_deck_id)
-            or _latest_deck(legacy_decks, "events")
         )
-        common_pool_deck = (
-            _deck_by_id(empire_decks, level_data.get("common_pool_deck_id"))
-            or _deck_by_id(legacy_decks, level_data.get("common_pool_deck_id"))
-            or _latest_deck(legacy_decks, "common-pool")
-        )
+        common_pool_deck = _deck_by_id(empire_decks, level_data.get("common_pool_deck_id"))
         initial_city_card_id = str(level_data.get("initial_city_card_id") or "capital-foundation")
         room_id = service.new_room_id()
         game_state = build_goldfishing_state(
             room_id=room_id,
             card_entries=cards,
             tag_entries=tags,
-            card_deck_ids=_deck_item_ids(card_deck) or _fallback_card_ids(cards),
-            event_deck_ids=_deck_item_ids(event_deck) or [event["id"] for event in events],
+            card_deck_ids=_deck_item_ids(card_deck) if card_deck else _fallback_card_ids(cards),
+            event_deck_ids=_deck_item_ids(event_deck),
             common_pool_ids=_deck_item_ids(common_pool_deck),
             card_deck_id=str(getattr(card_deck, "id", "") or ""),
             event_deck_id=str(getattr(event_deck, "id", "") or ""),
@@ -90,6 +75,7 @@ async def create_game_room(
             level_id=str(getattr(level, "id", "") or ""),
             common_pool_deck_id=str(getattr(common_pool_deck, "id", "") or ""),
             event_entries=events,
+            agenda_entries=agendas,
             ministry_entries=ministries,
             pillar_entries=pillars,
             effect_icon_entries=effect_icons,
@@ -120,7 +106,6 @@ async def list_game_levels(current_user: User = Depends(get_current_user), db: S
     cards = {entry.id: public_catalog_entry(entry) for entry in list_catalog_records(db, "cards")}
     empire_decks = {entry.id: public_catalog_entry(entry) for entry in list_catalog_records(db, "empire-decks")}
     event_decks = {entry.id: public_catalog_entry(entry) for entry in list_catalog_records(db, "event-decks")}
-    legacy_decks = {entry.id: public_catalog_entry(entry) for entry in list_catalog_records(db, "decks")}
     return [
         {
             "id": level["id"],
@@ -133,11 +118,7 @@ async def list_game_levels(current_user: User = Depends(get_current_user), db: S
             "event_deck_id": (level.get("data") or {}).get("event_deck_id") or "",
             "event_deck_name": event_decks.get((level.get("data") or {}).get("event_deck_id"), {}).get("name") or "",
             "common_pool_deck_id": (level.get("data") or {}).get("common_pool_deck_id") or "",
-            "common_pool_deck_name": (
-                empire_decks.get((level.get("data") or {}).get("common_pool_deck_id"), {}).get("name")
-                or legacy_decks.get((level.get("data") or {}).get("common_pool_deck_id"), {}).get("name")
-                or ""
-            ),
+            "common_pool_deck_name": empire_decks.get((level.get("data") or {}).get("common_pool_deck_id"), {}).get("name") or "",
         }
         for level in levels
     ]
@@ -159,81 +140,13 @@ async def get_game_state(room_id: str, current_user: User = Depends(get_current_
     return state_payload
 
 
-@router.post("/game/rooms/{room_id}/actions/propose")
-async def propose_game_project(
+@router.post("/game/rooms/{room_id}/actions")
+async def perform_game_action(
     room_id: str,
-    payload: GoldfishingProposeRequest,
+    payload: GoldfishingActionRequest,
     current_user: User = Depends(get_current_user),
 ):
-    return await _apply_action(room_id, current_user, "propose_project", payload.model_dump())
-
-
-@router.post("/game/rooms/{room_id}/actions/exhaust")
-async def exhaust_game_card(
-    room_id: str,
-    payload: GoldfishingExhaustRequest,
-    current_user: User = Depends(get_current_user),
-):
-    return await _apply_action(room_id, current_user, "exhaust_card", payload.model_dump())
-
-
-@router.post("/game/rooms/{room_id}/actions/assign-mana")
-async def assign_game_mana(
-    room_id: str,
-    payload: GoldfishingAssignManaRequest,
-    current_user: User = Depends(get_current_user),
-):
-    return await _apply_action(room_id, current_user, "assign_mana", payload.model_dump())
-
-
-@router.post("/game/rooms/{room_id}/actions/build-project")
-async def build_game_project(
-    room_id: str,
-    payload: GoldfishingBuildProjectRequest,
-    current_user: User = Depends(get_current_user),
-):
-    return await _apply_action(room_id, current_user, "build_project", payload.model_dump())
-
-
-@router.post("/game/rooms/{room_id}/actions/ministry-resource")
-async def use_game_ministry_resource(
-    room_id: str,
-    payload: GoldfishingMinistryResourceRequest,
-    current_user: User = Depends(get_current_user),
-):
-    return await _apply_action(room_id, current_user, "use_ministry_resource", payload.model_dump())
-
-
-@router.post("/game/rooms/{room_id}/actions/peek-event")
-async def peek_game_event(
-    room_id: str,
-    payload: GoldfishingPeekEventRequest,
-    current_user: User = Depends(get_current_user),
-):
-    return await _apply_action(room_id, current_user, "peek_event", payload.model_dump())
-
-
-@router.post("/game/rooms/{room_id}/actions/choose-ministry")
-async def choose_game_ministry(
-    room_id: str,
-    payload: GoldfishingChooseMinistryRequest,
-    current_user: User = Depends(get_current_user),
-):
-    return await _apply_action(room_id, current_user, "choose_ministry", payload.model_dump())
-
-
-@router.post("/game/rooms/{room_id}/actions/pass")
-async def pass_game_turn(
-    room_id: str,
-    payload: GoldfishingPassRequest,
-    current_user: User = Depends(get_current_user),
-):
-    return await _apply_action(room_id, current_user, "pass_turn", payload.model_dump())
-
-
-@router.post("/game/rooms/{room_id}/actions/continue-phase")
-async def continue_game_phase(room_id: str, current_user: User = Depends(get_current_user)):
-    return await _apply_action(room_id, current_user, "continue_phase", {})
+    return await _apply_action(room_id, current_user, payload.action, payload.payload)
 
 
 @router.get("/game/results/{room_id}", response_model=GameResultResponse)
@@ -263,17 +176,6 @@ async def _apply_action(room_id: str, user: User, action: str, payload: dict):
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-def _latest_deck(decks: list, deck_type: str):
-    candidates = [
-        deck
-        for deck in decks
-        if getattr(deck, "category", "") == deck_type or (getattr(deck, "data", {}) or {}).get("deck_type") == deck_type
-    ]
-    if not candidates:
-        return None
-    return max(candidates, key=lambda deck: getattr(deck, "updated_at", None) or getattr(deck, "created_at", None))
-
-
 def _latest_record(records: list):
     if not records:
         return None
@@ -291,7 +193,7 @@ def _deck_item_ids(deck) -> list[str]:
     if not deck:
         return []
     data = getattr(deck, "data", {}) or {}
-    item_ids = data.get("item_ids") or data.get("card_ids") or data.get("event_ids") or []
+    item_ids = data.get("item_ids") or []
     return [str(item_id) for item_id in item_ids if str(item_id or "").strip()]
 
 

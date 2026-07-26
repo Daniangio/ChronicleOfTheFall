@@ -97,48 +97,9 @@ class GameHistoryResponse(BaseModel):
     results: List[GameResultResponse]
 
 
-class GoldfishingProposeRequest(BaseModel):
-    player_id: str
-    card_id: str
-
-
-class GoldfishingExhaustRequest(BaseModel):
-    player_id: str
-    city_id: str
-    card_id: str
-
-
-class GoldfishingAssignManaRequest(BaseModel):
-    player_id: str
-    project_id: str
-    tag_id: str
-    amount: int = Field(default=1, ge=1)
-    city_id: str = "capital"
-
-
-class GoldfishingBuildProjectRequest(BaseModel):
-    player_id: str
-    project_id: str
-    city_id: str = "capital"
-
-
-class GoldfishingMinistryResourceRequest(BaseModel):
-    player_id: str
-    tag_id: str
-
-
-class GoldfishingPeekEventRequest(BaseModel):
-    player_id: str
-    event_id: str
-
-
-class GoldfishingChooseMinistryRequest(BaseModel):
-    player_id: str
-    ministry_id: str
-
-
-class GoldfishingPassRequest(BaseModel):
-    player_id: str
+class GoldfishingActionRequest(BaseModel):
+    action: str
+    payload: Dict[str, Any] = Field(default_factory=dict)
 
 
 class AuthMeResponse(BaseModel):
