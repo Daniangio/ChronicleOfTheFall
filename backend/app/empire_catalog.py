@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 import re
+from pathlib import Path
 from typing import Any, Literal
 
 from sqlalchemy import select
@@ -15,15 +17,13 @@ CatalogKind = Literal[
     "cards",
     "ministries",
     "pillars",
+    "tokens",
     "effect-icons",
     "agendas",
     "events",
     "groups",
-    "card-categories",
-    "empire-decks",
-    "event-decks",
-    "levels",
     "decks",
+    "levels",
 ]
 
 CATALOG_KINDS: tuple[CatalogKind, ...] = (
@@ -32,16 +32,26 @@ CATALOG_KINDS: tuple[CatalogKind, ...] = (
     "cards",
     "ministries",
     "pillars",
+    "tokens",
     "effect-icons",
     "agendas",
     "events",
     "groups",
-    "card-categories",
-    "empire-decks",
-    "event-decks",
-    "levels",
     "decks",
+    "levels",
 )
+STATIC_CATALOG_KINDS: tuple[CatalogKind, ...] = (
+    "tags",
+    "images",
+    "ministries",
+    "pillars",
+    "tokens",
+    "effect-icons",
+)
+DYNAMIC_CATALOG_KINDS: tuple[CatalogKind, ...] = tuple(
+    kind for kind in CATALOG_KINDS if kind not in STATIC_CATALOG_KINDS
+)
+STATIC_CATALOG_ROOT = Path(__file__).resolve().parents[2] / "catalog" / "ingredients"
 HEX_COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
 
 
@@ -77,7 +87,104 @@ def _sort_records(records: list[GameCatalogEntryRecord]) -> list[GameCatalogEntr
     return sorted(records, key=lambda entry: (entry.kind, entry.category, entry.name, entry.id))
 
 
+def load_static_catalog_entries() -> list[dict[str, Any]]:
+    if not STATIC_CATALOG_ROOT.is_dir():
+        raise RuntimeError(f"Static catalog directory does not exist: {STATIC_CATALOG_ROOT}")
+    entries: list[dict[str, Any]] = []
+    seen_ids: set[str] = set()
+    loaded_kinds: set[str] = set()
+    for path in sorted(STATIC_CATALOG_ROOT.glob("*.json")):
+        try:
+            document = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise RuntimeError(f"Cannot load static catalog {path}: {exc}") from exc
+        kind = str(document.get("kind") or "").strip()
+        if kind not in STATIC_CATALOG_KINDS:
+            raise RuntimeError(f"Static catalog {path} has unsupported kind {kind!r}.")
+        if kind in loaded_kinds:
+            raise RuntimeError(f"Static catalog kind {kind!r} is declared more than once.")
+        loaded_kinds.add(kind)
+        document_entries = document.get("entries")
+        if not isinstance(document_entries, list):
+            raise RuntimeError(f"Static catalog {path} must contain an entries list.")
+        for raw_entry in document_entries:
+            if not isinstance(raw_entry, dict) or raw_entry.get("kind") != kind:
+                raise RuntimeError(f"Every entry in {path} must have kind {kind!r}.")
+            entry_id = normalize_catalog_id(str(raw_entry.get("id") or ""))
+            if entry_id in seen_ids:
+                raise RuntimeError(f"Duplicate static catalog id: {entry_id}")
+            seen_ids.add(entry_id)
+            entries.append({**raw_entry, "id": entry_id})
+    missing_kinds = set(STATIC_CATALOG_KINDS) - loaded_kinds
+    if missing_kinds:
+        raise RuntimeError(f"Missing static catalog files for: {', '.join(sorted(missing_kinds))}.")
+    return entries
+
+
+def static_effect_types() -> set[str]:
+    return {
+        str((entry.get("data") or {}).get("effect_type") or "")
+        for entry in load_static_catalog_entries()
+        if entry.get("kind") == "effect-icons"
+    }
+
+
+def sync_static_catalog_records(db: Session) -> None:
+    desired_entries = load_static_catalog_entries()
+    desired_by_id = {entry["id"]: entry for entry in desired_entries}
+    existing_static = list(
+        db.execute(
+            select(GameCatalogEntryRecord).where(GameCatalogEntryRecord.kind.in_(STATIC_CATALOG_KINDS))
+        ).scalars().all()
+    )
+    changed = False
+    for row in existing_static:
+        if row.id not in desired_by_id:
+            db.delete(row)
+            changed = True
+    for entry_id, entry in desired_by_id.items():
+        kind = validate_catalog_kind(str(entry["kind"]))
+        data = entry.get("data") or {}
+        _validate_catalog_data(
+            db,
+            kind=kind,
+            entry_id=entry_id,
+            category=str(entry.get("category") or ""),
+            data=data,
+        )
+        values = {
+            "kind": kind,
+            "name": str(entry.get("name") or "").strip(),
+            "category": _catalog_category(kind, str(entry.get("category") or ""), data),
+            "summary": str(entry.get("summary") or "").strip(),
+            "color": validate_catalog_color(kind, entry.get("color")),
+            "data": data,
+        }
+        if not values["name"]:
+            raise RuntimeError(f"Static catalog entry {entry_id} has no name.")
+        row = db.get(GameCatalogEntryRecord, entry_id)
+        if row is not None and row.kind not in STATIC_CATALOG_KINDS:
+            raise RuntimeError(
+                f"Static catalog id {entry_id} conflicts with dynamic entry {row.kind}:{row.id}."
+            )
+        if row is None:
+            row = GameCatalogEntryRecord(id=entry_id, **values)
+            db.add(row)
+            changed = True
+            continue
+        if any(getattr(row, field) != value for field, value in values.items()):
+            for field, value in values.items():
+                setattr(row, field, value)
+            row.updated_at = utc_now()
+            db.add(row)
+            changed = True
+    if changed:
+        db.commit()
+
+
 def list_catalog_records(db: Session, kind: CatalogKind | None = None) -> list[GameCatalogEntryRecord]:
+    if kind is None or kind in STATIC_CATALOG_KINDS:
+        sync_static_catalog_records(db)
     stmt = select(GameCatalogEntryRecord)
     if kind is not None:
         stmt = stmt.where(GameCatalogEntryRecord.kind == kind)
@@ -85,6 +192,7 @@ def list_catalog_records(db: Session, kind: CatalogKind | None = None) -> list[G
 
 
 def catalog_record_summary(db: Session) -> dict[str, int]:
+    sync_static_catalog_records(db)
     summary = {kind.replace("-", "_"): 0 for kind in CATALOG_KINDS}
     for entry in db.execute(select(GameCatalogEntryRecord.kind)).scalars().all():
         key = str(entry).replace("-", "_")
@@ -111,12 +219,20 @@ def create_catalog_record(
     color: str | None,
     data: dict[str, Any],
 ) -> GameCatalogEntryRecord:
+    if kind in STATIC_CATALOG_KINDS:
+        raise ValueError(f"{kind} are repository-owned and cannot be created from the admin console.")
     normalized_id = normalize_catalog_id(entry_id)
     existing = db.get(GameCatalogEntryRecord, normalized_id)
     if existing is not None:
         raise ValueError(f"A catalog entry with this id already exists as {existing.kind}:{existing.id}.")
     normalized_data = data or {}
-    _validate_catalog_data(db, kind=kind, entry_id=normalized_id, data=normalized_data)
+    _validate_catalog_data(
+        db,
+        kind=kind,
+        entry_id=normalized_id,
+        category=category,
+        data=normalized_data,
+    )
     row = GameCatalogEntryRecord(
         id=normalized_id,
         kind=kind,
@@ -146,6 +262,8 @@ def update_catalog_record(
     color: str | None,
     data: dict[str, Any],
 ) -> GameCatalogEntryRecord | None:
+    if kind in STATIC_CATALOG_KINDS:
+        raise ValueError(f"{kind} are repository-owned and cannot be edited from the admin console.")
     row = get_catalog_record(db, kind=kind, entry_id=entry_id)
     if row is None:
         return None
@@ -154,7 +272,13 @@ def update_catalog_record(
     if existing is not None and existing.id != row.id:
         raise ValueError(f"A catalog entry with this id already exists as {existing.kind}:{existing.id}.")
     normalized_data = data or {}
-    _validate_catalog_data(db, kind=kind, entry_id=normalized_id, data=normalized_data)
+    _validate_catalog_data(
+        db,
+        kind=kind,
+        entry_id=normalized_id,
+        category=category,
+        data=normalized_data,
+    )
     row.id = normalized_id
     row.name = str(name or "").strip()
     row.category = _catalog_category(kind, category, normalized_data)
@@ -170,11 +294,165 @@ def update_catalog_record(
     return row
 
 
-def _validate_catalog_data(db: Session, *, kind: CatalogKind, entry_id: str, data: dict[str, Any]) -> None:
+def _validate_catalog_data(
+    db: Session,
+    *,
+    kind: CatalogKind,
+    entry_id: str,
+    category: str,
+    data: dict[str, Any],
+) -> None:
     if kind == "tags":
         resource_type = str((data or {}).get("resource_type") or "").strip()
         if resource_type not in {"permanent", "volatile"}:
             raise ValueError("Tag resource_type must be either permanent or volatile.")
+        return
+    if kind == "cards":
+        card_category = str(category or "").strip()
+        if card_category not in {"city", "structure"}:
+            raise ValueError("Card category must be city or structure.")
+        if "card_type" in data:
+            raise ValueError("Development Type was removed; use the card category.")
+        if card_category == "city" and int(data.get("building_slots") or 0) < 0:
+            raise ValueError("City building slots cannot be negative.")
+        _validate_count_map(data.get("required_tags"), "required_tags")
+        _validate_count_map(data.get("cost"), "cost")
+        _validate_count_map(data.get("tags"), "tags")
+        _validate_count_map(data.get("production"), "production")
+        _validate_card_effects(data.get("on_build_effects"), trigger="on_build")
+        _validate_card_effects(data.get("persistent_effects"), trigger="persistent")
+        return
+    if kind == "events":
+        if str(data.get("subtype") or "") not in {"edict", "crisis"}:
+            raise ValueError("Event subtype must be edict or crisis.")
+        _validate_event_requirements(data.get("requirements"))
+        _validate_event_effects(data.get("main_effects"))
+        _validate_event_effects(data.get("alternative_effects"))
+        return
+    if kind == "effect-icons":
+        effect_type = str(data.get("effect_type") or "")
+        valid_effects = static_effect_types()
+        if effect_type not in valid_effects:
+            raise ValueError("Effect icon code is not supported.")
+        return
+    if kind == "decks":
+        item_ids = data.get("item_ids")
+        if not isinstance(item_ids, list):
+            raise ValueError("Deck item_ids must be a list.")
+        initial_setup = data.get("initial_setup")
+        if not isinstance(initial_setup, dict):
+            raise ValueError("Deck initial_setup must contain 3, 4, and 5 player tiers.")
+        expected_tier_sizes = {"3": 12, "4": 3, "5": 3}
+        setup_ids: list[str] = []
+        for player_count, expected_size in expected_tier_sizes.items():
+            tier = initial_setup.get(player_count)
+            if not isinstance(tier, list) or len(tier) != expected_size:
+                raise ValueError(
+                    f"The {player_count}-player setup tier must contain exactly {expected_size} cards."
+                )
+            setup_ids.extend(str(item_id) for item_id in tier)
+        deck_counts: dict[str, int] = {}
+        setup_counts: dict[str, int] = {}
+        for item_id in item_ids:
+            deck_counts[str(item_id)] = deck_counts.get(str(item_id), 0) + 1
+        for item_id in deck_counts:
+            item = db.get(GameCatalogEntryRecord, item_id)
+            if item is None or item.kind not in {"cards", "events"}:
+                raise ValueError(f"Deck item {item_id} is not a Development or Event card.")
+        for item_id in setup_ids:
+            setup_counts[item_id] = setup_counts.get(item_id, 0) + 1
+        if any(count > deck_counts.get(item_id, 0) for item_id, count in setup_counts.items()):
+            raise ValueError("Initial setup copies must also exist in the deck.")
+        return
+    if kind == "levels":
+        city_id = str(data.get("initial_city_card_id") or "")
+        deck_id = str(data.get("deck_id") or "")
+        if not city_id:
+            raise ValueError("A level requires an initial city card.")
+        if not deck_id:
+            raise ValueError("A level requires a deck.")
+        city = db.get(GameCatalogEntryRecord, city_id)
+        if city is None or city.kind != "cards" or city.category != "city":
+            raise ValueError("The initial City must reference a City card.")
+        deck = db.get(GameCatalogEntryRecord, deck_id)
+        if deck is None or deck.kind != "decks":
+            raise ValueError("The level deck must reference a unified Empire Deck.")
+
+
+def _validate_count_map(value: Any, field: str) -> None:
+    if value in (None, {}):
+        return
+    if not isinstance(value, dict):
+        raise ValueError(f"Card {field} must be an object of item counts.")
+    if any(not str(item_id) or int(count) < 1 for item_id, count in value.items()):
+        raise ValueError(f"Card {field} counts must be positive integers.")
+
+
+def _validate_card_effects(value: Any, *, trigger: str) -> None:
+    effects = value or []
+    if not isinstance(effects, list):
+        raise ValueError(f"Card {trigger} effects must be a list.")
+    allowed = {"modify_pillar", "modify_token"} if trigger == "on_build" else {"add_building_slots", "storage"}
+    token_ids = {
+        str(entry.get("id") or "")
+        for entry in load_static_catalog_entries()
+        if entry.get("kind") == "tokens"
+    }
+    for effect in effects:
+        if not isinstance(effect, dict) or str(effect.get("effect_type") or "") not in allowed:
+            raise ValueError(f"Unsupported {trigger} card effect.")
+        if effect.get("effect_type") == "modify_token":
+            payload = effect.get("payload") or {}
+            if str(payload.get("token_id") or "") not in token_ids:
+                raise ValueError("Token effects must reference an existing token.")
+            if int(payload.get("amount") or 0) == 0:
+                raise ValueError("Token effects must add or remove at least one token.")
+
+
+def _validate_event_requirements(value: Any) -> None:
+    requirements = value or []
+    if not isinstance(requirements, list):
+        raise ValueError("Event requirements must be a list.")
+    for requirement in requirements:
+        if not isinstance(requirement, dict) or str(requirement.get("type") or "") not in {
+            "resource",
+            "tag",
+            "pillar",
+        }:
+            raise ValueError("Unsupported event requirement.")
+        if requirement.get("type") == "pillar" and requirement.get("operator") not in {
+            "gt",
+            "gte",
+            "lt",
+            "lte",
+            "eq",
+        }:
+            raise ValueError("Pillar requirements need a valid comparison.")
+
+
+def _validate_event_effects(value: Any) -> None:
+    effects = value or []
+    if not isinstance(effects, list):
+        raise ValueError("Event effects must be a list.")
+    allowed = {
+        "modify_pillar",
+        "destroy_building",
+        "remove_all_resources",
+        "discard_cards",
+        "add_plague",
+        "add_unrest",
+        "add_fortified",
+    }
+    for effect in effects:
+        if not isinstance(effect, dict) or str(effect.get("effect_type") or "") not in allowed:
+            raise ValueError("Unsupported event effect.")
+        condition = effect.get("condition")
+        if condition and (
+            not isinstance(condition, dict)
+            or condition.get("source_type") not in {"tag", "resource", "pillar"}
+            or condition.get("operator") not in {"gt", "gte", "lt", "lte", "eq"}
+        ):
+            raise ValueError("Event effect condition is invalid.")
 
 
 def _catalog_category(kind: CatalogKind, category: str, data: dict[str, Any]) -> str:
@@ -184,6 +462,8 @@ def _catalog_category(kind: CatalogKind, category: str, data: dict[str, Any]) ->
 
 
 def delete_catalog_record(db: Session, *, kind: CatalogKind, entry_id: str) -> bool:
+    if kind in STATIC_CATALOG_KINDS:
+        raise ValueError(f"{kind} are repository-owned and cannot be deleted from the admin console.")
     row = get_catalog_record(db, kind=kind, entry_id=entry_id)
     if row is None:
         return False

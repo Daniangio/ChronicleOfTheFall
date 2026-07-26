@@ -9,8 +9,9 @@ digital implementation.
 
 ## Setup
 
-- The selected Level provides the initial City, Empire Deck, Crisis Deck, and Base
-  Card Pool.
+- The selected Level provides the initial City and one unified Empire Deck.
+- The Deck's incremental setup tiers form the Base Card Pool for the current
+  player count.
 - Each player receives three random Base cards and two random Empire cards.
 - Each player receives one configured Hidden Agenda when enough Agenda cards exist.
 - The initial City enters play without consuming one of its own building slots.
@@ -39,33 +40,61 @@ voting, Crisis defense, resource storage, Scheme management, drawing, and cleanu
 
 ## Catalog Data
 
-Cards retain the existing catalog schema and add:
+Development cards use the clean schema:
 
 ```json
 {
-  "storage": {
-    "capacity": 2,
-    "mode": "generic"
-  },
-  "built_pillar_modifiers": [
-    {
-      "pillar_id": "morale",
-      "amount": 1
-    }
-  ]
+  "id": "granary",
+  "kind": "cards",
+  "category": "structure",
+  "data": {
+    "required_tags": {"urban": 1},
+    "cost": {"labor": 1},
+    "tags": {"sanitary": 1},
+    "production": {"wealth": 1},
+    "on_build_effects": [
+      {
+        "effect_type": "modify_pillar",
+        "payload": {"pillar_id": "morale", "amount": 1}
+      },
+      {
+        "effect_type": "modify_token",
+        "payload": {"token_id": "fortified-token", "amount": 1}
+      }
+    ],
+    "persistent_effects": [
+      {
+        "effect_type": "storage",
+        "payload": {"amount": 2, "resource_id": ""}
+      }
+    ]
+  }
 }
 ```
 
-Specific storage uses `"mode": "specific"` plus `resource_id`. Production can be
-stored in `production` or in persistent logic nodes that add resources.
+Card `category` is either `structure` or `city`. City cards additionally declare
+`data.building_slots`; there is no separate Development Type field.
 
-Event effects may have an optional condition:
+Tokens are fixed catalog ingredients with IDs `plague-token`, `unrest-token`,
+and `fortified-token`.
+An on-build `modify_token` effect applies to the City where the card is built.
+Its signed `amount` adds or removes tokens; token counts cannot fall below zero.
+
+An empty storage `resource_id` accepts any resource. A specific resource id limits
+that capacity. `add_building_slots` is the other persistent effect.
+
+Events declare `subtype` as `edict` or `crisis`. All entries in `requirements`
+must pass together. Resource requirements are paid; tag and Pillar requirements
+are checks. Passing resolves `main_effects`; failing resolves
+`alternative_effects`, when present.
+
+Individual effects may also have an optional condition:
 
 ```json
 {
   "effect_type": "modify_pillar",
   "payload": {
-    "pillar": "stability",
+    "pillar_id": "stability",
     "amount": -1
   },
   "condition": {

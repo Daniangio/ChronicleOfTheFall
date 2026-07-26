@@ -16,7 +16,7 @@ import CardVisual from "../components/CardVisual.jsx";
 import CatalogItemVisual from "../components/CatalogItemVisual.jsx";
 import TagIcon from "../components/TagIcon.jsx";
 import { useStore } from "../store.js";
-import { buildApiUrl } from "../utils/connection.js";
+import { buildApiUrl, buildAssetUrl } from "../utils/connection.js";
 
 const normalize = (value) => String(value || "").trim().toLowerCase().replace(/[\s_]+/g, "-");
 const lookup = (entries = []) => Object.fromEntries(entries.map((entry) => [normalize(entry.id), entry]));
@@ -38,8 +38,9 @@ const FaceDownCard = ({ label = "Anonymous" }) => (
   </article>
 );
 
-const ItemVisual = ({ item, catalogs, tagLookup, actionLabel = "", onAction, disabled = false }) => {
+const ItemVisual = ({ item, catalogs, tagLookup, storageIconSrc = "", actionLabel = "", onAction, disabled = false }) => {
   if (!item) return null;
+  const tokenLookup = buildTagLookup(catalogs.tokens, lookup(catalogs.images));
   if (item.kind === "events") {
     return (
       <div className="space-y-2">
@@ -50,6 +51,7 @@ const ItemVisual = ({ item, catalogs, tagLookup, actionLabel = "", onAction, dis
           ministries={catalogs.ministries}
           images={catalogs.images}
           pillars={catalogs.pillars}
+          tokens={catalogs.tokens}
           effectIcons={catalogs.effect_icons}
         />
         {actionLabel ? (
@@ -70,6 +72,8 @@ const ItemVisual = ({ item, catalogs, tagLookup, actionLabel = "", onAction, dis
       card={item}
       tagLookup={tagLookup}
       pillarLookup={lookup(catalogs.pillars)}
+      tokenLookup={tokenLookup}
+      storageIconSrc={storageIconSrc}
       size="hand"
       canAct={Boolean(actionLabel)}
       actionLabel={actionLabel}
@@ -84,7 +88,7 @@ const slotPosition = (index, total) => {
   return { x: Math.cos(angle), y: Math.sin(angle) };
 };
 
-const CityZone = ({ city, cardLookup, tagLookup, pillarLookup }) => {
+const CityZone = ({ city, cardLookup, tagLookup, pillarLookup, tokenLookup, storageIconSrc }) => {
   const cityCard = cardLookup[normalize(city.city_card_id)];
   const buildings = (city.cards || []).map((cardId) => cardLookup[normalize(cardId)]).filter(Boolean);
   const slots = Math.max(1, Number(city.building_slots || 0), buildings.length);
@@ -98,7 +102,7 @@ const CityZone = ({ city, cardLookup, tagLookup, pillarLookup }) => {
         <p className="mt-1 text-xs text-amber-800">{buildings.length}/{city.building_slots || 0} building slots</p>
       </div>
       <div className="absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2">
-        <CardVisual card={cityCard} tagLookup={tagLookup} pillarLookup={pillarLookup} />
+        <CardVisual card={cityCard} tagLookup={tagLookup} pillarLookup={pillarLookup} tokenLookup={tokenLookup} storageIconSrc={storageIconSrc} />
       </div>
       {Array.from({ length: slots }).map((_, index) => {
         const position = slotPosition(index, slots);
@@ -110,7 +114,7 @@ const CityZone = ({ city, cardLookup, tagLookup, pillarLookup }) => {
             style={{ transform: `translate(calc(-50% + ${position.x * 190}px), calc(-50% + ${position.y * 265}px))` }}
           >
             {building ? (
-              <CardVisual card={building} tagLookup={tagLookup} pillarLookup={pillarLookup} />
+              <CardVisual card={building} tagLookup={tagLookup} pillarLookup={pillarLookup} tokenLookup={tokenLookup} storageIconSrc={storageIconSrc} />
             ) : (
               <span className="text-[0.65rem] font-semibold uppercase text-amber-900">Building slot</span>
             )}
@@ -170,6 +174,7 @@ const GameRoomPage = () => {
     ministries: gameState?.catalog?.ministries || [],
     images: gameState?.catalog?.images || [],
     pillars: gameState?.catalog?.pillars || [],
+    tokens: gameState?.catalog?.tokens || [],
     effect_icons: gameState?.catalog?.effect_icons || [],
     agendas: gameState?.catalog?.agendas || [],
   };
@@ -181,6 +186,12 @@ const GameRoomPage = () => {
   const agendaLookup = useMemo(() => lookup(catalogs.agendas), [gameState]);
   const imageLookup = useMemo(() => lookup(catalogs.images), [gameState]);
   const tagLookup = useMemo(() => buildTagLookup(catalogs.tags, imageLookup), [gameState, imageLookup]);
+  const tokenLookup = useMemo(() => buildTagLookup(catalogs.tokens, imageLookup), [gameState, imageLookup]);
+  const storageIconSrc = useMemo(() => {
+    const icon = catalogs.effect_icons.find((entry) => entry.data?.effect_type === "storage");
+    const src = imageLookup[icon?.data?.icon_image_id]?.data?.src || "";
+    return buildAssetUrl(src);
+  }, [gameState, imageLookup]);
   const players = gameState?.players || [];
   const activePlayer = players.find((player) => player.id === gameState?.active_player_id);
   const focusedPlayer = players.find((player) => player.id === focusedPlayerId) || activePlayer || players[0];
@@ -447,7 +458,7 @@ const GameRoomPage = () => {
                 <div className="h-[38rem] overflow-auto bg-stone-950/60 p-5">
                   <div className="relative" style={{ width: boardWidth * boardZoom, height: 760 * boardZoom }}>
                     <div className="absolute left-0 top-0 flex origin-top-left gap-8" style={{ width: boardWidth, height: 760, transform: `scale(${boardZoom})` }}>
-                      {(gameState.cities || []).map((city) => <CityZone key={city.id} city={city} cardLookup={cardLookup} tagLookup={tagLookup} pillarLookup={pillarLookup} />)}
+                      {(gameState.cities || []).map((city) => <CityZone key={city.id} city={city} cardLookup={cardLookup} tagLookup={tagLookup} pillarLookup={pillarLookup} tokenLookup={tokenLookup} storageIconSrc={storageIconSrc} />)}
                     </div>
                   </div>
                 </div>
@@ -460,7 +471,7 @@ const GameRoomPage = () => {
                 <p className="mt-1 text-xs text-slate-500">{gameState.council_stack?.length || 0} cards remain</p>
                 <div className="mt-3 flex max-h-[22rem] flex-wrap gap-2 overflow-auto">
                   {(gameState.council_stack || []).map((commitment, index) => commitment.face_up ? (
-                    <ItemVisual key={commitment.id} item={itemLookup[normalize(commitment.item_id)]} catalogs={catalogs} tagLookup={tagLookup} />
+                    <ItemVisual key={commitment.id} item={itemLookup[normalize(commitment.item_id)]} catalogs={catalogs} tagLookup={tagLookup} storageIconSrc={storageIconSrc} />
                   ) : <FaceDownCard key={commitment.id} label={`Council ${index + 1}`} />)}
                   {!gameState.council_stack?.length ? <p className="text-xs text-slate-600">No committed cards.</p> : null}
                 </div>
@@ -468,7 +479,7 @@ const GameRoomPage = () => {
               {currentReveal ? (
                 <section className="border border-amber-900/60 bg-stone-950 p-3">
                   <h2 className="mb-2 text-sm font-bold text-amber-100">Current Reveal · {titleCase(currentReveal.status)}</h2>
-                  <ItemVisual item={itemLookup[normalize(currentReveal.item_id)]} catalogs={catalogs} tagLookup={tagLookup} />
+                  <ItemVisual item={itemLookup[normalize(currentReveal.item_id)]} catalogs={catalogs} tagLookup={tagLookup} storageIconSrc={storageIconSrc} />
                   {currentReveal.face_up ? <p className="mt-2 text-xs text-amber-700">Committed by {players.find((player) => player.id === currentReveal.owner_player_id)?.name}</p> : null}
                 </section>
               ) : null}
@@ -478,7 +489,7 @@ const GameRoomPage = () => {
                   {[...(gameState.queued_projects || []).map((project) => ({ ...project, row: "Queued" })), ...(gameState.stalled_projects || []).map((project) => ({ ...project, row: "Stalled" }))].map((project) => (
                     <div key={project.id}>
                       <p className="mb-1 text-[0.65rem] font-bold uppercase text-slate-500">{project.row}</p>
-                      <ItemVisual item={itemLookup[normalize(project.card_id)]} catalogs={catalogs} tagLookup={tagLookup} />
+                      <ItemVisual item={itemLookup[normalize(project.card_id)]} catalogs={catalogs} tagLookup={tagLookup} storageIconSrc={storageIconSrc} />
                     </div>
                   ))}
                   {!gameState.queued_projects?.length && !gameState.stalled_projects?.length ? <p className="text-xs text-slate-600">No projects.</p> : null}
@@ -516,6 +527,7 @@ const GameRoomPage = () => {
                           item={itemLookup[normalize(itemId)]}
                           catalogs={catalogs}
                           tagLookup={tagLookup}
+                          storageIconSrc={storageIconSrc}
                           actionLabel={primary ? plottingAction ? (plottingAction.face_up ? "Commit face up" : "Commit anonymously") : "Discard" : ""}
                           onAction={() => performAction(primary)}
                           disabled={busy || !primary}
@@ -537,7 +549,7 @@ const GameRoomPage = () => {
                   {(focusedPlayer?.scheme_slots || [null, null]).map((itemId, index) => {
                     const plottingAction = actions.find((entry) => entry.type === "commit_card" && entry.source === "scheme" && entry.index === index && entry.player_id === focusedPlayer.id);
                     return itemId ? (
-                      <ItemVisual key={`${itemId}-${index}`} item={itemLookup[normalize(itemId)]} catalogs={catalogs} tagLookup={tagLookup} actionLabel={plottingAction ? plottingAction.face_up ? "Commit face up" : "Commit anonymously" : ""} onAction={() => performAction(plottingAction)} disabled={busy || !plottingAction} />
+                      <ItemVisual key={`${itemId}-${index}`} item={itemLookup[normalize(itemId)]} catalogs={catalogs} tagLookup={tagLookup} storageIconSrc={storageIconSrc} actionLabel={plottingAction ? plottingAction.face_up ? "Commit face up" : "Commit anonymously" : ""} onAction={() => performAction(plottingAction)} disabled={busy || !plottingAction} />
                     ) : <div key={index} className="flex aspect-[5/7] items-center justify-center border border-dashed border-slate-700 text-xs text-slate-600">Empty slot {index + 1}</div>;
                   })}
                 </div>

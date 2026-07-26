@@ -1,42 +1,56 @@
-# Catalog Templates
+# Catalogs
 
-This folder stores human-readable catalog setup files for Chronicle of the Fall.
+Catalog ownership is split between repository ingredients and database content.
 
-The backend does not seed default game items from Python. A new database starts with an empty game catalog. Admins can import one of these JSON files from the admin console with `Import All` or import per-page files with `Import Page`.
+## Repository Ingredients
 
-Use this folder for default cards, tags/resources, images, Empire decks, Crisis
-decks, Events, Ministries, Pillars, effect icons, agendas, groups, categories, and
-Levels.
+`catalog/ingredients/` is authoritative for:
 
-Expected JSON shape:
+- `tags.json`: permanent tags and volatile resources
+- `images.json`: stable image ids and frontend public paths
+- `pillars.json`: Pillar definitions
+- `tokens.json`: fixed City token definitions
+- `ministries.json`: Ministry definitions
+- `effect-icons.json`: supported effect codes and their image references
+
+The backend synchronizes these files into the database at startup and whenever a
+static catalog is read. Entries removed from these files are removed from the
+database. Their admin pages are inspection-only.
+
+To change an ingredient, edit its JSON file in Git. Do not use an admin import.
+Raster assets live under `frontend/public/game-assets/`; naming and replacement
+instructions are in `frontend/public/game-assets/README.md`.
+
+## Dynamic Content
+
+`catalog/content/` contains optional import templates for content that remains
+admin-authored:
+
+- cards
+- Events
+- unified Empire decks
+- Levels
+
+Import the files in dependency order:
+
+1. `cards.json`
+2. `events.json`
+3. `decks.json`
+4. `levels.json`
+
+`chronicle-catalog-all.json` is the same dynamic template as a single convenience
+import. It intentionally excludes repository ingredients, agendas, and groups
+when no defaults for those kinds exist.
+
+All files use this envelope:
 
 ```json
 {
   "version": 1,
-  "kind": "all",
-  "entries": [
-    {
-      "id": "labor",
-      "name": "Labor",
-      "kind": "tags",
-      "category": "volatile",
-      "summary": "Transient construction and workforce resource.",
-      "color": "#b45309",
-      "data": {
-        "resource_type": "volatile"
-      }
-    }
-  ]
+  "kind": "cards",
+  "entries": []
 }
 ```
 
-For a per-page file, set `kind` to a catalog kind such as `cards`, `tags`,
-`images`, `events`, `empire-decks`, or `event-decks`.
-
-Deck entries store repeated item ids in `data.item_ids`:
-
-- `empire-decks` can be selected as the Empire Deck or the Base Card Pool.
-- The Base Card Pool deals three cards to each player during setup.
-- The Empire Deck deals two cards to each player and can contain Buildings,
-  Cities, Events, and Political cards.
-- `event-decks` are Crisis Decks resolved from Era 2 onward.
+An admin `Export All` contains only dynamic content. Static ingredients remain
+portable because they are versioned with the application.

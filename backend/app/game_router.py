@@ -41,43 +41,35 @@ async def create_game_room(
         events = [public_catalog_entry(entry) for entry in list_catalog_records(db, "events")]
         ministries = [public_catalog_entry(entry) for entry in list_catalog_records(db, "ministries")]
         pillars = [public_catalog_entry(entry) for entry in list_catalog_records(db, "pillars")]
+        tokens = [public_catalog_entry(entry) for entry in list_catalog_records(db, "tokens")]
         effect_icons = [public_catalog_entry(entry) for entry in list_catalog_records(db, "effect-icons")]
         images = [public_catalog_entry(entry) for entry in list_catalog_records(db, "images")]
         agendas = [public_catalog_entry(entry) for entry in list_catalog_records(db, "agendas")]
-        empire_decks = list_catalog_records(db, "empire-decks")
-        event_decks = list_catalog_records(db, "event-decks")
+        decks = list_catalog_records(db, "decks")
         levels = list_catalog_records(db, "levels")
         level = _deck_by_id(levels, payload.level_id) or _latest_record(levels)
+        if level is None:
+            raise ValueError("No level is configured.")
         level_data = getattr(level, "data", {}) or {}
-        card_deck = (
-            _deck_by_id(empire_decks, payload.empire_deck_id)
-            or _deck_by_id(empire_decks, level_data.get("empire_deck_id"))
-            or _latest_record(empire_decks)
-        )
-        event_deck = (
-            _deck_by_id(event_decks, payload.event_deck_id)
-            or _deck_by_id(event_decks, level_data.get("event_deck_id"))
-            or _latest_record(event_decks)
-        )
-        common_pool_deck = _deck_by_id(empire_decks, level_data.get("common_pool_deck_id"))
+        deck = _deck_by_id(decks, payload.deck_id) or _deck_by_id(decks, level_data.get("deck_id"))
+        if deck is None:
+            raise ValueError("The selected level has no valid deck.")
         initial_city_card_id = str(level_data.get("initial_city_card_id") or "capital-foundation")
         room_id = service.new_room_id()
         game_state = build_goldfishing_state(
             room_id=room_id,
             card_entries=cards,
             tag_entries=tags,
-            card_deck_ids=_deck_item_ids(card_deck) if card_deck else _fallback_card_ids(cards),
-            event_deck_ids=_deck_item_ids(event_deck),
-            common_pool_ids=_deck_item_ids(common_pool_deck),
-            card_deck_id=str(getattr(card_deck, "id", "") or ""),
-            event_deck_id=str(getattr(event_deck, "id", "") or ""),
+            deck_ids=_deck_item_ids(deck),
+            setup_pool_ids=_deck_setup_ids(deck, player_count=4),
+            deck_id=str(getattr(deck, "id", "") or ""),
             initial_city_card_id=initial_city_card_id,
             level_id=str(getattr(level, "id", "") or ""),
-            common_pool_deck_id=str(getattr(common_pool_deck, "id", "") or ""),
             event_entries=events,
             agenda_entries=agendas,
             ministry_entries=ministries,
             pillar_entries=pillars,
+            token_entries=tokens,
             effect_icon_entries=effect_icons,
             image_entries=images,
         )
@@ -104,8 +96,7 @@ async def list_game_levels(current_user: User = Depends(get_current_user), db: S
     del current_user
     levels = [public_catalog_entry(entry) for entry in list_catalog_records(db, "levels")]
     cards = {entry.id: public_catalog_entry(entry) for entry in list_catalog_records(db, "cards")}
-    empire_decks = {entry.id: public_catalog_entry(entry) for entry in list_catalog_records(db, "empire-decks")}
-    event_decks = {entry.id: public_catalog_entry(entry) for entry in list_catalog_records(db, "event-decks")}
+    decks = {entry.id: public_catalog_entry(entry) for entry in list_catalog_records(db, "decks")}
     return [
         {
             "id": level["id"],
@@ -113,12 +104,8 @@ async def list_game_levels(current_user: User = Depends(get_current_user), db: S
             "summary": level.get("summary") or "",
             "initial_city_card_id": (level.get("data") or {}).get("initial_city_card_id") or "",
             "initial_city_name": cards.get((level.get("data") or {}).get("initial_city_card_id"), {}).get("name") or "",
-            "empire_deck_id": (level.get("data") or {}).get("empire_deck_id") or "",
-            "empire_deck_name": empire_decks.get((level.get("data") or {}).get("empire_deck_id"), {}).get("name") or "",
-            "event_deck_id": (level.get("data") or {}).get("event_deck_id") or "",
-            "event_deck_name": event_decks.get((level.get("data") or {}).get("event_deck_id"), {}).get("name") or "",
-            "common_pool_deck_id": (level.get("data") or {}).get("common_pool_deck_id") or "",
-            "common_pool_deck_name": empire_decks.get((level.get("data") or {}).get("common_pool_deck_id"), {}).get("name") or "",
+            "deck_id": (level.get("data") or {}).get("deck_id") or "",
+            "deck_name": decks.get((level.get("data") or {}).get("deck_id"), {}).get("name") or "",
         }
         for level in levels
     ]
@@ -197,11 +184,15 @@ def _deck_item_ids(deck) -> list[str]:
     return [str(item_id) for item_id in item_ids if str(item_id or "").strip()]
 
 
-def _fallback_card_ids(cards: list[dict]) -> list[str]:
-    ids = [card["id"] for card in cards if card.get("id") != "capital-foundation"]
-    if not ids:
+def _deck_setup_ids(deck, *, player_count: int) -> list[str]:
+    if not deck:
         return []
-    repeated = []
-    while len(repeated) < 20:
-        repeated.extend(ids)
-    return repeated[:20]
+    initial_setup = (getattr(deck, "data", {}) or {}).get("initial_setup") or {}
+    setup_ids: list[str] = []
+    for tier in range(3, max(3, min(5, player_count)) + 1):
+        setup_ids.extend(
+            str(item_id)
+            for item_id in initial_setup.get(str(tier), [])
+            if str(item_id or "").strip()
+        )
+    return setup_ids

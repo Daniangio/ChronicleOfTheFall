@@ -1,0 +1,202 @@
+{
+  "version": 1,
+  "kind": "events",
+  "entries": [
+    {
+      "id": "earthquake",
+      "name": "Earthquake",
+      "kind": "events",
+      "category": "event",
+      "summary": "A powerful earthquake afflicts the Empire",
+      "color": null,
+      "data": {
+        "subtype": "crisis",
+        "ministry_id": "minister-of-infrastructure",
+        "requirements": [
+          {
+            "type": "tag",
+            "item_id": "industry",
+            "amount": 4
+          }
+        ],
+        "main_effects": [],
+        "alternative_effects": [
+          {
+            "effect_type": "destroy_building",
+            "payload": {
+              "amount": 1
+            }
+          },
+          {
+            "effect_type": "modify_pillar",
+            "payload": {
+              "pillar_id": "pillar-of-stability",
+              "amount": -1
+            },
+            "condition": {
+              "source_type": "tag",
+              "source_id": "unrest",
+              "operator": "gte",
+              "amount": 2
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "barbarian-horde",
+      "name": "The Barbarian Horde",
+      "kind": "events",
+      "category": "event",
+      "summary": "A military invasion tests the Empire's permanent defenses.",
+      "color": null,
+      "data": {
+        "subtype": "crisis",
+        "ministry_id": "minister-of-war",
+        "requirements": [
+          {
+            "type": "tag",
+            "item_id": "military",
+            "amount": 4
+          }
+        ],
+        "main_effects": [],
+        "alternative_effects": [
+          {
+            "effect_type": "modify_pillar",
+            "payload": {
+              "pillar_id": "pillar-of-stability",
+              "amount": -1
+            }
+          },
+          {
+            "effect_type": "destroy_building",
+            "payload": {
+              "amount": 1,
+              "tag_id": "faith"
+            }
+          },
+          {
+            "effect_type": "modify_pillar",
+            "payload": {
+              "pillar_id": "pillar-of-morale",
+              "amount": -2
+            },
+            "condition": {
+              "source_type": "tag",
+              "source_id": "unrest",
+              "operator": "gte",
+              "amount": 3
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "crimson-plague",
+      "name": "The Crimson Plague",
+      "kind": "events",
+      "category": "event",
+      "summary": "Disease punishes weak public health and low food reserves.",
+      "color": null,
+      "data": {
+        "subtype": "crisis",
+        "ministry_id": "minister-of-health-and-harvest",
+        "requirements": [
+          {
+            "type": "tag",
+            "item_id": "sanitary",
+            "amount": 3
+          }
+        ],
+        "main_effects": [
+          {
+            "effect_type": "modify_pillar",
+            "payload": {
+              "pillar_id": "pillar-of-stability",
+              "amount": 1
+            }
+          }
+        ],
+        "alternative_effects": [
+          {
+            "effect_type": "modify_pillar",
+            "payload": {
+              "pillar_id": "pillar-of-stability",
+              "amount": -1
+            }
+          },
+          {
+            "effect_type": "discard_cards",
+            "payload": {
+              "amount": 1
+            }
+          },
+          {
+            "effect_type": "modify_pillar",
+            "payload": {
+              "pillar_id": "pillar-of-morale",
+              "amount": -1
+            },
+            "condition": {
+              "source_type": "tag",
+              "source_id": "unrest",
+              "operator": "gte",
+              "amount": 2
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "trade-embargo",
+      "name": "Trade Embargo",
+      "kind": "events",
+      "category": "event",
+      "summary": "Diplomatic isolation freezes commercial production.",
+      "color": null,
+      "data": {
+        "subtype": "crisis",
+        "ministry_id": "minister-of-state",
+        "requirements": [
+          {
+            "type": "tag",
+            "item_id": "diplomacy",
+            "amount": 2
+          }
+        ],
+        "main_effects": [
+          {
+            "effect_type": "modify_pillar",
+            "payload": {
+              "pillar_id": "pillar-of-treasury",
+              "amount": 1
+            }
+          }
+        ],
+        "alternative_effects": [
+          {
+            "effect_type": "modify_pillar",
+            "payload": {
+              "pillar_id": "pillar-of-treasury",
+              "amount": -1
+            }
+          },
+          {
+            "effect_type": "modify_pillar",
+            "payload": {
+              "pillar_id": "pillar-of-treasury",
+              "amount": -1
+            },
+            "condition": {
+              "source_type": "tag",
+              "source_id": "unrest",
+              "operator": "gte",
+              "amount": 2
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

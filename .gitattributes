@@ -1,0 +1,5 @@
+frontend/public/game-assets/**/*.png filter=lfs diff=lfs merge=lfs -text
+frontend/public/game-assets/**/*.jpg filter=lfs diff=lfs merge=lfs -text
+frontend/public/game-assets/**/*.jpeg filter=lfs diff=lfs merge=lfs -text
+frontend/public/game-assets/**/*.webp filter=lfs diff=lfs merge=lfs -text
+frontend/public/game-assets/**/*.gif filter=lfs diff=lfs merge=lfs -text

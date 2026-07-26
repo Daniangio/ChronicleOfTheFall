@@ -1,5 +1,5 @@
 import { AlertTriangle, Badge, CircleDollarSign, Landmark, Sparkles } from "lucide-react";
-import { buildApiUrl } from "../utils/connection.js";
+import { buildAssetUrl } from "../utils/connection.js";
 
 const fallbackTagColor = "#64748b";
 
@@ -18,9 +18,7 @@ const normalizeLabel = (value) =>
     .toUpperCase();
 
 const assetSrc = (value) => {
-  const src = String(value || "");
-  if (!src || src.startsWith("data:") || /^https?:\/\//i.test(src)) return src;
-  return buildApiUrl(src);
+  return buildAssetUrl(value);
 };
 
 const sizeClasses = {

@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "kind": "levels",
+  "entries": [
+    {
+      "id": "chronicle-default-level",
+      "name": "Chronicle Default Level",
+      "kind": "levels",
+      "category": "level",
+      "summary": "Default level template using the Capital and Chronicle deck.",
+      "color": null,
+      "data": {
+        "initial_city_card_id": "capital",
+        "deck_id": "chronicle-default-deck"
+      }
+    }
+  ]
+}

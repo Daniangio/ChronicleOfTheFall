@@ -1,0 +1,186 @@
+{
+  "version": 1,
+  "kind": "tags",
+  "entries": [
+    {
+      "id": "culture",
+      "name": "Culture",
+      "kind": "tags",
+      "category": "permanent",
+      "summary": "",
+      "color": "#581192",
+      "data": {
+        "resource_type": "permanent",
+        "icon_image_id": "tag-culture"
+      }
+    },
+    {
+      "id": "diplomacy",
+      "name": "Diplomacy",
+      "kind": "tags",
+      "category": "permanent",
+      "summary": "Permanent diplomatic leverage and intelligence.",
+      "color": "#7c3aed",
+      "data": {
+        "resource_type": "permanent",
+        "icon_image_id": "tag-diplomacy"
+      }
+    },
+    {
+      "id": "faith",
+      "name": "Faith",
+      "kind": "tags",
+      "category": "permanent",
+      "summary": "",
+      "color": "#dbde3b",
+      "data": {
+        "resource_type": "permanent",
+        "icon_image_id": "tag-faith"
+      }
+    },
+    {
+      "id": "industry",
+      "name": "Industry",
+      "kind": "tags",
+      "category": "permanent",
+      "summary": "Permanent workshops, quarries, and production base.",
+      "color": "#e36c1c",
+      "data": {
+        "resource_type": "permanent",
+        "icon_image_id": "tag-industry"
+      }
+    },
+    {
+      "id": "military",
+      "name": "Military",
+      "kind": "tags",
+      "category": "permanent",
+      "summary": "Permanent defensive and coercive capacity.",
+      "color": "#e60a0a",
+      "data": {
+        "resource_type": "permanent",
+        "icon_image_id": "tag-military"
+      }
+    },
+    {
+      "id": "sanitary",
+      "name": "Sanitary",
+      "kind": "tags",
+      "category": "permanent",
+      "summary": "Permanent public health and urban resilience.",
+      "color": "#65a30d",
+      "data": {
+        "resource_type": "permanent",
+        "icon_image_id": "tag-sanitary"
+      }
+    },
+    {
+      "id": "science",
+      "name": "Science",
+      "kind": "tags",
+      "category": "permanent",
+      "summary": "",
+      "color": "#1565d5",
+      "data": {
+        "resource_type": "permanent",
+        "icon_image_id": "tag-science"
+      }
+    },
+    {
+      "id": "unrest",
+      "name": "Unrest",
+      "kind": "tags",
+      "category": "permanent",
+      "summary": "Commitment and crisis tag used for sabotage thresholds.",
+      "color": "#554e50",
+      "data": {
+        "resource_type": "permanent",
+        "icon_image_id": "tag-unrest"
+      }
+    },
+    {
+      "id": "favor",
+      "name": "Favor",
+      "kind": "tags",
+      "category": "volatile",
+      "summary": "",
+      "color": "#a968bb",
+      "data": {
+        "resource_type": "volatile",
+        "icon_image_id": "resource-favor"
+      }
+    },
+    {
+      "id": "food",
+      "name": "Food",
+      "kind": "tags",
+      "category": "volatile",
+      "summary": "Permanent agricultural and provisioning capacity.",
+      "color": "#16a34a",
+      "data": {
+        "resource_type": "volatile",
+        "icon_image_id": "resource-food"
+      }
+    },
+    {
+      "id": "influence",
+      "name": "Influence",
+      "kind": "tags",
+      "category": "volatile",
+      "summary": "",
+      "color": "#db76b1",
+      "data": {
+        "resource_type": "volatile",
+        "icon_image_id": "resource-influence"
+      }
+    },
+    {
+      "id": "knowledge",
+      "name": "Knowledge",
+      "kind": "tags",
+      "category": "volatile",
+      "summary": "",
+      "color": "#9ab9e4",
+      "data": {
+        "resource_type": "volatile",
+        "icon_image_id": "resource-knowledge"
+      }
+    },
+    {
+      "id": "labor",
+      "name": "Labor",
+      "kind": "tags",
+      "category": "volatile",
+      "summary": "Temporary workforce and construction effort.",
+      "color": "#b0b234",
+      "data": {
+        "resource_type": "volatile",
+        "icon_image_id": "resource-labor"
+      }
+    },
+    {
+      "id": "material",
+      "name": "Material",
+      "kind": "tags",
+      "category": "volatile",
+      "summary": "Temporary stone, timber, tools, and supply throughput.",
+      "color": "#59473a",
+      "data": {
+        "resource_type": "volatile",
+        "icon_image_id": "resource-material"
+      }
+    },
+    {
+      "id": "wealth",
+      "name": "Wealth",
+      "kind": "tags",
+      "category": "volatile",
+      "summary": "Temporary coin, credit, and trade goods.",
+      "color": "#ca8a04",
+      "data": {
+        "resource_type": "volatile",
+        "icon_image_id": "resource-wealth"
+      }
+    }
+  ]
+}

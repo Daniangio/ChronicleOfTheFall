@@ -77,18 +77,16 @@ def build_goldfishing_state(
     room_id: str,
     card_entries: list[dict[str, Any]],
     tag_entries: list[dict[str, Any]],
-    card_deck_ids: list[str],
-    event_deck_ids: list[str],
-    common_pool_ids: list[str] | None = None,
-    card_deck_id: str,
-    event_deck_id: str,
+    deck_ids: list[str],
+    setup_pool_ids: list[str],
+    deck_id: str,
     initial_city_card_id: str = "capital-foundation",
     level_id: str = "",
-    common_pool_deck_id: str = "",
     event_entries: list[dict[str, Any]] | None = None,
     agenda_entries: list[dict[str, Any]] | None = None,
     ministry_entries: list[dict[str, Any]] | None = None,
     pillar_entries: list[dict[str, Any]] | None = None,
+    token_entries: list[dict[str, Any]] | None = None,
     effect_icon_entries: list[dict[str, Any]] | None = None,
     image_entries: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
@@ -98,6 +96,7 @@ def build_goldfishing_state(
     agendas = deepcopy(agenda_entries or [])
     ministries = deepcopy(ministry_entries or [])
     pillars = deepcopy(pillar_entries or [])
+    tokens = deepcopy(token_entries or [])
     effect_icons = deepcopy(effect_icon_entries or [])
     images = deepcopy(image_entries or [])
     item_ids = {entry["id"] for entry in [*card_entries, *events]}
@@ -107,8 +106,21 @@ def build_goldfishing_state(
         initial_city_card_id = city["id"] if city else ""
     initial_city = card_lookup.get(initial_city_card_id, {})
 
-    empire_deck = Deck([item_id for item_id in card_deck_ids if item_id in item_ids and item_id != initial_city_card_id])
-    base_deck = Deck([item_id for item_id in (common_pool_ids or []) if item_id in item_ids and item_id != initial_city_card_id])
+    valid_deck_ids = [item_id for item_id in deck_ids if item_id in item_ids and item_id != initial_city_card_id]
+    setup_counts = Counter(
+        item_id for item_id in setup_pool_ids if item_id in item_ids and item_id != initial_city_card_id
+    )
+    remaining_setup = Counter(setup_counts)
+    empire_ids: list[str] = []
+    for item_id in valid_deck_ids:
+        if remaining_setup[item_id] > 0:
+            remaining_setup[item_id] -= 1
+        else:
+            empire_ids.append(item_id)
+    if any(remaining_setup.values()):
+        raise ValueError("Initial setup contains copies that are not present in the selected deck.")
+    empire_deck = Deck(empire_ids)
+    base_deck = Deck(list(setup_counts.elements()))
     empire_deck.shuffle(f"{room_id}:empire")
     base_deck.shuffle(f"{room_id}:base")
 
@@ -182,12 +194,13 @@ def build_goldfishing_state(
                 "city_card_id": initial_city_card_id,
                 "building_slots": int((initial_city.get("data") or {}).get("building_slots") or 4),
                 "cards": [],
+                "condition_tokens": {},
             }
         ] if initial_city_card_id else [],
         "empire_deck": empire_deck.to_list(),
         "empire_discard": [],
         "base_deck": base_deck.to_list(),
-        "crisis_deck": [event_id for event_id in event_deck_ids if event_id in {entry["id"] for entry in events}],
+        "crisis_deck": [],
         "crisis_discard": [],
         "catalog": {
             "cards": card_entries,
@@ -195,14 +208,13 @@ def build_goldfishing_state(
             "events": events,
             "ministries": ministries,
             "pillars": pillars,
+            "tokens": tokens,
             "effect_icons": effect_icons,
             "images": images,
             "agendas": agendas,
         },
         "decks": {
-            "empire": card_deck_id,
-            "crisis": event_deck_id,
-            "base_pool": common_pool_deck_id,
+            "empire": deck_id,
         },
         "level_id": level_id,
         "log": [
@@ -392,7 +404,15 @@ def _reveal_next(state: dict[str, Any], _payload: dict[str, Any]) -> None:
     state["revealed_cards"].append(reveal)
     state["log"].append(f"Council revealed {reveal['name']}.")
     if _is_event(item):
-        _apply_event_effects(state, item, (item.get("data") or {}).get("effects", []))
+        data = item.get("data") or {}
+        resolved = _event_requirements_met(state, data.get("requirements") or [])
+        if resolved:
+            _pay_event_resource_cost(state, data.get("requirements") or [])
+        _apply_event_effects(
+            state,
+            item,
+            data.get("main_effects", []) if resolved else data.get("alternative_effects", []),
+        )
         reveal["status"] = "resolved"
         _discard_empire_item(state, item["id"])
         return
@@ -467,27 +487,16 @@ def _resolve_crisis(state: dict[str, Any], payload: dict[str, Any]) -> None:
     if not crisis_id:
         raise ValueError("There is no Crisis to resolve.")
     event = event_by_id(state, crisis_id)
-    requirements = _counts((event.get("data") or {}).get("defense_requirement"))
-    tags = _empire_tag_counts(state)
-    defense = sum(min(int(tags.get(tag_id, 0)), amount) for tag_id, amount in requirements.items())
-    target = sum(requirements.values())
-    use_war_power = bool(payload.get("use_war_power"))
-    if use_war_power:
-        if state.get("war_power_used"):
-            raise ValueError("The Minister of War power was already used this Era.")
-        war_holder = _ministry_holder(state, "war")
-        if not war_holder:
-            raise ValueError("There is no Minister of War.")
-        defense += 2 if int(tags.get("military", 0)) > 0 else 1
-        state["war_power_used"] = True
-    success = defense >= target
     data = event.get("data") or {}
-    effects = data.get("success_effects", []) if success else data.get("failure_effects", [])
-    _apply_event_effects(state, event, effects)
-    _apply_event_thresholds(state, event)
-    state["log"].append(
-        f"{event.get('name', crisis_id)} {'succeeded' if success else 'failed'} ({defense}/{target})."
+    resolved = _event_requirements_met(state, data.get("requirements") or [])
+    if resolved:
+        _pay_event_resource_cost(state, data.get("requirements") or [])
+    _apply_event_effects(
+        state,
+        event,
+        data.get("main_effects", []) if resolved else data.get("alternative_effects", []),
     )
+    state["log"].append(f"{event.get('name', crisis_id)} {'resolved' if resolved else 'was unresolved'}.")
     state["crisis_discard"].append(crisis_id)
     state["current_crisis_id"] = ""
     _begin_storage(state)
@@ -903,21 +912,8 @@ def _requirements_satisfied(state: dict[str, Any], card: dict[str, Any]) -> bool
     data = card.get("data") or {}
     global_tags = _empire_tag_counts(state)
     if _is_city_card(card):
-        for tag_id, amount in _counts(data.get("required_city_tags")).items():
+        for tag_id, amount in _counts(data.get("required_tags")).items():
             if int(global_tags.get(tag_id, 0)) < amount:
-                return False
-    for requirement in data.get("requirements", []):
-        if requirement.get("type") == "not_condition":
-            if int(global_tags.get(str(requirement.get("tag_id") or ""), 0)) > 0:
-                return False
-        elif requirement.get("type") == "has_card":
-            if str(requirement.get("scope") or "city") == "city" and not _is_city_card(card):
-                continue
-            card_id = str(requirement.get("card_id") or "")
-            if not any(
-                card_id == city.get("city_card_id") or card_id in city.get("cards", [])
-                for city in state.get("cities", [])
-            ):
                 return False
     return True
 
@@ -927,22 +923,14 @@ def _legal_placements(state: dict[str, Any], card: dict[str, Any]) -> list[str]:
         return []
     if _is_city_card(card):
         return ["__new_city__"]
-    required = _counts((card.get("data") or {}).get("required_city_tags"))
+    required = _counts((card.get("data") or {}).get("required_tags"))
     placements = []
     for city in state.get("cities", []):
         if len(city.get("cards", [])) >= int(city.get("building_slots", 0)):
             continue
         city_tags = _city_tag_counts(state, city)
         if all(int(city_tags.get(tag_id, 0)) >= amount for tag_id, amount in required.items()):
-            local_card_ids = {city.get("city_card_id"), *city.get("cards", [])}
-            local_requirements_met = all(
-                requirement.get("type") != "has_card"
-                or str(requirement.get("scope") or "city") != "city"
-                or str(requirement.get("card_id") or "") in local_card_ids
-                for requirement in (card.get("data") or {}).get("requirements", [])
-            )
-            if local_requirements_met:
-                placements.append(city["id"])
+            placements.append(city["id"])
     return placements
 
 
@@ -954,6 +942,7 @@ def _build_card(state: dict[str, Any], card: dict[str, Any], city_id: str) -> No
             "city_card_id": card["id"],
             "building_slots": int((card.get("data") or {}).get("building_slots") or 0),
             "cards": [],
+            "condition_tokens": {},
         }
         state["cities"].append(city)
         state["log"].append(f"{card['name']} entered the Empire as a new City.")
@@ -963,7 +952,12 @@ def _build_card(state: dict[str, Any], card: dict[str, Any], city_id: str) -> No
             raise ValueError("City not found.")
         city["cards"].append(card["id"])
         state["log"].append(f"{card['name']} was built in {city['name']}.")
-    _apply_built_pillar_modifiers(state, card)
+    for effect in (card.get("data") or {}).get("persistent_effects", []):
+        if effect.get("effect_type") == "add_building_slots":
+            city["building_slots"] = int(city.get("building_slots", 0)) + max(
+                0, int((effect.get("payload") or {}).get("amount", 0))
+            )
+    _apply_on_build_effects(state, card, city)
 
 
 def _placement_payload(
@@ -998,29 +992,59 @@ def _pay_cost(state: dict[str, Any], card: dict[str, Any]) -> None:
     state["global_resource_pool"] = _positive_counts(pool)
 
 
-def _apply_built_pillar_modifiers(state: dict[str, Any], card: dict[str, Any]) -> None:
-    data = card.get("data") or {}
-    modifiers = data.get("built_pillar_modifiers") or data.get("on_build_pillars") or []
-    for modifier in modifiers:
-        pillar_id = str(modifier.get("pillar_id") or modifier.get("pillar") or "")
-        if pillar_id:
-            _modify_pillar(state, pillar_id, int(modifier.get("amount", 0)))
+def _apply_on_build_effects(state: dict[str, Any], card: dict[str, Any], city: dict[str, Any]) -> None:
+    for effect in (card.get("data") or {}).get("on_build_effects", []):
+        payload = effect.get("payload") or {}
+        if effect.get("effect_type") == "modify_pillar":
+            pillar_id = str(payload.get("pillar_id") or "")
+            if pillar_id:
+                _modify_pillar(state, pillar_id, int(payload.get("amount", 0)))
+        elif effect.get("effect_type") == "modify_token":
+            token_id = str(payload.get("token_id") or "")
+            if token_id:
+                tokens = city.setdefault("condition_tokens", {})
+                next_amount = max(0, int(tokens.get(token_id, 0)) + int(payload.get("amount", 0)))
+                if next_amount:
+                    tokens[token_id] = next_amount
+                else:
+                    tokens.pop(token_id, None)
 
 
 def _production_for_card(card: dict[str, Any]) -> Counter:
-    data = card.get("data") or {}
-    production = Counter(_counts(data.get("production")))
-    for node in data.get("logic_nodes", []):
-        for effect in node.get("effects", []):
-            if effect.get("effect_type") in {"add_resources", "modify_mana"}:
-                payload = effect.get("payload") or {}
-                if effect.get("effect_type") == "modify_mana":
-                    resource_id = payload.get("mana_type") or payload.get("tag_id")
-                    if resource_id:
-                        production[str(resource_id)] += int(payload.get("amount", 1))
-                else:
-                    production.update(_counts(payload.get("resources") or payload.get("mana")))
-    return production
+    return Counter(_counts((card.get("data") or {}).get("production")))
+
+
+def _event_requirements_met(state: dict[str, Any], requirements: list[dict[str, Any]]) -> bool:
+    resources = _counts(state.get("global_resource_pool"))
+    tags = _empire_tag_counts(state)
+    for requirement in requirements:
+        requirement_type = str(requirement.get("type") or "")
+        if requirement_type == "resource":
+            if int(resources.get(str(requirement.get("item_id") or ""), 0)) < int(requirement.get("amount", 1)):
+                return False
+        elif requirement_type == "tag":
+            if int(tags.get(str(requirement.get("item_id") or ""), 0)) < int(requirement.get("amount", 1)):
+                return False
+        elif requirement_type == "pillar":
+            if not _effect_condition_met(
+                state,
+                {
+                    "source_type": "pillar",
+                    "source_id": requirement.get("pillar_id"),
+                    "operator": requirement.get("operator"),
+                    "value": requirement.get("value"),
+                },
+            ):
+                return False
+    return True
+
+
+def _pay_event_resource_cost(state: dict[str, Any], requirements: list[dict[str, Any]]) -> None:
+    pool = Counter(_counts(state.get("global_resource_pool")))
+    for requirement in requirements:
+        if requirement.get("type") == "resource":
+            pool[str(requirement.get("item_id") or "")] -= int(requirement.get("amount", 1))
+    state["global_resource_pool"] = _positive_counts(pool)
 
 
 def _apply_event_effects(state: dict[str, Any], event: dict[str, Any], effects: list[dict[str, Any]]) -> None:
@@ -1032,43 +1056,23 @@ def _apply_event_effects(state: dict[str, Any], event: dict[str, Any], effects: 
         amount = int(payload.get("amount", 1))
         if effect_type == "modify_pillar":
             _modify_pillar(state, str(payload.get("pillar") or payload.get("pillar_id") or ""), amount)
-        elif effect_type in {"generate_resource", "modify_resource"}:
-            resource_id = str(payload.get("resource_id") or "")
-            if resource_id:
-                pool = Counter(_counts(state.get("global_resource_pool")))
-                pool[resource_id] += amount
-                state["global_resource_pool"] = _positive_counts(pool)
-        elif effect_type == "add_resources":
-            pool = Counter(_counts(state.get("global_resource_pool")))
-            pool.update(_counts(payload.get("resources")))
-            state["global_resource_pool"] = _positive_counts(pool)
-        elif effect_type == "destroy_building_with_tag":
+        elif effect_type == "destroy_building":
             _destroy_buildings(state, str(payload.get("tag_id") or ""), max(1, amount))
-        elif effect_type == "discard_card":
+        elif effect_type == "remove_all_resources":
+            state["global_resource_pool"] = {}
+        elif effect_type == "discard_cards":
             _discard_for_event(state, payload, event)
-        elif effect_type == "freeze_resource_generation":
-            resource_id = str(payload.get("resource_id") or "")
-            if resource_id and resource_id not in state["frozen_resources"]:
-                state["frozen_resources"].append(resource_id)
-        elif effect_type == "block_minister_next_year":
-            ministry_id = str(payload.get("ministry_id") or (event.get("data") or {}).get("ministry_id") or "")
-            holder = state.get("ministry_assignments", {}).get(ministry_id)
-            if holder:
-                state.setdefault("blocked_players_next_era", []).append(holder)
-
-
-def _apply_event_thresholds(state: dict[str, Any], event: dict[str, Any]) -> None:
-    for threshold in (event.get("data") or {}).get("thresholds", []):
-        source_type = threshold.get("source_type") or "tag"
-        source_id = threshold.get("source_id") or threshold.get("tag_id")
-        condition = {
-            "source_type": source_type,
-            "source_id": source_id,
-            "operator": threshold.get("operator") or "gte",
-            "amount": threshold.get("amount", 1),
-        }
-        if _effect_condition_met(state, condition):
-            _apply_event_effects(state, event, threshold.get("effects", []))
+        elif effect_type in {"add_plague", "add_unrest", "add_fortified"}:
+            token = effect_type.removeprefix("add_")
+            if payload.get("scope") == "global":
+                state.setdefault("condition_tokens", {})[token] = (
+                    int(state.setdefault("condition_tokens", {}).get(token, 0)) + max(1, amount)
+                )
+            elif state.get("cities"):
+                city = state["cities"][0]
+                city.setdefault("condition_tokens", {})[token] = (
+                    int(city.setdefault("condition_tokens", {}).get(token, 0)) + max(1, amount)
+                )
 
 
 def _effect_condition_met(state: dict[str, Any], condition: dict[str, Any] | None) -> bool:
@@ -1126,7 +1130,7 @@ def _destroy_buildings(state: dict[str, Any], tag_id: str, amount: int) -> None:
 
 def _discard_for_event(state: dict[str, Any], payload: dict[str, Any], event: dict[str, Any]) -> None:
     target = str(payload.get("target") or "all_players")
-    amount = max(1, int(payload.get("amount", 1)))
+    amount_value = payload.get("amount")
     if target == "all_players":
         targets = state["players"]
     else:
@@ -1137,7 +1141,8 @@ def _discard_for_event(state: dict[str, Any], payload: dict[str, Any], event: di
     for player in targets:
         if player["id"] == health_holder:
             continue
-        remaining = amount
+        remaining = len(player["hand"]) + sum(bool(card_id) for card_id in player.get("scheme_slots", [])) \
+            if amount_value is None else max(1, int(amount_value))
         while remaining > 0 and player["hand"]:
             _discard_empire_item(state, player["hand"].pop(0))
             remaining -= 1
@@ -1168,14 +1173,13 @@ def _storage_capacity(state: dict[str, Any]) -> tuple[int, dict[str, int]]:
             if not card_id:
                 continue
             card = card_by_id(state, card_id)
-            storage = (card.get("data") or {}).get("storage")
-            if isinstance(storage, (int, float)):
-                generic += max(0, int(storage))
-            elif isinstance(storage, dict):
-                capacity = max(0, int(storage.get("capacity", storage.get("amount", 0))))
-                mode = storage.get("mode") or storage.get("resource_type") or "generic"
-                resource_id = str(storage.get("resource_id") or "")
-                if mode == "specific" and resource_id:
+            for effect in (card.get("data") or {}).get("persistent_effects", []):
+                if effect.get("effect_type") != "storage":
+                    continue
+                payload = effect.get("payload") or {}
+                capacity = max(0, int(payload.get("amount", 0)))
+                resource_id = str(payload.get("resource_id") or "")
+                if resource_id:
                     specific[resource_id] += capacity
                 else:
                     generic += capacity
@@ -1229,13 +1233,11 @@ def _discard_empire_item(state: dict[str, Any], item_id: str) -> None:
 
 
 def _is_event(item: dict[str, Any]) -> bool:
-    card_type = str((item.get("data") or {}).get("card_type") or "").lower()
-    return item.get("kind") == "events" or card_type in {"event", "politics", "economy"}
+    return item.get("kind") == "events"
 
 
 def _is_city_card(card: dict[str, Any]) -> bool:
-    data = card.get("data") or {}
-    return str(data.get("card_type") or card.get("category") or "").lower() == "city"
+    return str(card.get("category") or "").lower() == "city"
 
 
 def _is_ministry(entry: dict[str, Any], role: str) -> bool:

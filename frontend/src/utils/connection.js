@@ -24,6 +24,12 @@ export const apiBaseUrl = resolveApiBaseUrl();
 export const wsBaseUrl = resolveWsBaseUrl();
 
 export const buildApiUrl = (path) => `${apiBaseUrl}${ensureLeadingSlash(path)}`;
+export const buildAssetUrl = (path) => {
+  const value = String(path || "");
+  if (!value || value.startsWith("data:") || /^https?:\/\//i.test(value)) return value;
+  if (value.startsWith("/game-assets/")) return value;
+  return buildApiUrl(value);
+};
 export const fetchJsonWithTimeout = async (
   path,
   options = {},

@@ -1,0 +1,421 @@
+{
+  "version": 1,
+  "kind": "cards",
+  "entries": [
+    {
+      "id": "peasant-village-culture",
+      "name": "Peasant Village",
+      "kind": "cards",
+      "category": "structure",
+      "summary": "",
+      "color": null,
+      "data": {
+        "required_tags": {},
+        "cost": {
+          "labor": 2,
+          "food": 2,
+          "material": 1
+        },
+        "tags": {},
+        "production": {
+          "labor": 2
+        },
+        "on_build_effects": [],
+        "persistent_effects": []
+      }
+    },
+    {
+      "id": "barracks-unrest",
+      "name": "Barracks",
+      "kind": "cards",
+      "category": "structure",
+      "summary": "",
+      "color": null,
+      "data": {
+        "required_tags": {},
+        "cost": {
+          "labor": 1,
+          "food": 1,
+          "material": 1
+        },
+        "tags": {
+          "military": 1
+        },
+        "production": {},
+        "on_build_effects": [],
+        "persistent_effects": []
+      }
+    },
+    {
+      "id": "capital",
+      "name": "Capital",
+      "kind": "cards",
+      "category": "city",
+      "summary": "Capital of the Empire. This can be the starting City.",
+      "color": null,
+      "data": {
+        "required_tags": {},
+        "cost": {},
+        "tags": {},
+        "production": {
+          "labor": 1
+        },
+        "on_build_effects": [],
+        "persistent_effects": [],
+        "building_slots": 7
+      }
+    },
+    {
+      "id": "farm-industry",
+      "name": "Farm",
+      "kind": "cards",
+      "category": "structure",
+      "summary": "Basic project that adds Food.",
+      "color": null,
+      "data": {
+        "required_tags": {},
+        "cost": {
+          "labor": 1
+        },
+        "tags": {},
+        "production": {
+          "food": 1
+        },
+        "on_build_effects": [],
+        "persistent_effects": []
+      }
+    },
+    {
+      "id": "farm-unrest",
+      "name": "Farm",
+      "kind": "cards",
+      "category": "structure",
+      "summary": "",
+      "color": null,
+      "data": {
+        "required_tags": {},
+        "cost": {
+          "labor": 1
+        },
+        "tags": {},
+        "production": {
+          "food": 1
+        },
+        "on_build_effects": [],
+        "persistent_effects": []
+      }
+    },
+    {
+      "id": "fortified-manor-military",
+      "name": "Fortified Manor",
+      "kind": "cards",
+      "category": "structure",
+      "summary": "",
+      "color": null,
+      "data": {
+        "required_tags": {},
+        "cost": {
+          "labor": 3,
+          "food": 2,
+          "material": 2
+        },
+        "tags": {
+          "military": 1
+        },
+        "production": {
+          "wealth": 1
+        },
+        "on_build_effects": [],
+        "persistent_effects": []
+      }
+    },
+    {
+      "id": "grand-garrison-military",
+      "name": "Grand Garrison",
+      "kind": "cards",
+      "category": "structure",
+      "summary": "",
+      "color": null,
+      "data": {
+        "required_tags": {
+          "military": 1,
+          "industry": 1
+        },
+        "cost": {
+          "labor": 2,
+          "material": 3,
+          "food": 2
+        },
+        "tags": {
+          "military": 2
+        },
+        "production": {},
+        "on_build_effects": [],
+        "persistent_effects": []
+      }
+    },
+    {
+      "id": "manor-unrest",
+      "name": "Manor",
+      "kind": "cards",
+      "category": "structure",
+      "summary": "",
+      "color": null,
+      "data": {
+        "required_tags": {},
+        "cost": {
+          "labor": 2,
+          "material": 1,
+          "food": 2
+        },
+        "tags": {},
+        "production": {
+          "wealth": 1
+        },
+        "on_build_effects": [],
+        "persistent_effects": []
+      }
+    },
+    {
+      "id": "market-hall-culture",
+      "name": "Market Hall",
+      "kind": "cards",
+      "category": "structure",
+      "summary": "",
+      "color": null,
+      "data": {
+        "required_tags": {},
+        "cost": {
+          "labor": 2,
+          "food": 4,
+          "material": 1
+        },
+        "tags": {},
+        "production": {
+          "food": 1,
+          "wealth": 1
+        },
+        "on_build_effects": [],
+        "persistent_effects": []
+      }
+    },
+    {
+      "id": "monastery-culture",
+      "name": "Monastery",
+      "kind": "cards",
+      "category": "structure",
+      "summary": "",
+      "color": null,
+      "data": {
+        "required_tags": {
+          "faith": 1
+        },
+        "cost": {
+          "material": 1,
+          "labor": 2,
+          "wealth": 3,
+          "food": 2
+        },
+        "tags": {
+          "faith": 1,
+          "culture": 1
+        },
+        "production": {
+          "labor": 1,
+          "favor": 1,
+          "food": 1
+        },
+        "on_build_effects": [],
+        "persistent_effects": []
+      }
+    },
+    {
+      "id": "mountain-village",
+      "name": "Mountain Village",
+      "kind": "cards",
+      "category": "city",
+      "summary": "Small remote Village in the mountains.",
+      "color": null,
+      "data": {
+        "required_tags": {},
+        "cost": {
+          "labor": 2,
+          "material": 2,
+          "influence": 1
+        },
+        "tags": {},
+        "production": {
+          "food": 1
+        },
+        "on_build_effects": [],
+        "persistent_effects": [],
+        "building_slots": 4
+      }
+    },
+    {
+      "id": "peasant-home-military",
+      "name": "Peasant Home",
+      "kind": "cards",
+      "category": "structure",
+      "summary": "",
+      "color": null,
+      "data": {
+        "required_tags": {},
+        "cost": {
+          "labor": 1
+        },
+        "tags": {},
+        "production": {
+          "labor": 1
+        },
+        "on_build_effects": [],
+        "persistent_effects": []
+      }
+    },
+    {
+      "id": "peasant-home-unrest",
+      "name": "Peasant Home",
+      "kind": "cards",
+      "category": "structure",
+      "summary": "",
+      "color": null,
+      "data": {
+        "required_tags": {},
+        "cost": {
+          "labor": 1
+        },
+        "tags": {},
+        "production": {
+          "labor": 1
+        },
+        "on_build_effects": [],
+        "persistent_effects": []
+      }
+    },
+    {
+      "id": "scriptorium",
+      "name": "Scriptorium",
+      "kind": "cards",
+      "category": "structure",
+      "summary": "",
+      "color": null,
+      "data": {
+        "required_tags": {
+          "faith": 1
+        },
+        "cost": {
+          "favor": 1,
+          "labor": 1,
+          "wealth": 2,
+          "material": 1
+        },
+        "tags": {
+          "science": 1
+        },
+        "production": {
+          "knowledge": 1
+        },
+        "on_build_effects": [],
+        "persistent_effects": []
+      }
+    },
+    {
+      "id": "stone-quarry-industry",
+      "name": "Stone Quarry",
+      "kind": "cards",
+      "category": "structure",
+      "summary": "",
+      "color": null,
+      "data": {
+        "required_tags": {},
+        "cost": {
+          "labor": 2,
+          "food": 1
+        },
+        "tags": {
+          "industry": 1
+        },
+        "production": {
+          "material": 1
+        },
+        "on_build_effects": [],
+        "persistent_effects": []
+      }
+    },
+    {
+      "id": "temple-culture",
+      "name": "Temple",
+      "kind": "cards",
+      "category": "structure",
+      "summary": "",
+      "color": null,
+      "data": {
+        "required_tags": {
+          "faith": 1
+        },
+        "cost": {
+          "labor": 2,
+          "material": 1,
+          "food": 2,
+          "wealth": 3
+        },
+        "tags": {
+          "culture": 1,
+          "faith": 1
+        },
+        "production": {
+          "favor": 1,
+          "wealth": 1
+        },
+        "on_build_effects": [],
+        "persistent_effects": []
+      }
+    },
+    {
+      "id": "votive-chapel-faith",
+      "name": "Votive Chapel",
+      "kind": "cards",
+      "category": "structure",
+      "summary": "",
+      "color": null,
+      "data": {
+        "required_tags": {},
+        "cost": {
+          "material": 1,
+          "labor": 2,
+          "wealth": 1,
+          "food": 1
+        },
+        "tags": {
+          "faith": 1
+        },
+        "production": {},
+        "on_build_effects": [],
+        "persistent_effects": []
+      }
+    },
+    {
+      "id": "woodcutter-industry",
+      "name": "Woodcutter",
+      "kind": "cards",
+      "category": "structure",
+      "summary": "",
+      "color": null,
+      "data": {
+        "required_tags": {},
+        "cost": {
+          "food": 2,
+          "labor": 1
+        },
+        "tags": {
+          "industry": 1
+        },
+        "production": {
+          "material": 1
+        },
+        "on_build_effects": [],
+        "persistent_effects": []
+      }
+    }
+  ]
+}

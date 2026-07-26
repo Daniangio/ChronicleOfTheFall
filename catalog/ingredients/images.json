@@ -1,0 +1,413 @@
+{
+  "version": 1,
+  "kind": "images",
+  "entries": [
+    {
+      "id": "all-players-image",
+      "name": "All Players Image",
+      "kind": "images",
+      "category": "image",
+      "summary": "",
+      "color": null,
+      "data": {
+        "src": "/game-assets/effects/all-players.png"
+      }
+    },
+    {
+      "id": "depose-image",
+      "name": "Depose Image",
+      "kind": "images",
+      "category": "image",
+      "summary": "",
+      "color": null,
+      "data": {
+        "src": "/game-assets/effects/depose.png"
+      }
+    },
+    {
+      "id": "destroy-building-image",
+      "name": "Destroy Building Image",
+      "kind": "images",
+      "category": "image",
+      "summary": "",
+      "color": null,
+      "data": {
+        "src": "/game-assets/effects/destroy-building.png"
+      }
+    },
+    {
+      "id": "discard-card-image",
+      "name": "Discard Card Image",
+      "kind": "images",
+      "category": "image",
+      "summary": "",
+      "color": null,
+      "data": {
+        "src": "/game-assets/effects/discard-card.png"
+      }
+    },
+    {
+      "id": "draw-card-image",
+      "name": "Draw Card Image",
+      "kind": "images",
+      "category": "image",
+      "summary": "",
+      "color": null,
+      "data": {
+        "src": "/game-assets/effects/draw-card.png"
+      }
+    },
+    {
+      "id": "freeze-image",
+      "name": "Freeze Image",
+      "kind": "images",
+      "category": "image",
+      "summary": "",
+      "color": null,
+      "data": {
+        "src": "/game-assets/effects/freeze.png"
+      }
+    },
+    {
+      "id": "pillar-of-morale-image",
+      "name": "Pillar of Morale Image",
+      "kind": "images",
+      "category": "image",
+      "summary": "",
+      "color": null,
+      "data": {
+        "src": "/game-assets/pillars/pillar-of-morale.png"
+      }
+    },
+    {
+      "id": "pillar-of-stability-image",
+      "name": "Pillar of Stability Image",
+      "kind": "images",
+      "category": "image",
+      "summary": "",
+      "color": null,
+      "data": {
+        "src": "/game-assets/pillars/pillar-of-stability.png"
+      }
+    },
+    {
+      "id": "pillar-of-treasury-image",
+      "name": "Pillar of Treasury Image",
+      "kind": "images",
+      "category": "image",
+      "summary": "",
+      "color": null,
+      "data": {
+        "src": "/game-assets/pillars/pillar-of-treasury.png"
+      }
+    },
+    {
+      "id": "minister-empire",
+      "name": "minister empire",
+      "kind": "images",
+      "category": "image",
+      "summary": "",
+      "color": null,
+      "data": {
+        "src": "/game-assets/ministries/minister-empire.png"
+      }
+    },
+    {
+      "id": "minister-health-harvest",
+      "name": "minister health&harvest",
+      "kind": "images",
+      "category": "image",
+      "summary": "",
+      "color": null,
+      "data": {
+        "src": "/game-assets/ministries/minister-health-harvest.png"
+      }
+    },
+    {
+      "id": "minister-infrastructure",
+      "name": "minister infrastructure",
+      "kind": "images",
+      "category": "image",
+      "summary": "",
+      "color": null,
+      "data": {
+        "src": "/game-assets/ministries/minister-infrastructure.png"
+      }
+    },
+    {
+      "id": "minister-state",
+      "name": "minister state",
+      "kind": "images",
+      "category": "image",
+      "summary": "",
+      "color": null,
+      "data": {
+        "src": "/game-assets/ministries/minister-state.png"
+      }
+    },
+    {
+      "id": "minister-war",
+      "name": "minister war",
+      "kind": "images",
+      "category": "image",
+      "summary": "",
+      "color": null,
+      "data": {
+        "src": "/game-assets/ministries/minister-war.png"
+      }
+    },
+    {
+      "id": "resource-favor",
+      "name": "resource favor",
+      "kind": "images",
+      "category": "image",
+      "summary": "",
+      "color": null,
+      "data": {
+        "src": "/game-assets/resources/resource-favor.png"
+      }
+    },
+    {
+      "id": "resource-food",
+      "name": "resource food",
+      "kind": "images",
+      "category": "image",
+      "summary": "",
+      "color": null,
+      "data": {
+        "src": "/game-assets/resources/resource-food.png"
+      }
+    },
+    {
+      "id": "resource-influence",
+      "name": "resource influence",
+      "kind": "images",
+      "category": "image",
+      "summary": "",
+      "color": null,
+      "data": {
+        "src": "/game-assets/resources/resource-influence.png"
+      }
+    },
+    {
+      "id": "resource-knowledge",
+      "name": "resource knowledge",
+      "kind": "images",
+      "category": "image",
+      "summary": "",
+      "color": null,
+      "data": {
+        "src": "/game-assets/resources/resource-knowledge.png"
+      }
+    },
+    {
+      "id": "resource-labor",
+      "name": "resource labor",
+      "kind": "images",
+      "category": "image",
+      "summary": "",
+      "color": null,
+      "data": {
+        "src": "/game-assets/resources/resource-labor.png"
+      }
+    },
+    {
+      "id": "resource-material",
+      "name": "resource material",
+      "kind": "images",
+      "category": "image",
+      "summary": "",
+      "color": null,
+      "data": {
+        "src": "/game-assets/resources/resource-material.png"
+      }
+    },
+    {
+      "id": "resource-wealth",
+      "name": "resource wealth",
+      "kind": "images",
+      "category": "image",
+      "summary": "",
+      "color": null,
+      "data": {
+        "src": "/game-assets/resources/resource-wealth.png"
+      }
+    },
+    {
+      "id": "tag-culture",
+      "name": "tag culture",
+      "kind": "images",
+      "category": "image",
+      "summary": "",
+      "color": null,
+      "data": {
+        "src": "/game-assets/tags/tag-culture.png"
+      }
+    },
+    {
+      "id": "tag-diplomacy",
+      "name": "tag diplomacy",
+      "kind": "images",
+      "category": "image",
+      "summary": "",
+      "color": null,
+      "data": {
+        "src": "/game-assets/tags/tag-diplomacy.png"
+      }
+    },
+    {
+      "id": "tag-faith",
+      "name": "tag faith",
+      "kind": "images",
+      "category": "image",
+      "summary": "",
+      "color": null,
+      "data": {
+        "src": "/game-assets/tags/tag-faith.png"
+      }
+    },
+    {
+      "id": "tag-industry",
+      "name": "tag industry",
+      "kind": "images",
+      "category": "image",
+      "summary": "",
+      "color": null,
+      "data": {
+        "src": "/game-assets/tags/tag-industry.png"
+      }
+    },
+    {
+      "id": "tag-military",
+      "name": "tag military",
+      "kind": "images",
+      "category": "image",
+      "summary": "",
+      "color": null,
+      "data": {
+        "src": "/game-assets/tags/tag-military.png"
+      }
+    },
+    {
+      "id": "tag-sanitary",
+      "name": "tag sanitary",
+      "kind": "images",
+      "category": "image",
+      "summary": "",
+      "color": null,
+      "data": {
+        "src": "/game-assets/tags/tag-sanitary.png"
+      }
+    },
+    {
+      "id": "tag-science",
+      "name": "tag science",
+      "kind": "images",
+      "category": "image",
+      "summary": "",
+      "color": null,
+      "data": {
+        "src": "/game-assets/tags/tag-science.png"
+      }
+    },
+    {
+      "id": "tag-unrest",
+      "name": "tag unrest",
+      "kind": "images",
+      "category": "image",
+      "summary": "",
+      "color": null,
+      "data": {
+        "src": "/game-assets/tags/tag-unrest.png"
+      }
+    },
+    {
+      "id": "effect-modify-pillar",
+      "name": "Modify Pillar Effect",
+      "kind": "images",
+      "category": "image",
+      "summary": "",
+      "color": null,
+      "data": {
+        "src": "/game-assets/effects/modify-pillar.svg"
+      }
+    },
+    {
+      "id": "effect-remove-all-resources",
+      "name": "Remove All Resources Effect",
+      "kind": "images",
+      "category": "image",
+      "summary": "",
+      "color": null,
+      "data": {
+        "src": "/game-assets/effects/remove-all-resources.svg"
+      }
+    },
+    {
+      "id": "effect-add-plague",
+      "name": "Add Plague Effect",
+      "kind": "images",
+      "category": "image",
+      "summary": "",
+      "color": null,
+      "data": {
+        "src": "/game-assets/effects/add-plague.svg"
+      }
+    },
+    {
+      "id": "effect-add-unrest",
+      "name": "Add Unrest Effect",
+      "kind": "images",
+      "category": "image",
+      "summary": "",
+      "color": null,
+      "data": {
+        "src": "/game-assets/effects/add-unrest.svg"
+      }
+    },
+    {
+      "id": "effect-add-fortified",
+      "name": "Add Fortified Effect",
+      "kind": "images",
+      "category": "image",
+      "summary": "",
+      "color": null,
+      "data": {
+        "src": "/game-assets/effects/add-fortified.svg"
+      }
+    },
+    {
+      "id": "effect-add-building-slots",
+      "name": "Add Building Slots Effect",
+      "kind": "images",
+      "category": "image",
+      "summary": "",
+      "color": null,
+      "data": {
+        "src": "/game-assets/effects/add-building-slots.svg"
+      }
+    },
+    {
+      "id": "effect-modify-token",
+      "name": "Modify Token Effect",
+      "kind": "images",
+      "category": "image",
+      "summary": "",
+      "color": null,
+      "data": {
+        "src": "/game-assets/effects/modify-token.svg"
+      }
+    },
+    {
+      "id": "storage",
+      "name": "Storage",
+      "kind": "images",
+      "category": "image",
+      "summary": "Image used for generic and resource-specific storage.",
+      "color": null,
+      "data": {
+        "src": "/game-assets/effects/storage.svg"
+      }
+    }
+  ]
+}

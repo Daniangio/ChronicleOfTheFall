@@ -1,4 +1,4 @@
-import { Archive, Hand, RotateCcw, Scale, ScrollText, Zap } from "lucide-react";
+import { Archive, Grid2X2, Hand, Scale } from "lucide-react";
 import TagIcon from "./TagIcon.jsx";
 
 const normalize = (value) => String(value || "").trim().toLowerCase().replace(/[\s_]+/g, "-");
@@ -18,10 +18,6 @@ const tagEntries = (value) => {
   return Object.entries(value || {});
 };
 
-const productionLogicEffects = (data = {}) => (data.logic_nodes || [])
-  .flatMap((entry) => entry.effects || [])
-  .filter((effect) => ["add_resources", "modify_mana"].includes(effect?.effect_type));
-
 const IconPill = ({ children, title, tone = "slate", compact = false }) => {
   const toneClass = tone === "amber"
     ? "border-amber-700 text-amber-200"
@@ -35,60 +31,13 @@ const IconPill = ({ children, title, tone = "slate", compact = false }) => {
   );
 };
 
-const EffectIcons = ({ effects = [], tagLookup, compact = false }) => (
+const ResourceIcons = ({ resources = {}, tagLookup, compact = false }) => (
   <>
-    {effects.flatMap((effect, index) => {
-      const payload = effect?.payload || {};
-      if (effect?.effect_type === "add_resources" || effect?.effect_type === "modify_mana") {
-        const resources = effect.effect_type === "modify_mana"
-          ? { [payload.mana_type || payload.tag_id]: Number(payload.amount || 1) }
-          : countRepeatedTags(payload.resources || payload.mana);
-        return Object.entries(resources).filter(([tagId]) => tagId).map(([tagId, count]) => (
-          <TagIcon key={`${index}-${tagId}`} tag={tagLookup[normalize(tagId)]} label={tagId} count={count} size={compact ? "xs" : "sm"} />
-        ));
-      }
-      if (effect?.effect_type === "draw_card") {
-        return (
-          <IconPill key={index} title={`Draw ${Number(payload.amount || 1)} card(s)`} compact={compact}>
-            <ScrollText className={compact ? "h-3 w-3" : "h-3.5 w-3.5"} aria-hidden="true" />
-            {Number(payload.amount || 1) > 1 ? <span className="ml-1">{Number(payload.amount || 1)}</span> : null}
-          </IconPill>
-        );
-      }
-      if (effect?.effect_type === "ready_building") {
-        return (
-          <IconPill key={index} title="Ready a building" tone="teal" compact={compact}>
-            <RotateCcw className={compact ? "h-3 w-3" : "h-3.5 w-3.5"} aria-hidden="true" />
-          </IconPill>
-        );
-      }
-      return [];
-    })}
+    {Object.entries(countRepeatedTags(resources)).filter(([tagId]) => tagId).map(([tagId, count]) => (
+      <TagIcon key={tagId} tag={tagLookup[normalize(tagId)]} label={tagId} count={count} size={compact ? "xs" : "sm"} />
+    ))}
   </>
 );
-
-const RequirementIcons = ({ requirements = [], tagLookup, compact = false }) => {
-  if (!requirements.length) return null;
-  return (
-    <div className="flex flex-wrap justify-center gap-1">
-      {requirements.map((requirement, index) => {
-        if (requirement?.type === "not_condition") {
-          return (
-            <span key={index} className="inline-flex items-center gap-1 rounded-md border border-rose-800/80 bg-rose-950/40 px-1.5 py-0.5 text-[0.58rem] font-bold text-rose-200">
-              NO
-              <TagIcon tag={tagLookup[normalize(requirement.tag_id)]} label={requirement.tag_id} size={compact ? "xs" : "sm"} />
-            </span>
-          );
-        }
-        return (
-          <span key={index} className="rounded-md border border-slate-700/80 bg-slate-950/70 px-1.5 py-1 text-[0.58rem] font-bold uppercase text-slate-300">
-            HAS {String(requirement.card_id || requirement.scope || "card").replace(/[-_]+/g, " ")}
-          </span>
-        );
-      })}
-    </div>
-  );
-};
 
 const CardVisual = ({
   card,
@@ -105,29 +54,24 @@ const CardVisual = ({
   size = "table",
   className = "",
   pillarLookup = {},
+  tokenLookup = {},
+  storageIconSrc = "",
 }) => {
   const data = card?.data || {};
   const cost = data.cost || {};
-  const requiredCityTags = data.required_city_tags || {};
+  const requiredTags = data.required_tags || {};
   const tags = data.tags || {};
-  const productionEffects = [
-    ...(Object.keys(data.production || {}).length
-      ? [{ effect_type: "add_resources", payload: { resources: data.production } }]
-      : []),
-    ...productionLogicEffects(data),
-  ];
-  const storage = data.storage && typeof data.storage === "object"
-    ? data.storage
-    : Number(data.storage || 0) > 0
-      ? { capacity: Number(data.storage), mode: "generic" }
-      : null;
-  const pillarModifiers = Array.isArray(data.built_pillar_modifiers) ? data.built_pillar_modifiers : [];
+  const production = data.production || {};
+  const onBuildEffects = Array.isArray(data.on_build_effects) ? data.on_build_effects : [];
+  const persistentEffects = Array.isArray(data.persistent_effects) ? data.persistent_effects : [];
+  const storageEffects = persistentEffects.filter((effect) => effect.effect_type === "storage");
+  const slotEffects = persistentEffects.filter((effect) => effect.effect_type === "add_building_slots");
   const compact = size === "hand";
   const widthClass = compact ? "w-[clamp(9rem,13vw,11rem)]" : "w-[clamp(10.5rem,12vw,13rem)]";
 
   return (
     <article
-      className={`relative flex aspect-[5/7] ${widthClass} shrink-0 flex-col overflow-hidden rounded-lg border bg-stone-950/95 p-2 shadow-xl ${
+      className={`relative flex aspect-[5/7] ${widthClass} shrink-0 flex-col rounded-lg border bg-stone-950/95 p-2 shadow-xl ${
         exhausted ? "border-amber-500/80 opacity-70" : "border-amber-900/80"
       } ${className}`}
     >
@@ -139,7 +83,7 @@ const CardVisual = ({
               <TagIcon key={`${tagId}-${index}`} tag={tagLookup[normalize(tagId)]} label={tagId} size="xs" />
             ))
           ))}
-          {Object.entries(requiredCityTags).flatMap(([tagId, count]) => (
+          {Object.entries(requiredTags).flatMap(([tagId, count]) => (
             Array.from({ length: Math.max(1, Number(count) || 1) }).map((_, index) => (
               <span key={`required-${tagId}-${index}`} className="rounded-full ring-1 ring-amber-300/80" title={`Requires ${tagId} in city`}>
                 <TagIcon tag={tagLookup[normalize(tagId)]} label={tagId} size="xs" />
@@ -149,12 +93,11 @@ const CardVisual = ({
         </div>
         <div className="min-w-0 text-right">
           <h3 className="line-clamp-2 text-[0.78rem] font-bold leading-tight text-amber-50">{card?.name || "Unknown Card"}</h3>
-          <p className="mt-0.5 truncate text-[0.55rem] uppercase text-amber-700">{data.card_type || card?.category || "card"}</p>
+          <p className="mt-0.5 truncate text-[0.55rem] uppercase text-amber-700">{card?.category || "card"}</p>
         </div>
       </div>
 
       <div className="mt-2 flex flex-1 flex-col justify-center gap-2">
-        <RequirementIcons requirements={Array.isArray(data.requirements) ? data.requirements : []} tagLookup={tagLookup} compact={compact} />
         {card?.summary ? <p className="line-clamp-3 text-center text-[0.62rem] leading-5 text-stone-300">{card.summary}</p> : null}
       </div>
 
@@ -168,26 +111,55 @@ const CardVisual = ({
         </div>
       ) : null}
 
-      {storage || pillarModifiers.length ? (
+      {storageEffects.length || slotEffects.length || onBuildEffects.length ? (
         <div className="mb-1 flex flex-wrap items-center justify-center gap-1">
-          {storage ? (
+          {storageEffects.map((effect, index) => {
+            const amount = Number(effect.payload?.amount || 1);
+            const resourceId = effect.payload?.resource_id || "";
+            return (
             <IconPill
-              title={`Stores ${Number(storage.capacity || 0)} ${storage.mode === "specific" ? storage.resource_id || "selected resource" : "resources"}`}
+              key={`storage-${index}`}
+              title={`Stores ${amount} ${resourceId || "resources"}`}
               tone="teal"
               compact={compact}
             >
-              <Archive className={compact ? "h-3 w-3" : "h-3.5 w-3.5"} aria-hidden="true" />
-              <span className="ml-1">{Number(storage.capacity || 0)}</span>
-              {storage.mode === "specific" && storage.resource_id ? (
+              {storageIconSrc ? (
+                <img alt="" className={compact ? "h-3.5 w-3.5 object-contain" : "h-4 w-4 object-contain"} src={storageIconSrc} />
+              ) : (
+                <Archive className={compact ? "h-3 w-3" : "h-3.5 w-3.5"} aria-hidden="true" />
+              )}
+              <span className="ml-1">{amount}</span>
+              {resourceId ? (
                 <span className="ml-1">
-                  <TagIcon tag={tagLookup[normalize(storage.resource_id)]} label={storage.resource_id} size="xs" />
+                  <TagIcon tag={tagLookup[normalize(resourceId)]} label={resourceId} size="xs" />
                 </span>
               ) : null}
             </IconPill>
-          ) : null}
-          {pillarModifiers.map((modifier, index) => {
-            const pillarId = modifier.pillar_id || modifier.pillar;
-            const amount = Number(modifier.amount || 0);
+            );
+          })}
+          {slotEffects.map((effect, index) => (
+            <IconPill key={`slots-${index}`} title={`Adds ${Number(effect.payload?.amount || 1)} building slots`} tone="teal" compact={compact}>
+              <Grid2X2 className={compact ? "h-3 w-3" : "h-3.5 w-3.5"} aria-hidden="true" />
+              <span className="ml-1">+{Number(effect.payload?.amount || 1)}</span>
+            </IconPill>
+          ))}
+          {onBuildEffects.map((effect, index) => {
+            const pillarId = effect.payload?.pillar_id;
+            const tokenId = effect.payload?.token_id;
+            const amount = Number(effect.payload?.amount || 0);
+            if (effect.effect_type === "modify_token") {
+              return (
+                <IconPill
+                  key={`token-${tokenId}-${index}`}
+                  title={`${amount >= 0 ? "Add" : "Remove"} ${Math.abs(amount)} ${tokenLookup[normalize(tokenId)]?.name || tokenId} when built`}
+                  tone={amount >= 0 ? "teal" : "amber"}
+                  compact={compact}
+                >
+                  <TagIcon tag={tokenLookup[normalize(tokenId)]} label={tokenId} size="xs" />
+                  <span className="ml-1">{amount >= 0 ? `+${amount}` : amount}</span>
+                </IconPill>
+              );
+            }
             return (
               <IconPill
                 key={`${pillarId}-${index}`}
@@ -203,9 +175,9 @@ const CardVisual = ({
         </div>
       ) : null}
 
-      {productionEffects.length ? (
+      {Object.keys(production).length ? (
         <div className="mb-1 flex min-h-7 flex-wrap items-center justify-center gap-1 border-t border-teal-900/50 pt-1" title="Production">
-          <EffectIcons effects={productionEffects} tagLookup={tagLookup} compact={compact} />
+          <ResourceIcons resources={production} tagLookup={tagLookup} compact={compact} />
         </div>
       ) : null}
 

@@ -5,7 +5,7 @@ import { PageSubnavigation } from "../components/AuthenticatedLayout.jsx";
 import CatalogItemVisual from "../components/CatalogItemVisual.jsx";
 import TagIcon from "../components/TagIcon.jsx";
 import { useStore } from "../store.js";
-import { buildApiUrl } from "../utils/connection.js";
+import { buildApiUrl, buildAssetUrl } from "../utils/connection.js";
 
 const sections = [
   { key: "users", label: "Users", to: "/admin/users" },
@@ -16,12 +16,12 @@ const sections = [
   { key: "cards", label: "Cards", to: "/admin/cards" },
   { key: "ministries", label: "Ministries", to: "/admin/ministries" },
   { key: "pillars", label: "Pillars", to: "/admin/pillars" },
+  { key: "tokens", label: "Tokens", to: "/admin/tokens" },
   { key: "effect-icons", label: "Effect Icons", to: "/admin/effect-icons" },
   { key: "agendas", label: "Agendas", to: "/admin/agendas" },
   { key: "events", label: "Events", to: "/admin/events" },
   { key: "groups", label: "Groups", to: "/admin/groups" },
-  { key: "empire-decks", label: "Empire Decks", to: "/admin/empire-decks" },
-  { key: "event-decks", label: "Crisis Decks", to: "/admin/event-decks" },
+  { key: "decks", label: "Empire Decks", to: "/admin/decks" },
   { key: "levels", label: "Levels", to: "/admin/levels" },
 ];
 
@@ -31,15 +31,21 @@ const catalogSections = new Set([
   "cards",
   "ministries",
   "pillars",
+  "tokens",
   "effect-icons",
   "agendas",
   "events",
   "groups",
-  "card-categories",
-  "empire-decks",
-  "event-decks",
   "levels",
   "decks",
+]);
+const readOnlyCatalogSections = new Set([
+  "tags",
+  "images",
+  "ministries",
+  "pillars",
+  "tokens",
+  "effect-icons",
 ]);
 
 const DataPill = ({ children }) => (
@@ -82,8 +88,7 @@ const tagListFieldsBySection = {
   events: [],
   pillars: [],
   "effect-icons": [],
-  "empire-decks": [],
-  "event-decks": [],
+  decks: [],
   levels: [],
 };
 
@@ -94,8 +99,7 @@ const tagCountFieldsBySection = {
   events: [],
   pillars: [],
   "effect-icons": [],
-  "empire-decks": [],
-  "event-decks": [],
+  decks: [],
   levels: [],
 };
 
@@ -106,8 +110,7 @@ const tagSingleFieldsBySection = {
   events: [],
   pillars: [],
   "effect-icons": [],
-  "empire-decks": [],
-  "event-decks": [],
+  decks: [],
   levels: [],
 };
 
@@ -147,9 +150,7 @@ const catalogIdFromText = (value) =>
     .replace(/^-+|-+$/g, "");
 
 const assetSrc = (value) => {
-  const src = String(value || "");
-  if (!src || src.startsWith("data:") || /^https?:\/\//i.test(src)) return src;
-  return buildApiUrl(src);
+  return buildAssetUrl(value);
 };
 
 const tagIsVolatileResource = (tag) => tag?.data?.resource_type === "volatile";
@@ -509,44 +510,6 @@ const ImageAssetSelect = ({ label, images, selectedId, onSelect }) => {
   );
 };
 
-const ImageGuidedFields = ({ data, setField, catalogForm, setCatalogForm, uploadImageAsset }) => (
-  <IconImageEditor
-    label="Image Asset"
-    value={data.src || ""}
-    onChange={async (dataUrl, filename) => {
-      if (!dataUrl) {
-        setField("src", "");
-        return;
-      }
-      const uploaded = await uploadImageAsset({
-        dataUrl,
-        filename,
-        requestedId: catalogForm.id,
-      });
-      setCatalogForm((state) => ({
-        ...state,
-        id: state.id || uploaded.id,
-        name: state.name || uploaded.name || uploaded.id,
-      }));
-      setField("src", uploaded.src);
-    }}
-  />
-);
-
-const TagResourceFields = ({ data, setField, imageEntries }) => (
-  <div>
-    <ImageAssetSelect
-      label="Tag Icon"
-      images={imageEntries}
-      selectedId={data.icon_image_id || ""}
-      onSelect={(image) => {
-        setField("icon_image_id", image?.id || "");
-        setField("icon", "");
-      }}
-    />
-  </div>
-);
-
 const SelectField = ({ label, value, options, onChange }) => (
   <label className="block">
     <span className="text-sm font-medium text-slate-300">{label}</span>
@@ -773,7 +736,7 @@ const LogicNodeEditor = ({ logicNodes, setLogicNodes, tagEntries }) => {
   );
 };
 
-const CardGuidedFields = ({ data, setField, tagEntries, cardEntries, groupEntries, pillarEntries }) => {
+const CardGuidedFields = ({ category, data, setField, tagEntries, cardEntries, groupEntries, pillarEntries }) => {
   const conditionTags = tagEntries.filter((tag) => tag.category === "condition");
   const resourceTags = volatileResourceTags(tagEntries);
   const permanentTags = permanentOnlyTags(tagEntries);
@@ -802,25 +765,13 @@ const CardGuidedFields = ({ data, setField, tagEntries, cardEntries, groupEntrie
   return (
     <>
       <SelectField
-        label="Card Type"
-        value={data.card_type || "building"}
-        options={[
-          { value: "city", label: "City" },
-          { value: "building", label: "Building" },
-          { value: "politics", label: "Politics" },
-          { value: "economy", label: "Economy" },
-        ]}
-        onChange={(value) => setField("card_type", value)}
-      />
-
-      <SelectField
         label="Placement"
         value={data.placement || "city"}
         options={placementOptions}
         onChange={(value) => setField("placement", value)}
       />
 
-      {data.card_type === "city" ? (
+      {category === "city" ? (
         <NumberField
           label="Building Slots"
           value={data.building_slots || 3}
@@ -1157,7 +1108,7 @@ const DeckGuidedFields = ({ data, setField, items, title = "Deck Items" }) => {
 };
 
 const LevelGuidedFields = ({ data, setField, cardEntries, empireDeckEntries, eventDeckEntries }) => {
-  const cityCards = cardEntries.filter((card) => String(card.data?.card_type || card.category || "").toLowerCase() === "city");
+  const cityCards = cardEntries.filter((card) => String(card.category || "").toLowerCase() === "city");
   return (
     <>
       <SelectField
@@ -1242,8 +1193,15 @@ const eventEffectTypeOptions = [
   { value: "block_minister_next_year", label: "Block minister" },
 ];
 const effectIconCodeOptions = [
-  { value: "all_players", label: "All players" },
-  ...eventEffectTypeOptions,
+  { value: "modify_pillar", label: "Modify Pillar" },
+  { value: "destroy_building", label: "Destroy Building" },
+  { value: "remove_all_resources", label: "Remove All Resources" },
+  { value: "discard_cards", label: "Discard Cards" },
+  { value: "add_plague", label: "Add Plague" },
+  { value: "add_unrest", label: "Add Unrest" },
+  { value: "add_fortified", label: "Add Fortified" },
+  { value: "add_building_slots", label: "Add Building Slots" },
+  { value: "storage", label: "Storage" },
 ];
 
 const effectIconOptionLabel = (effectType) =>
@@ -1723,58 +1681,591 @@ const EffectIconGuidedFields = ({ data, setField, imageEntries, editingEntry, se
   );
 };
 
+const updateCountMap = (value, itemId, count) => {
+  const next = { ...(value || {}) };
+  if (count <= 0) delete next[itemId];
+  else next[itemId] = count;
+  return next;
+};
+
+const DevelopmentCardGuidedFields = ({ category, data, setField, tagEntries, pillarEntries, tokenEntries = [], imageEntries = [] }) => {
+  const resources = volatileResourceTags(tagEntries);
+  const permanentTags = permanentOnlyTags(tagEntries);
+  const onBuildEffects = Array.isArray(data.on_build_effects) ? data.on_build_effects : [];
+  const persistentEffects = Array.isArray(data.persistent_effects) ? data.persistent_effects : [];
+  const imageLookup = Object.fromEntries((imageEntries || []).map((image) => [image.id, image]));
+
+  const updateEffect = (field, effects, index, patch) => {
+    const next = [...effects];
+    next[index] = { ...next[index], ...patch };
+    setField(field, next);
+  };
+
+  return (
+    <>
+      {category === "city" ? (
+        <NumberField
+          label="Building Slots"
+          value={data.building_slots ?? 0}
+          onChange={(value) => setField("building_slots", Math.max(0, value))}
+        />
+      ) : null}
+      <TagCounterGroup
+        label="Required Tags to Build"
+        tags={permanentTags}
+        values={data.required_tags || {}}
+        onChange={(tagId, count) => setField("required_tags", updateCountMap(data.required_tags, tagId, count))}
+      />
+      <TagCounterGroup
+        label="Required Resources to Build"
+        tags={resources}
+        values={data.cost || {}}
+        onChange={(tagId, count) => setField("cost", updateCountMap(data.cost, tagId, count))}
+      />
+      <TagCounterGroup
+        label="Tags Provided"
+        tags={permanentTags}
+        values={data.tags || {}}
+        onChange={(tagId, count) => setField("tags", updateCountMap(data.tags, tagId, count))}
+      />
+      <TagCounterGroup
+        label="Resources Provided Each Era"
+        tags={resources}
+        values={data.production || {}}
+        onChange={(tagId, count) => setField("production", updateCountMap(data.production, tagId, count))}
+      />
+
+      <div className="space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <h4 className="text-sm font-semibold text-slate-300">When Built Effects</h4>
+          <button
+            className="rounded-md border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800"
+            onClick={() => setField("on_build_effects", [...onBuildEffects, { effect_type: "modify_pillar", payload: { pillar_id: "", amount: 1 } }])}
+            type="button"
+          >
+            Add effect
+          </button>
+        </div>
+        {onBuildEffects.map((effect, index) => (
+          <div key={index} className="grid gap-2 rounded-md border border-slate-800 bg-slate-950 p-3 sm:grid-cols-[11rem_1fr_8rem_auto]">
+            <SelectField
+              label="Effect"
+              value={effect.effect_type || "modify_pillar"}
+              options={[
+                { value: "modify_pillar", label: "Modify pillar" },
+                { value: "modify_token", label: "Modify token" },
+              ]}
+              onChange={(effectType) => updateEffect("on_build_effects", onBuildEffects, index, {
+                effect_type: effectType,
+                payload: effectType === "modify_token"
+                  ? { token_id: "", amount: 1 }
+                  : { pillar_id: "", amount: 1 },
+              })}
+            />
+            {effect.effect_type === "modify_token" ? (
+              <label className="block">
+                <span className="text-sm font-medium text-slate-300">Token</span>
+                <span className="mt-2 flex items-center gap-2">
+                  {effect.payload?.token_id ? (
+                    <img
+                      alt=""
+                      className="h-8 w-8 object-contain"
+                      src={assetSrc(imageLookup[tokenEntries.find((token) => token.id === effect.payload?.token_id)?.data?.icon_image_id]?.data?.src || "")}
+                    />
+                  ) : null}
+                  <select
+                    value={effect.payload?.token_id || ""}
+                    onChange={(event) => updateEffect("on_build_effects", onBuildEffects, index, {
+                      payload: { ...(effect.payload || {}), token_id: event.target.value },
+                    })}
+                    className="w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none focus:border-teal-400"
+                  >
+                    <option value="">Select token</option>
+                    {tokenEntries.map((token) => <option key={token.id} value={token.id}>{token.name}</option>)}
+                  </select>
+                </span>
+              </label>
+            ) : (
+              <SelectField
+                label="Pillar"
+                value={effect.payload?.pillar_id || ""}
+                options={[{ value: "", label: "Select pillar" }, ...pillarEntries.map((pillar) => ({ value: pillar.id, label: pillar.name }))]}
+                onChange={(pillarId) => updateEffect("on_build_effects", onBuildEffects, index, {
+                  payload: { ...(effect.payload || {}), pillar_id: pillarId },
+                })}
+              />
+            )}
+            <NumberField
+              label="Change"
+              value={effect.payload?.amount ?? 1}
+              onChange={(amount) => updateEffect("on_build_effects", onBuildEffects, index, {
+                payload: { ...(effect.payload || {}), amount },
+              })}
+            />
+            <button
+              className="mt-7 text-xs font-semibold text-rose-300 hover:text-rose-200"
+              onClick={() => setField("on_build_effects", onBuildEffects.filter((_, effectIndex) => effectIndex !== index))}
+              type="button"
+            >
+              Remove
+            </button>
+          </div>
+        ))}
+      </div>
+
+      <div className="space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <h4 className="text-sm font-semibold text-slate-300">Persistent Effects</h4>
+          <button
+            className="rounded-md border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800"
+            onClick={() => setField("persistent_effects", [...persistentEffects, { effect_type: "storage", payload: { amount: 1, resource_id: "" } }])}
+            type="button"
+          >
+            Add effect
+          </button>
+        </div>
+        {persistentEffects.map((effect, index) => (
+          <div key={index} className="grid gap-2 rounded-md border border-slate-800 bg-slate-950 p-3 sm:grid-cols-[12rem_1fr_8rem_auto]">
+            <SelectField
+              label="Effect"
+              value={effect.effect_type || "storage"}
+              options={[
+                { value: "storage", label: "Add storage" },
+                { value: "add_building_slots", label: "Add building slots" },
+              ]}
+              onChange={(effectType) => updateEffect("persistent_effects", persistentEffects, index, {
+                effect_type: effectType,
+                payload: effectType === "storage" ? { amount: 1, resource_id: "" } : { amount: 1 },
+              })}
+            />
+            {effect.effect_type === "add_building_slots" ? (
+              <p className="self-end pb-2 text-sm text-slate-400">Adds slots to this City.</p>
+            ) : (
+              <SelectField
+                label="Stored Resource"
+                value={effect.payload?.resource_id || ""}
+                options={[{ value: "", label: "Any resource" }, ...resources.map((resource) => ({ value: resource.id, label: resource.name }))]}
+                onChange={(resourceId) => updateEffect("persistent_effects", persistentEffects, index, {
+                  payload: { ...(effect.payload || {}), resource_id: resourceId },
+                })}
+              />
+            )}
+            <NumberField
+              label={effect.effect_type === "add_building_slots" ? "Slots" : "Capacity"}
+              value={effect.payload?.amount ?? 1}
+              onChange={(amount) => updateEffect("persistent_effects", persistentEffects, index, {
+                payload: { ...(effect.payload || {}), amount: Math.max(1, amount) },
+              })}
+            />
+            <button
+              className="mt-7 text-xs font-semibold text-rose-300 hover:text-rose-200"
+              onClick={() => setField("persistent_effects", persistentEffects.filter((_, effectIndex) => effectIndex !== index))}
+              type="button"
+            >
+              Remove
+            </button>
+          </div>
+        ))}
+      </div>
+    </>
+  );
+};
+
+const eventV2EffectOptions = [
+  { value: "modify_pillar", label: "Modify pillar" },
+  { value: "destroy_building", label: "Destroy building" },
+  { value: "remove_all_resources", label: "Remove all remaining resources" },
+  { value: "discard_cards", label: "Discard cards from hand" },
+  { value: "add_plague", label: "Add Plague token" },
+  { value: "add_unrest", label: "Add Unrest token" },
+  { value: "add_fortified", label: "Add Fortified token" },
+];
+
+const EventEffectsV2 = ({ effects, setEffects, tagEntries, pillarEntries }) => {
+  const resources = volatileResourceTags(tagEntries);
+  const permanentTags = permanentOnlyTags(tagEntries);
+  const updateEffect = (index, patch) => {
+    const next = [...effects];
+    next[index] = { ...next[index], ...patch };
+    setEffects(next);
+  };
+  const updatePayload = (index, patch) => updateEffect(index, {
+    payload: { ...(effects[index]?.payload || {}), ...patch },
+  });
+
+  return (
+    <div className="space-y-2">
+      {effects.map((effect, index) => (
+        <div key={index} className="space-y-3 rounded-md border border-slate-800 bg-slate-950 p-3">
+          <div className="grid gap-2 sm:grid-cols-[12rem_1fr_8rem_auto]">
+            <SelectField
+              label="Effect"
+              value={effect.effect_type || "modify_pillar"}
+              options={eventV2EffectOptions}
+              onChange={(effectType) => updateEffect(index, { effect_type: effectType, payload: {} })}
+            />
+            {effect.effect_type === "modify_pillar" ? (
+              <>
+                <SelectField
+                  label="Pillar"
+                  value={effect.payload?.pillar_id || ""}
+                  options={[{ value: "", label: "Select pillar" }, ...pillarEntries.map((pillar) => ({ value: pillar.id, label: pillar.name }))]}
+                  onChange={(pillarId) => updatePayload(index, { pillar_id: pillarId })}
+                />
+                <NumberField label="Change" value={effect.payload?.amount ?? -1} onChange={(amount) => updatePayload(index, { amount })} />
+              </>
+            ) : effect.effect_type === "destroy_building" ? (
+              <>
+                <SelectField
+                  label="Eligible Building Tag"
+                  value={effect.payload?.tag_id || ""}
+                  options={[{ value: "", label: "Any building" }, ...permanentTags.map((tag) => ({ value: tag.id, label: tag.name }))]}
+                  onChange={(tagId) => updatePayload(index, { tag_id: tagId, decider: "minister-of-state" })}
+                />
+                <NumberField label="Buildings" value={effect.payload?.amount ?? 1} onChange={(amount) => updatePayload(index, { amount: Math.max(1, amount), decider: "minister-of-state" })} />
+              </>
+            ) : effect.effect_type === "discard_cards" ? (
+              <>
+                <SelectField
+                  label="Discard"
+                  value={effect.payload?.amount == null ? "all" : "amount"}
+                  options={[{ value: "all", label: "All cards" }, { value: "amount", label: "Specific amount" }]}
+                  onChange={(mode) => updateEffect(index, { payload: { target: "all_players", amount: mode === "all" ? null : 1 } })}
+                />
+                {effect.payload?.amount == null ? <span /> : (
+                  <NumberField label="Cards" value={effect.payload?.amount ?? 1} onChange={(amount) => updatePayload(index, { amount: Math.max(1, amount), target: "all_players" })} />
+                )}
+              </>
+            ) : ["add_plague", "add_unrest", "add_fortified"].includes(effect.effect_type) ? (
+              <>
+                <SelectField
+                  label="Placement"
+                  value={effect.payload?.scope || (effect.effect_type === "add_unrest" ? "unspecified" : "city")}
+                  options={[
+                    { value: "city", label: "City" },
+                    ...(effect.effect_type === "add_unrest"
+                      ? [{ value: "global", label: "Global" }, { value: "unspecified", label: "Minister decides" }]
+                      : []),
+                  ]}
+                  onChange={(scope) => updatePayload(index, { scope })}
+                />
+                <NumberField label="Tokens" value={effect.payload?.amount ?? 1} onChange={(amount) => updatePayload(index, { amount: Math.max(1, amount) })} />
+              </>
+            ) : (
+              <p className="self-end pb-2 text-sm text-slate-400 sm:col-span-2">Applies to the shared Empire pool.</p>
+            )}
+            <button
+              className="mt-7 text-xs font-semibold text-rose-300 hover:text-rose-200"
+              onClick={() => setEffects(effects.filter((_, effectIndex) => effectIndex !== index))}
+              type="button"
+            >
+              Remove
+            </button>
+          </div>
+          <label className="flex items-center gap-2 text-sm font-medium text-slate-300">
+            <input
+              checked={Boolean(effect.condition)}
+              onChange={(event) => updateEffect(index, {
+                condition: event.target.checked
+                  ? { source_type: "resource", source_id: "", operator: "gte", amount: 1 }
+                  : null,
+              })}
+              type="checkbox"
+            />
+            Apply only when a condition is met
+          </label>
+          {effect.condition ? (
+            <div className="grid gap-2 sm:grid-cols-4">
+              <SelectField
+                label="Condition Type"
+                value={effect.condition.source_type || "resource"}
+                options={[
+                  { value: "resource", label: "Resource" },
+                  { value: "tag", label: "Tag" },
+                  { value: "pillar", label: "Pillar" },
+                ]}
+                onChange={(sourceType) => updateEffect(index, { condition: { ...effect.condition, source_type: sourceType, source_id: "" } })}
+              />
+              <SelectField
+                label="Value"
+                value={effect.condition.source_id || ""}
+                options={[
+                  { value: "", label: "Select value" },
+                  ...(effect.condition.source_type === "pillar"
+                    ? pillarEntries
+                    : effect.condition.source_type === "tag"
+                      ? permanentTags
+                      : resources
+                  ).map((entry) => ({ value: entry.id, label: entry.name })),
+                ]}
+                onChange={(sourceId) => updateEffect(index, { condition: { ...effect.condition, source_id: sourceId } })}
+              />
+              <SelectField
+                label="Comparison"
+                value={effect.condition.operator || "gte"}
+                options={[
+                  { value: "gt", label: "More than" },
+                  { value: "gte", label: "At least" },
+                  { value: "lt", label: "Less than" },
+                  { value: "lte", label: "At most" },
+                  { value: "eq", label: "Exactly" },
+                ]}
+                onChange={(operator) => updateEffect(index, { condition: { ...effect.condition, operator } })}
+              />
+              <NumberField label="Amount" value={effect.condition.amount ?? 1} onChange={(amount) => updateEffect(index, { condition: { ...effect.condition, amount } })} />
+            </div>
+          ) : null}
+        </div>
+      ))}
+      <button
+        className="rounded-md border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800"
+        onClick={() => setEffects([...effects, { effect_type: "modify_pillar", payload: { pillar_id: "", amount: -1 } }])}
+        type="button"
+      >
+        Add effect
+      </button>
+    </div>
+  );
+};
+
+const EventGuidedFieldsV2 = ({ data, setField, tagEntries, imageEntries, pillarEntries }) => {
+  const requirements = Array.isArray(data.requirements) ? data.requirements : [];
+  const updateRequirement = (index, patch) => {
+    const next = [...requirements];
+    next[index] = { ...next[index], ...patch };
+    setField("requirements", next);
+  };
+  return (
+    <>
+      <SelectField
+        label="Event Subtype"
+        value={data.subtype || "edict"}
+        options={[{ value: "edict", label: "Edict" }, { value: "crisis", label: "Crisis" }]}
+        onChange={(subtype) => setField("subtype", subtype)}
+      />
+      <ImageAssetSelect
+        label="Event Image"
+        images={imageEntries}
+        selectedId={data.image_id || ""}
+        onSelect={(image) => setField("image_id", image?.id || "")}
+      />
+      <div className="space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <h4 className="text-sm font-semibold text-slate-300">Resolution Requirements</h4>
+          <button
+            className="rounded-md border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800"
+            onClick={() => setField("requirements", [...requirements, { type: "resource", item_id: "", amount: 1 }])}
+            type="button"
+          >
+            Add requirement
+          </button>
+        </div>
+        {requirements.map((requirement, index) => {
+          const options = requirement.type === "pillar"
+            ? pillarEntries
+            : requirement.type === "tag"
+              ? permanentOnlyTags(tagEntries)
+              : volatileResourceTags(tagEntries);
+          return (
+            <div key={index} className="grid gap-2 rounded-md border border-slate-800 bg-slate-950 p-3 sm:grid-cols-[10rem_1fr_9rem_7rem_auto]">
+              <SelectField
+                label="Type"
+                value={requirement.type || "resource"}
+                options={[
+                  { value: "resource", label: "Resource cost" },
+                  { value: "tag", label: "Tag requirement" },
+                  { value: "pillar", label: "Pillar condition" },
+                ]}
+                onChange={(type) => updateRequirement(index, type === "pillar"
+                  ? { type, pillar_id: "", operator: "gte", value: 1, item_id: undefined, amount: undefined }
+                  : { type, item_id: "", amount: 1, pillar_id: undefined, operator: undefined, value: undefined })}
+              />
+              <SelectField
+                label={requirement.type === "pillar" ? "Pillar" : "Item"}
+                value={requirement.type === "pillar" ? requirement.pillar_id || "" : requirement.item_id || ""}
+                options={[{ value: "", label: "Select item" }, ...options.map((entry) => ({ value: entry.id, label: entry.name }))]}
+                onChange={(value) => updateRequirement(index, requirement.type === "pillar" ? { pillar_id: value } : { item_id: value })}
+              />
+              {requirement.type === "pillar" ? (
+                <SelectField
+                  label="Comparison"
+                  value={requirement.operator || "gte"}
+                  options={[
+                    { value: "gt", label: "More than" },
+                    { value: "gte", label: "At least" },
+                    { value: "lt", label: "Less than" },
+                    { value: "lte", label: "At most" },
+                    { value: "eq", label: "Exactly" },
+                  ]}
+                  onChange={(operator) => updateRequirement(index, { operator })}
+                />
+              ) : <span />}
+              <NumberField
+                label={requirement.type === "pillar" ? "Value" : "Amount"}
+                value={requirement.type === "pillar" ? requirement.value ?? 1 : requirement.amount ?? 1}
+                onChange={(value) => updateRequirement(index, requirement.type === "pillar" ? { value } : { amount: Math.max(1, value) })}
+              />
+              <button
+                className="mt-7 text-xs font-semibold text-rose-300 hover:text-rose-200"
+                onClick={() => setField("requirements", requirements.filter((_, requirementIndex) => requirementIndex !== index))}
+                type="button"
+              >
+                Remove
+              </button>
+            </div>
+          );
+        })}
+      </div>
+      <div className="space-y-3">
+        <h4 className="text-sm font-semibold text-slate-300">Main Effects</h4>
+        <EventEffectsV2
+          effects={Array.isArray(data.main_effects) ? data.main_effects : []}
+          setEffects={(effects) => setField("main_effects", effects)}
+          tagEntries={tagEntries}
+          pillarEntries={pillarEntries}
+        />
+      </div>
+      <div className="space-y-3">
+        <h4 className="text-sm font-semibold text-slate-300">Alternative Effects</h4>
+        <p className="text-xs text-slate-500">These resolve only when one or more requirements are not satisfied.</p>
+        <EventEffectsV2
+          effects={Array.isArray(data.alternative_effects) ? data.alternative_effects : []}
+          setEffects={(effects) => setField("alternative_effects", effects)}
+          tagEntries={tagEntries}
+          pillarEntries={pillarEntries}
+        />
+      </div>
+    </>
+  );
+};
+
+const UnifiedDeckGuidedFields = ({ data, setField, items }) => {
+  const itemIds = Array.isArray(data.item_ids) ? data.item_ids : [];
+  const setup = data.initial_setup && typeof data.initial_setup === "object"
+    ? data.initial_setup
+    : { "3": [], "4": [], "5": [] };
+  const deckCounts = repeatedListToCounts(itemIds);
+  const tierCounts = Object.fromEntries(["3", "4", "5"].map((tier) => [tier, repeatedListToCounts(setup[tier] || [])]));
+  const tierTargets = { "3": 12, "4": 3, "5": 3 };
+
+  const setDeckCopies = (itemId, copies) => {
+    const normalized = Math.max(0, Math.min(99, Number(copies) || 0));
+    const otherIds = itemIds.filter((id) => id !== itemId);
+    const nextSetup = Object.fromEntries(["3", "4", "5"].map((tier) => {
+      const allowed = Math.max(0, normalized - ["3", "4", "5"]
+        .filter((candidate) => candidate !== tier)
+        .reduce((total, candidate) => total + Number(tierCounts[candidate][itemId] || 0), 0));
+      const count = Math.min(Number(tierCounts[tier][itemId] || 0), allowed);
+      const withoutItem = (setup[tier] || []).filter((id) => id !== itemId);
+      return [tier, [...withoutItem, ...Array.from({ length: count }, () => itemId)]];
+    }));
+    setField("item_ids", [...otherIds, ...Array.from({ length: normalized }, () => itemId)]);
+    setField("initial_setup", nextSetup);
+  };
+  const setTierCopies = (tier, itemId, copies) => {
+    const otherTierCount = ["3", "4", "5"]
+      .filter((candidate) => candidate !== tier)
+      .reduce((total, candidate) => total + Number(tierCounts[candidate][itemId] || 0), 0);
+    const maxForTier = Math.max(0, Number(deckCounts[itemId] || 0) - otherTierCount);
+    const normalized = Math.max(0, Math.min(maxForTier, Number(copies) || 0));
+    setField("initial_setup", {
+      ...setup,
+      [tier]: [
+        ...(setup[tier] || []).filter((id) => id !== itemId),
+        ...Array.from({ length: normalized }, () => itemId),
+      ],
+    });
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-[minmax(0,1fr)_5rem_repeat(3,5.5rem)] gap-2 px-3 text-xs font-semibold text-slate-500">
+        <span>Card</span><span>Deck</span><span>3 players</span><span>+4th</span><span>+5th</span>
+      </div>
+      {items.map((item) => (
+        <div key={item.id} className="grid grid-cols-[minmax(0,1fr)_5rem_repeat(3,5.5rem)] items-center gap-2 rounded-md border border-slate-800 bg-slate-950 p-3">
+          <span className="min-w-0">
+            <span className="block truncate text-sm font-semibold text-slate-200">{item.name}</span>
+            <span className="block text-xs text-slate-500">{item.kind === "events" ? `Event - ${item.data?.subtype || "event"}` : item.category}</span>
+          </span>
+          <input className="h-8 rounded border border-slate-700 bg-slate-900 px-1 text-center text-sm text-white" min="0" max="99" type="number" value={deckCounts[item.id] || 0} onChange={(event) => setDeckCopies(item.id, event.target.value)} />
+          {["3", "4", "5"].map((tier) => (
+            <input key={tier} className="h-8 rounded border border-slate-700 bg-slate-900 px-1 text-center text-sm text-white disabled:opacity-40" disabled={!deckCounts[item.id]} min="0" max={deckCounts[item.id] || 0} type="number" value={tierCounts[tier][item.id] || 0} onChange={(event) => setTierCopies(tier, item.id, event.target.value)} />
+          ))}
+        </div>
+      ))}
+      <div className="grid gap-2 sm:grid-cols-3">
+        {["3", "4", "5"].map((tier) => {
+          const total = (setup[tier] || []).length;
+          return (
+            <p key={tier} className={`rounded-md border px-3 py-2 text-sm ${total === tierTargets[tier] ? "border-emerald-800 text-emerald-200" : "border-amber-800 text-amber-200"}`}>
+              {tier === "3" ? "3 players" : `Add player ${tier}`}: {total}/{tierTargets[tier]}
+            </p>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+const LevelGuidedFieldsV2 = ({ data, setField, cardEntries, deckEntries }) => {
+  const cityCards = cardEntries.filter((card) => card.category === "city");
+  return (
+    <>
+      <SelectField
+        label="Initial City Card"
+        value={data.initial_city_card_id || ""}
+        options={[{ value: "", label: "Select city card" }, ...cityCards.map((card) => ({ value: card.id, label: card.name }))]}
+        onChange={(value) => setField("initial_city_card_id", value)}
+      />
+      <SelectField
+        label="Empire Deck"
+        value={data.deck_id || ""}
+        options={[{ value: "", label: "Select deck" }, ...deckEntries.map((deck) => ({ value: deck.id, label: deck.name }))]}
+        onChange={(value) => setField("deck_id", value)}
+      />
+    </>
+  );
+};
+
+const SystemEffectIconGuidedFields = ({ data, setField, imageEntries }) => (
+  <>
+    <p className="rounded-md border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-300">
+      Effect code: <span className="font-semibold text-white">{effectIconOptionLabel(data.effect_type)}</span>
+    </p>
+    <ImageAssetSelect
+      label="Effect Image"
+      images={imageEntries}
+      selectedId={data.icon_image_id || ""}
+      onSelect={(image) => setField("icon_image_id", image?.id || "")}
+    />
+  </>
+);
+
 const GuidedMetadataEditor = ({
   activeSection,
   catalogForm,
   setCatalogForm,
   isEditing,
-  uploadImageAsset,
   tagEntries,
   cardEntries,
   groupEntries,
   eventEntries,
-  empireDeckEntries,
-  eventDeckEntries,
+  deckEntries,
   ministryEntries,
   imageEntries,
   pillarEntries,
+  tokenEntries,
 }) => {
   const data = dataForForm(catalogForm);
-  if (activeSection === "tags" || activeSection === "images") {
-    const setField = (field, value) => {
-      setCatalogForm((state) => {
-        let currentData = {};
-        try {
-          currentData = parseDataText(state.dataText);
-        } catch (_error) {
-          currentData = data;
-        }
-        const nextData = { ...currentData };
-        if (value === "" || value === false || value == null) delete nextData[field];
-        else nextData[field] = value;
-        return { ...state, dataText: stringifyData(nextData) };
-      });
-    };
-    if (activeSection === "images") {
-      return (
-        <ImageGuidedFields
-          data={data}
-          setField={setField}
-          catalogForm={catalogForm}
-          setCatalogForm={setCatalogForm}
-          uploadImageAsset={uploadImageAsset}
-        />
-      );
-    }
-    return <TagResourceFields data={data} setField={setField} imageEntries={imageEntries} />;
-  }
+  if (readOnlyCatalogSections.has(activeSection)) return null;
 
   const countFields = tagCountFieldsBySection[activeSection] || [];
   const listFields = tagListFieldsBySection[activeSection] || [];
   const singleFields = tagSingleFieldsBySection[activeSection] || [];
   const usefulFields = [...countFields, ...listFields, ...singleFields];
   const hasCardGuidance = activeSection === "cards";
-  const hasDeckGuidance = activeSection === "decks" || activeSection === "empire-decks" || activeSection === "event-decks";
+  const hasDeckGuidance = activeSection === "decks";
   const hasLevelGuidance = activeSection === "levels";
   const hasMinistryGuidance = activeSection === "ministries";
   const hasEventGuidance = activeSection === "events";
@@ -1834,37 +2325,29 @@ const GuidedMetadataEditor = ({
     <div className="space-y-5 rounded-lg border border-slate-800 bg-slate-950 p-4">
       <h3 className="font-semibold text-white">Guided Metadata</h3>
       {hasCardGuidance ? (
-        <CardGuidedFields
+        <DevelopmentCardGuidedFields
+          category={catalogForm.category}
           data={data}
           setField={setField}
           tagEntries={tagEntries}
-          cardEntries={cardEntries}
-          groupEntries={groupEntries}
           pillarEntries={pillarEntries}
+          tokenEntries={tokenEntries}
+          imageEntries={imageEntries}
         />
       ) : null}
       {hasDeckGuidance ? (
-        <DeckGuidedFields
+        <UnifiedDeckGuidedFields
           data={data}
           setField={setField}
-          items={
-            activeSection === "event-decks"
-              ? eventEntries
-              : [
-                  ...cardEntries.filter((entry) => String(entry.data?.card_type || entry.category || "").toLowerCase() !== "city"),
-                  ...eventEntries,
-                ]
-          }
-          title={activeSection === "event-decks" ? "Crisis Cards" : "Empire Cards and Events"}
+          items={[...cardEntries, ...eventEntries]}
         />
       ) : null}
       {hasLevelGuidance ? (
-        <LevelGuidedFields
+        <LevelGuidedFieldsV2
           data={data}
           setField={setField}
           cardEntries={cardEntries}
-          empireDeckEntries={empireDeckEntries}
-          eventDeckEntries={eventDeckEntries}
+          deckEntries={deckEntries}
         />
       ) : null}
       {hasMinistryGuidance ? (
@@ -1875,11 +2358,10 @@ const GuidedMetadataEditor = ({
         />
       ) : null}
       {hasEventGuidance ? (
-        <EventGuidedFields
+        <EventGuidedFieldsV2
           data={data}
           setField={setField}
           tagEntries={tagEntries}
-          ministryEntries={ministryEntries}
           imageEntries={imageEntries}
           pillarEntries={pillarEntries}
         />
@@ -1896,12 +2378,10 @@ const GuidedMetadataEditor = ({
         <PillarGuidedFields data={data} setField={setField} imageEntries={imageEntries} />
       ) : null}
       {hasEffectIconGuidance ? (
-        <EffectIconGuidedFields
+        <SystemEffectIconGuidedFields
           data={data}
           setField={setField}
           imageEntries={imageEntries}
-          editingEntry={isEditing}
-          setCatalogForm={setCatalogForm}
         />
       ) : null}
       {countFields.map((field) => (
@@ -1936,7 +2416,7 @@ const GuidedMetadataEditor = ({
 };
 
 const AdminPage = () => {
-  const { section = "users", subsection = "" } = useParams();
+  const { section = "users" } = useParams();
   const { token, user } = useStore();
   const [query, setQuery] = useState("");
   const [users, setUsers] = useState([]);
@@ -1949,11 +2429,10 @@ const AdminPage = () => {
   const [cardEntries, setCardEntries] = useState([]);
   const [eventEntries, setEventEntries] = useState([]);
   const [pillarEntries, setPillarEntries] = useState([]);
+  const [tokenEntries, setTokenEntries] = useState([]);
   const [effectIconEntries, setEffectIconEntries] = useState([]);
   const [ministryEntries, setMinistryEntries] = useState([]);
-  const [cardCategories, setCardCategories] = useState([]);
-  const [empireDeckEntries, setEmpireDeckEntries] = useState([]);
-  const [eventDeckEntries, setEventDeckEntries] = useState([]);
+  const [deckEntries, setDeckEntries] = useState([]);
   const [levelEntries, setLevelEntries] = useState([]);
   const [groupEntries, setGroupEntries] = useState([]);
   const [catalogSummary, setCatalogSummary] = useState(null);
@@ -1965,10 +2444,9 @@ const AdminPage = () => {
   const [busy, setBusy] = useState(false);
 
   const activeSection = sections.some((entry) => entry.key === section) ? section : null;
-  const activeCatalogKind =
-    activeSection === "cards" && subsection === "categories" ? "card-categories" : activeSection;
+  const activeCatalogKind = activeSection;
   const isCatalogSection = catalogSections.has(activeCatalogKind);
-  const isCardCategoriesPage = activeCatalogKind === "card-categories";
+  const isReadOnlyCatalogSection = readOnlyCatalogSections.has(activeCatalogKind);
 
   const request = async (path, options = {}) => {
     const response = await fetch(buildApiUrl(path), {
@@ -1981,22 +2459,6 @@ const AdminPage = () => {
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(payload.detail || "Admin request failed.");
     return payload;
-  };
-
-  const uploadImageAsset = async ({ dataUrl, filename, requestedId }) => {
-    const normalizedId = catalogIdFromText(requestedId);
-    const path = normalizedId
-      ? `/api/admin/images/${encodeURIComponent(normalizedId)}/upload`
-      : "/api/admin/images/upload";
-    return request(path, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        data_url: dataUrl,
-        filename,
-        id: normalizedId,
-      }),
-    });
   };
 
   const loadUsers = async () => {
@@ -2056,20 +2518,17 @@ const AdminPage = () => {
       if (targetSection !== "pillars") {
         requests.push(request("/api/admin/pillars"));
       }
+      if (targetSection !== "tokens") {
+        requests.push(request("/api/admin/tokens"));
+      }
       if (targetSection !== "effect-icons") {
         requests.push(request("/api/admin/effect-icons"));
       }
       if (targetSection !== "ministries") {
         requests.push(request("/api/admin/ministries"));
       }
-      if (targetSection !== "card-categories") {
-        requests.push(request("/api/admin/card-categories"));
-      }
-      if (targetSection !== "empire-decks") {
-        requests.push(request("/api/admin/empire-decks"));
-      }
-      if (targetSection !== "event-decks") {
-        requests.push(request("/api/admin/event-decks"));
+      if (targetSection !== "decks") {
+        requests.push(request("/api/admin/decks"));
       }
       if (targetSection !== "levels") {
         requests.push(request("/api/admin/levels"));
@@ -2083,11 +2542,10 @@ const AdminPage = () => {
       const groups = targetSection === "groups" ? entries : results[resultIndex++];
       const events = targetSection === "events" ? entries : results[resultIndex++];
       const pillars = targetSection === "pillars" ? entries : results[resultIndex++];
+      const tokens = targetSection === "tokens" ? entries : results[resultIndex++];
       const effectIcons = targetSection === "effect-icons" ? entries : results[resultIndex++];
       const ministries = targetSection === "ministries" ? entries : results[resultIndex++];
-      const categories = targetSection === "card-categories" ? entries : results[resultIndex++];
-      const empireDecks = targetSection === "empire-decks" ? entries : results[resultIndex++];
-      const eventDecks = targetSection === "event-decks" ? entries : results[resultIndex++];
+      const decks = targetSection === "decks" ? entries : results[resultIndex++];
       const levels = targetSection === "levels" ? entries : results[resultIndex++];
       setCatalogSummary(summary);
       setCatalogEntries(entries);
@@ -2097,11 +2555,10 @@ const AdminPage = () => {
       setGroupEntries(targetSection === "groups" ? entries : groups);
       setEventEntries(targetSection === "events" ? entries : events);
       setPillarEntries(targetSection === "pillars" ? entries : pillars);
+      setTokenEntries(targetSection === "tokens" ? entries : tokens);
       setEffectIconEntries(targetSection === "effect-icons" ? entries : effectIcons);
       setMinistryEntries(targetSection === "ministries" ? entries : ministries);
-      setCardCategories(targetSection === "card-categories" ? entries : categories);
-      setEmpireDeckEntries(targetSection === "empire-decks" ? entries : empireDecks);
-      setEventDeckEntries(targetSection === "event-decks" ? entries : eventDecks);
+      setDeckEntries(targetSection === "decks" ? entries : decks);
       setLevelEntries(targetSection === "levels" ? entries : levels);
       setEditingEntry(null);
       setCatalogForm(emptyCatalogForm);
@@ -2160,6 +2617,7 @@ const AdminPage = () => {
   }, [activeCatalogKind, filteredCatalogEntries]);
 
   const beginCreateCatalogEntry = () => {
+    if (isReadOnlyCatalogSection) return;
     setEditingEntry(null);
     setCatalogForm({
       ...emptyCatalogForm,
@@ -2167,12 +2625,10 @@ const AdminPage = () => {
       category:
         activeCatalogKind === "groups"
           ? "mutually-exclusive"
-          : activeCatalogKind === "card-categories"
-            ? "card-category"
-            : activeCatalogKind === "empire-decks"
-              ? "empire"
-            : activeCatalogKind === "event-decks"
-              ? "events"
+          : activeCatalogKind === "cards"
+            ? "structure"
+            : activeCatalogKind === "decks"
+              ? "deck"
             : activeCatalogKind === "levels"
               ? "level"
             : activeCatalogKind === "events"
@@ -2189,22 +2645,18 @@ const AdminPage = () => {
       dataText:
         activeCatalogKind === "groups"
           ? stringifyData({ type: "mutually_exclusive" })
-            : activeCatalogKind === "empire-decks"
-              ? stringifyData({ item_ids: [] })
-            : activeCatalogKind === "event-decks"
-              ? stringifyData({ item_ids: [] })
+            : activeCatalogKind === "decks"
+              ? stringifyData({ item_ids: [], initial_setup: { "3": [], "4": [], "5": [] } })
             : activeCatalogKind === "levels"
-              ? stringifyData({ initial_city_card_id: "", empire_deck_id: "", event_deck_id: "", common_pool_deck_id: "" })
+              ? stringifyData({ initial_city_card_id: "", deck_id: "" })
             : activeCatalogKind === "ministries"
               ? stringifyData({
                   infrastructure_resources: [],
                 })
               : activeCatalogKind === "events"
-                ? stringifyData({ defense_requirement: {}, success_effects: [], failure_effects: [], thresholds: [] })
+                ? stringifyData({ subtype: "edict", requirements: [], main_effects: [], alternative_effects: [] })
               : activeCatalogKind === "pillars"
                 ? stringifyData({ min: 0, max: 10, start: 5, range_effects: [] })
-              : activeCatalogKind === "effect-icons"
-                ? stringifyData({ effect_type: "", icon_image_id: "", icon: "" })
               : activeCatalogKind === "tags"
                 ? stringifyData({ resource_type: "permanent" })
                 : activeCatalogKind === "images"
@@ -2216,6 +2668,7 @@ const AdminPage = () => {
   };
 
   const beginEditCatalogEntry = (entry) => {
+    if (isReadOnlyCatalogSection) return;
     setEditingEntry(entry);
     setCatalogForm({
       id: entry.id,
@@ -2238,7 +2691,7 @@ const AdminPage = () => {
   };
 
   const saveCatalogEntry = async () => {
-    if (!isCatalogSection || busy) return;
+    if (!isCatalogSection || isReadOnlyCatalogSection || busy) return;
     setBusy(true);
     setError("");
     try {
@@ -2269,12 +2722,8 @@ const AdminPage = () => {
         category:
           activeCatalogKind === "groups"
             ? "mutually-exclusive"
-            : activeCatalogKind === "card-categories"
-              ? "card-category"
-              : activeCatalogKind === "empire-decks"
-                ? "empire"
-              : activeCatalogKind === "event-decks"
-                ? "events"
+            : activeCatalogKind === "decks"
+                ? "deck"
               : activeCatalogKind === "levels"
                 ? "level"
               : activeCatalogKind === "events"
@@ -2290,17 +2739,17 @@ const AdminPage = () => {
         color: activeCatalogKind === "tags" ? catalogForm.color : null,
         data: activeCatalogKind === "groups"
           ? { ...parsedData, type: "mutually_exclusive" }
-          : activeCatalogKind === "empire-decks"
-            ? { ...parsedData, item_ids: Array.isArray(parsedData.item_ids) ? parsedData.item_ids : [] }
-          : activeCatalogKind === "event-decks"
-            ? { ...parsedData, item_ids: Array.isArray(parsedData.item_ids) ? parsedData.item_ids : [] }
+          : activeCatalogKind === "decks"
+            ? {
+                ...parsedData,
+                item_ids: Array.isArray(parsedData.item_ids) ? parsedData.item_ids : [],
+                initial_setup: parsedData.initial_setup || { "3": [], "4": [], "5": [] },
+              }
           : activeCatalogKind === "levels"
             ? {
                 ...parsedData,
                 initial_city_card_id: parsedData.initial_city_card_id || "",
-                empire_deck_id: parsedData.empire_deck_id || "",
-                event_deck_id: parsedData.event_deck_id || "",
-                common_pool_deck_id: parsedData.common_pool_deck_id || "",
+                deck_id: parsedData.deck_id || "",
               }
           : activeCatalogKind === "tags"
               ? { ...parsedData, resource_type: tagResourceType }
@@ -2384,24 +2833,8 @@ const AdminPage = () => {
           );
         });
       }
-      if (activeCatalogKind === "card-categories") {
-        setCardCategories((entries) => {
-          const withoutSaved = entries.filter((entry) => entry.id !== saved.id);
-          return [...withoutSaved, saved].sort((a, b) =>
-            `${a.category}:${a.name}:${a.id}`.localeCompare(`${b.category}:${b.name}:${b.id}`)
-          );
-        });
-      }
-      if (activeCatalogKind === "empire-decks") {
-        setEmpireDeckEntries((entries) => {
-          const withoutSaved = entries.filter((entry) => entry.id !== saved.id);
-          return [...withoutSaved, saved].sort((a, b) =>
-            `${a.category}:${a.name}:${a.id}`.localeCompare(`${b.category}:${b.name}:${b.id}`)
-          );
-        });
-      }
-      if (activeCatalogKind === "event-decks") {
-        setEventDeckEntries((entries) => {
+      if (activeCatalogKind === "decks") {
+        setDeckEntries((entries) => {
           const withoutSaved = entries.filter((entry) => entry.id !== saved.id);
           return [...withoutSaved, saved].sort((a, b) =>
             `${a.category}:${a.name}:${a.id}`.localeCompare(`${b.category}:${b.name}:${b.id}`)
@@ -2435,7 +2868,7 @@ const AdminPage = () => {
   };
 
   const deleteCatalogEntry = async (entry) => {
-    if (!entry?.id || busy) return;
+    if (!entry?.id || isReadOnlyCatalogSection || busy) return;
     const confirmed = window.confirm(`Delete ${entry.name}?`);
     if (!confirmed) return;
     setBusy(true);
@@ -2467,14 +2900,8 @@ const AdminPage = () => {
       if (activeCatalogKind === "ministries") {
         setMinistryEntries((entries) => entries.filter((candidate) => candidate.id !== entry.id));
       }
-      if (activeCatalogKind === "card-categories") {
-        setCardCategories((entries) => entries.filter((candidate) => candidate.id !== entry.id));
-      }
-      if (activeCatalogKind === "empire-decks") {
-        setEmpireDeckEntries((entries) => entries.filter((candidate) => candidate.id !== entry.id));
-      }
-      if (activeCatalogKind === "event-decks") {
-        setEventDeckEntries((entries) => entries.filter((candidate) => candidate.id !== entry.id));
+      if (activeCatalogKind === "decks") {
+        setDeckEntries((entries) => entries.filter((candidate) => candidate.id !== entry.id));
       }
       if (activeCatalogKind === "levels") {
         setLevelEntries((entries) => entries.filter((candidate) => candidate.id !== entry.id));
@@ -2774,28 +3201,6 @@ const AdminPage = () => {
               ))}
             </div>
           ) : null}
-          {activeSection === "cards" ? (
-            <nav className="flex flex-wrap gap-2 border-b border-slate-800 pb-4">
-              <NavLink
-                to="/admin/cards"
-                end
-                className={({ isActive }) =>
-                  `rounded-md px-3 py-2 text-sm font-medium transition hover:bg-slate-800 hover:text-white ${isActive ? "bg-slate-800 text-white" : "text-slate-400"}`
-                }
-              >
-                Cards
-              </NavLink>
-              <NavLink
-                to="/admin/cards/categories"
-                className={({ isActive }) =>
-                  `rounded-md px-3 py-2 text-sm font-medium transition hover:bg-slate-800 hover:text-white ${isActive ? "bg-slate-800 text-white" : "text-slate-400"}`
-                }
-              >
-                Categories
-              </NavLink>
-            </nav>
-          ) : null}
-
           <div className="flex flex-wrap items-center justify-between gap-3">
             {activeSection === "tags" ? (
               <label className="flex items-center gap-2 text-sm text-slate-300">
@@ -2815,62 +3220,66 @@ const AdminPage = () => {
               <span />
             )}
             <div className="flex flex-wrap gap-2">
-              <button
-                className="inline-flex items-center gap-2 rounded-md border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800 disabled:opacity-60"
-                disabled={busy}
-                onClick={() => exportCatalog(activeCatalogKind)}
-                type="button"
-              >
-                <Download className="h-4 w-4" aria-hidden="true" />
-                Export Page
-              </button>
-              <button
-                className="inline-flex items-center gap-2 rounded-md border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800 disabled:opacity-60"
-                disabled={busy}
-                onClick={() => exportCatalog("")}
-                type="button"
-              >
-                <Download className="h-4 w-4" aria-hidden="true" />
-                Export All
-              </button>
-              <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800">
-                <Upload className="h-4 w-4" aria-hidden="true" />
-                Import Page
-                <input
-                  accept="application/json,.json"
-                  className="hidden"
-                  disabled={busy}
-                  onChange={(event) => {
-                    const file = event.target.files?.[0];
-                    void importCatalogFile(file);
-                    event.target.value = "";
-                  }}
-                  type="file"
-                />
-              </label>
-              <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800">
-                <Upload className="h-4 w-4" aria-hidden="true" />
-                Import All
-                <input
-                  accept="application/json,.json"
-                  className="hidden"
-                  disabled={busy}
-                  onChange={(event) => {
-                    const file = event.target.files?.[0];
-                    void importCatalogFile(file, true);
-                    event.target.value = "";
-                  }}
-                  type="file"
-                />
-              </label>
-              <button
-                className="inline-flex items-center gap-2 rounded-md bg-teal-400 px-3 py-2 text-sm font-semibold text-slate-950 hover:bg-teal-300"
-                onClick={beginCreateCatalogEntry}
-                type="button"
-              >
-                <Plus className="h-4 w-4" aria-hidden="true" />
-                New {isCardCategoriesPage ? "category" : activeSection.slice(0, -1)}
-              </button>
+              {isReadOnlyCatalogSection ? null : (
+                <>
+                  <button
+                    className="inline-flex items-center gap-2 rounded-md border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800 disabled:opacity-60"
+                    disabled={busy}
+                    onClick={() => exportCatalog(activeCatalogKind)}
+                    type="button"
+                  >
+                    <Download className="h-4 w-4" aria-hidden="true" />
+                    Export Page
+                  </button>
+                  <button
+                    className="inline-flex items-center gap-2 rounded-md border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800 disabled:opacity-60"
+                    disabled={busy}
+                    onClick={() => exportCatalog("")}
+                    type="button"
+                  >
+                    <Download className="h-4 w-4" aria-hidden="true" />
+                    Export All
+                  </button>
+                  <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800">
+                    <Upload className="h-4 w-4" aria-hidden="true" />
+                    Import Page
+                    <input
+                      accept="application/json,.json"
+                      className="hidden"
+                      disabled={busy}
+                      onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        void importCatalogFile(file);
+                        event.target.value = "";
+                      }}
+                      type="file"
+                    />
+                  </label>
+                  <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800">
+                    <Upload className="h-4 w-4" aria-hidden="true" />
+                    Import All
+                    <input
+                      accept="application/json,.json"
+                      className="hidden"
+                      disabled={busy}
+                      onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        void importCatalogFile(file, true);
+                        event.target.value = "";
+                      }}
+                      type="file"
+                    />
+                  </label>
+                  <button
+                    className="inline-flex items-center gap-2 rounded-md bg-teal-400 px-3 py-2 text-sm font-semibold text-slate-950 hover:bg-teal-300"
+                    onClick={beginCreateCatalogEntry}
+                    type="button"
+                  >
+                    <Plus className="h-4 w-4" aria-hidden="true" />
+                    New {activeSection.slice(0, -1)}
+                  </button>
+                </>
+              )}
             </div>
           </div>
           <div className="space-y-6">
@@ -2881,9 +3290,9 @@ const AdminPage = () => {
                     {category}
                   </h2>
                 ) : null}
-                <div className="grid gap-4 md:grid-cols-2">
+                <div className="grid gap-4 md:grid-cols-5">
                   {entries.map((entry) => {
-                    const actionButtons = (
+                    const actionButtons = isReadOnlyCatalogSection ? null : (
                       <>
                         <button
                           className="inline-flex items-center gap-2 rounded-md border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800"
@@ -2913,10 +3322,11 @@ const AdminPage = () => {
                           ministries={ministryEntries}
                           images={imageEntries}
                           pillars={pillarEntries}
+                          tokens={tokenEntries}
                           effectIcons={effectIconEntries}
                           actions={entry.kind === "events" ? null : actionButtons}
                         />
-                        {entry.kind === "events" ? (
+                        {entry.kind === "events" && actionButtons ? (
                           <div className="flex flex-wrap gap-2 rounded-lg border border-slate-800 bg-slate-900 p-3">
                             {actionButtons}
                           </div>
@@ -2934,13 +3344,13 @@ const AdminPage = () => {
         </section>
       ) : null}
 
-      {editorOpen && isCatalogSection ? (
+      {editorOpen && isCatalogSection && !isReadOnlyCatalogSection ? (
         <div className="fixed inset-0 z-[1200] flex items-start justify-center overflow-y-auto bg-slate-950/80 px-4 py-8">
           <div className="w-full max-w-3xl rounded-lg border border-slate-800 bg-slate-900 shadow-2xl">
             <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-slate-800 bg-slate-900 px-5 py-4">
               <div>
                 <h2 className="font-semibold text-white">{editingEntry ? "Edit Item" : "Create Item"}</h2>
-                <p className="mt-1 text-xs text-slate-500">{isCardCategoriesPage ? "card category" : activeSection}</p>
+                <p className="mt-1 text-xs text-slate-500">{activeSection}</p>
               </div>
               <button
                 className="rounded-md border border-slate-700 p-2 text-slate-300 hover:bg-slate-800"
@@ -2988,10 +3398,8 @@ const AdminPage = () => {
                       onChange={(event) => setCatalogForm((state) => ({ ...state, category: event.target.value }))}
                       className="mt-2 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none focus:border-teal-400"
                     >
-                      <option value="">Select category</option>
-                      {cardCategories.map((category) => (
-                        <option key={category.id} value={category.id}>{category.name}</option>
-                      ))}
+                      <option value="structure">Structure</option>
+                      <option value="city">City</option>
                     </select>
                   </label>
                 ) : activeCatalogKind === "tags" ? (
@@ -3028,7 +3436,7 @@ const AdminPage = () => {
                       value={catalogForm.category}
                       onChange={(event) => setCatalogForm((state) => ({ ...state, category: event.target.value }))}
                       className="mt-2 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none focus:border-teal-400 disabled:text-slate-500"
-                      disabled={activeCatalogKind === "card-categories" || activeCatalogKind === "groups"}
+                      disabled={activeCatalogKind === "groups"}
                     />
                   </label>
                 )}
@@ -3066,16 +3474,15 @@ const AdminPage = () => {
                 catalogForm={catalogForm}
                 setCatalogForm={setCatalogForm}
                 isEditing={Boolean(editingEntry)}
-                uploadImageAsset={uploadImageAsset}
                 tagEntries={tagEntries}
                 cardEntries={cardEntries}
                 groupEntries={groupEntries}
                 eventEntries={eventEntries}
-                empireDeckEntries={empireDeckEntries}
-                eventDeckEntries={eventDeckEntries}
+                deckEntries={deckEntries}
                 ministryEntries={ministryEntries}
                 imageEntries={imageEntries}
                 pillarEntries={pillarEntries}
+                tokenEntries={tokenEntries}
               />
 
               <label className="block">

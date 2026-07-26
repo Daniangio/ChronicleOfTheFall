@@ -1,9 +1,7 @@
 import asyncio
-from pathlib import Path
 
 from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 
 from .connection_manager import ConnectionManager
 from .chat_service import ChatService
@@ -21,6 +19,7 @@ from .presence_service import PresenceService
 from .websocket_session_router import WebSocketSessionRouter
 from .websocket_gateway import WebSocketGateway
 from .runtime_state import set_connection_manager, set_game_room_service, set_presence_service
+from .empire_catalog import sync_static_catalog_records
 
 app = FastAPI()
 
@@ -40,8 +39,6 @@ app.include_router(auth_router, prefix="/api")
 app.include_router(player_router, prefix="/api")
 app.include_router(admin_router, prefix="/api")
 app.include_router(game_router, prefix="/api")
-Path(settings.IMAGE_STORAGE_DIR).mkdir(parents=True, exist_ok=True)
-app.mount(settings.IMAGE_PUBLIC_PATH, StaticFiles(directory=settings.IMAGE_STORAGE_DIR), name="catalog-images")
 
 connection_manager = ConnectionManager()
 presence_service = PresenceService(ttl_seconds=settings.PRESENCE_TTL_SECONDS)
@@ -90,6 +87,7 @@ async def startup_event():
     db = SessionLocal()
     try:
         bootstrap_all_registered_users(db)
+        sync_static_catalog_records(db)
     finally:
         db.close()
 

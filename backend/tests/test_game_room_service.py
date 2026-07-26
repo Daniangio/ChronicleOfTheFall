@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 
 from backend.app.game_room_service import GameRoomService, ROOM_STATE_FINISHED, ROOM_STATE_IN_GAME
-from backend.app.goldfishing_engine import build_goldfishing_state, perform_action
+from backend.app.goldfishing_engine import _apply_on_build_effects, build_goldfishing_state, perform_action
 from backend.app.server_models import User
 
 
@@ -48,32 +48,32 @@ CARDS = [
         "cards",
         category="city",
         data={
-            "card_type": "city",
             "building_slots": 4,
             "tags": {"urban": 1},
             "production": {"labor": 2, "wealth": 1},
-            "storage": {"capacity": 2, "mode": "generic"},
+            "persistent_effects": [{"effect_type": "storage", "payload": {"amount": 2}}],
         },
     ),
     catalog_entry(
         "farm",
         "Farm",
         "cards",
-        category="building",
+        category="structure",
         data={
-            "card_type": "building",
             "cost": {"labor": 1},
             "tags": {"food": 1},
             "production": {"labor": 1},
-            "built_pillar_modifiers": [{"pillar_id": "morale", "amount": 1}],
+            "on_build_effects": [
+                {"effect_type": "modify_pillar", "payload": {"pillar_id": "morale", "amount": 1}}
+            ],
         },
     ),
     catalog_entry(
         "garrison",
         "Garrison",
         "cards",
-        category="building",
-        data={"card_type": "building", "cost": {"labor": 1}, "tags": {"military": 1}},
+        category="structure",
+        data={"cost": {"labor": 1}, "tags": {"military": 1}},
     ),
 ]
 
@@ -83,14 +83,16 @@ EVENTS = [
         "Tax Riots",
         "events",
         data={
-            "effects": [
-                {"effect_type": "modify_resource", "payload": {"resource_id": "wealth", "amount": 2}},
-                {
-                    "effect_type": "modify_pillar",
-                    "payload": {"pillar": "stability", "amount": -1},
-                    "condition": {"source_type": "pillar", "source_id": "morale", "operator": "lte", "amount": 4},
-                },
-            ]
+            "subtype": "edict",
+            "requirements": [
+                {"type": "pillar", "pillar_id": "morale", "operator": "lte", "value": 4}
+            ],
+            "main_effects": [
+                {"effect_type": "modify_pillar", "payload": {"pillar_id": "stability", "amount": -1}}
+            ],
+            "alternative_effects": [
+                {"effect_type": "modify_pillar", "payload": {"pillar_id": "treasury", "amount": -1}}
+            ],
         },
     ),
     catalog_entry(
@@ -98,25 +100,24 @@ EVENTS = [
         "Border Raid",
         "events",
         data={
-            "defense_requirement": {"military": 2},
-            "success_effects": [{"effect_type": "modify_resource", "payload": {"resource_id": "wealth", "amount": 1}}],
-            "failure_effects": [{"effect_type": "modify_pillar", "payload": {"pillar": "stability", "amount": -1}}],
+            "subtype": "crisis",
+            "requirements": [{"type": "tag", "item_id": "military", "amount": 2}],
+            "main_effects": [{"effect_type": "modify_pillar", "payload": {"pillar_id": "treasury", "amount": 1}}],
+            "alternative_effects": [{"effect_type": "modify_pillar", "payload": {"pillar_id": "stability", "amount": -1}}],
         },
     ),
 ]
 
 
 def build_state(**overrides) -> dict:
+    setup_pool_ids = ["farm", "garrison"] * 7 + ["farm"]
     arguments = {
         "room_id": "test-room",
         "card_entries": CARDS,
         "tag_entries": TAGS,
-        "card_deck_ids": ["farm", "garrison", "tax-riots"] * 12,
-        "event_deck_ids": ["border-raid"],
-        "common_pool_ids": ["farm", "garrison"] * 12,
-        "card_deck_id": "empire-deck",
-        "event_deck_id": "crisis-deck",
-        "common_pool_deck_id": "base-pool",
+        "deck_ids": [*setup_pool_ids, *(["farm", "garrison", "tax-riots", "border-raid"] * 12)],
+        "setup_pool_ids": setup_pool_ids,
+        "deck_id": "empire-deck",
         "initial_city_card_id": "capital",
         "event_entries": EVENTS,
         "ministry_entries": MINISTRIES,
@@ -142,6 +143,32 @@ def finish_ministry_draft(state: dict) -> dict:
 
 
 class TestAnonymousCouncilEngine(unittest.TestCase):
+    def test_on_build_effects_add_and_remove_city_tokens(self):
+        state = build_state()
+        city = state["cities"][0]
+        card = catalog_entry(
+            "quarantine",
+            "Quarantine",
+            "cards",
+            category="structure",
+            data={
+                "on_build_effects": [
+                    {"effect_type": "modify_token", "payload": {"token_id": "plague-token", "amount": 2}},
+                    {"effect_type": "modify_token", "payload": {"token_id": "unrest-token", "amount": 1}},
+                ]
+            },
+        )
+
+        _apply_on_build_effects(state, card, city)
+        self.assertEqual(city["condition_tokens"], {"plague-token": 2, "unrest-token": 1})
+
+        card["data"]["on_build_effects"] = [
+            {"effect_type": "modify_token", "payload": {"token_id": "plague-token", "amount": -3}},
+            {"effect_type": "modify_token", "payload": {"token_id": "unrest-token", "amount": -1}},
+        ]
+        _apply_on_build_effects(state, card, city)
+        self.assertEqual(city["condition_tokens"], {})
+
     def test_setup_deals_base_and_empire_cards_and_places_initial_city(self):
         state = build_state()
 
@@ -228,7 +255,7 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
         self.assertEqual(state["pillars"]["morale"], 6)
         self.assertEqual(state["current_reveal"]["status"], "built")
 
-    def test_immediate_event_effects_support_resource_and_pillar_conditions(self):
+    def test_event_requirements_choose_main_or_alternative_effects(self):
         state = build_state()
         state.update(
             {
@@ -249,8 +276,8 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
 
         state = perform_action(state, "reveal_next", {})
 
-        self.assertEqual(state["global_resource_pool"], {"wealth": 2})
         self.assertEqual(state["pillars"]["stability"], 4)
+        self.assertEqual(state["pillars"]["treasury"], 5)
         self.assertIn("tax-riots", state["empire_discard"])
 
     def test_specific_and_generic_storage_are_validated(self):
@@ -258,7 +285,12 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
             "warehouse",
             "Warehouse",
             "cards",
-            data={"card_type": "building", "storage": {"capacity": 2, "mode": "specific", "resource_id": "wealth"}},
+            category="structure",
+            data={
+                "persistent_effects": [
+                    {"effect_type": "storage", "payload": {"amount": 2, "resource_id": "wealth"}}
+                ],
+            },
         )
         state = build_state(card_entries=[*CARDS, warehouse])
         state["cities"][0]["cards"].append("warehouse")
@@ -287,18 +319,24 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
         self.assertEqual(stored["stored_resources"], {"labor": 2, "wealth": 2})
         self.assertEqual(stored["phase"], "cleanup")
 
-    def test_crisis_uses_permanent_tags_and_war_power(self):
-        state = finish_ministry_draft(build_state())
-        state["era"] = 2
-        state["phase"] = "crisis"
-        state["current_crisis_id"] = "border-raid"
+    def test_event_tag_requirement_uses_permanent_empire_tags(self):
+        state = build_state()
+        state["phase"] = "reveal"
+        state["council_stack"] = [
+            {
+                "id": "border-raid",
+                "item_id": "border-raid",
+                "kind": "events",
+                "owner_player_id": "",
+                "face_up": False,
+            }
+        ]
         state["cities"][0]["cards"].append("garrison")
 
-        state = perform_action(state, "resolve_crisis", {"use_war_power": True})
+        state = perform_action(state, "reveal_next", {})
 
-        self.assertEqual(state["phase"], "storage")
-        self.assertEqual(state["global_resource_pool"], {"wealth": 1})
-        self.assertEqual(state["pillars"]["stability"], 5)
+        self.assertEqual(state["pillars"]["stability"], 4)
+        self.assertEqual(state["pillars"]["treasury"], 5)
 
     def test_collapse_reveals_agendas_and_calculates_winners(self):
         state = build_state()
@@ -314,8 +352,9 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
                 "face_up": False,
             }
         ]
-        state["catalog"]["events"][0]["data"]["effects"] = [
-            {"effect_type": "modify_pillar", "payload": {"pillar": "morale", "amount": -1}}
+        state["catalog"]["events"][0]["data"]["requirements"] = []
+        state["catalog"]["events"][0]["data"]["main_effects"] = [
+            {"effect_type": "modify_pillar", "payload": {"pillar_id": "morale", "amount": -1}}
         ]
 
         state = perform_action(state, "reveal_next", {})

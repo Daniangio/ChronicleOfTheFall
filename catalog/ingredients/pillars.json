@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "kind": "pillars",
+  "entries": [
+    {
+      "id": "pillar-of-morale",
+      "name": "Pillar of Morale",
+      "kind": "pillars",
+      "category": "pillar",
+      "summary": "",
+      "color": null,
+      "data": {
+        "min": 0,
+        "max": 10,
+        "start": 5,
+        "range_effects": [],
+        "icon_image_id": "pillar-of-morale-image"
+      }
+    },
+    {
+      "id": "pillar-of-stability",
+      "name": "Pillar of Stability",
+      "kind": "pillars",
+      "category": "pillar",
+      "summary": "",
+      "color": null,
+      "data": {
+        "min": 0,
+        "max": 10,
+        "start": 5,
+        "range_effects": [],
+        "icon_image_id": "pillar-of-stability-image"
+      }
+    },
+    {
+      "id": "pillar-of-treasury",
+      "name": "Pillar of Treasury",
+      "kind": "pillars",
+      "category": "pillar",
+      "summary": "",
+      "color": null,
+      "data": {
+        "min": 0,
+        "max": 10,
+        "start": 5,
+        "range_effects": [],
+        "icon_image_id": "pillar-of-treasury-image"
+      }
+    }
+  ]
+}

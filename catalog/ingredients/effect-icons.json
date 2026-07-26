@@ -1,0 +1,126 @@
+{
+  "version": 1,
+  "kind": "effect-icons",
+  "entries": [
+    {
+      "id": "modify-pillar-effect-icon",
+      "name": "Modify Pillar",
+      "kind": "effect-icons",
+      "category": "effect-icon",
+      "summary": "",
+      "color": null,
+      "data": {
+        "effect_type": "modify_pillar",
+        "icon_image_id": "effect-modify-pillar"
+      }
+    },
+    {
+      "id": "modify-token-effect-icon",
+      "name": "Modify Token",
+      "kind": "effect-icons",
+      "category": "effect-icon",
+      "summary": "",
+      "color": null,
+      "data": {
+        "effect_type": "modify_token",
+        "icon_image_id": "effect-modify-token"
+      }
+    },
+    {
+      "id": "destroy-building-effect-icon",
+      "name": "Destroy Building",
+      "kind": "effect-icons",
+      "category": "effect-icon",
+      "summary": "",
+      "color": null,
+      "data": {
+        "effect_type": "destroy_building",
+        "icon_image_id": "destroy-building-image"
+      }
+    },
+    {
+      "id": "remove-all-resources-effect-icon",
+      "name": "Remove All Resources",
+      "kind": "effect-icons",
+      "category": "effect-icon",
+      "summary": "",
+      "color": null,
+      "data": {
+        "effect_type": "remove_all_resources",
+        "icon_image_id": "effect-remove-all-resources"
+      }
+    },
+    {
+      "id": "discard-cards-effect-icon",
+      "name": "Discard Cards",
+      "kind": "effect-icons",
+      "category": "effect-icon",
+      "summary": "",
+      "color": null,
+      "data": {
+        "effect_type": "discard_cards",
+        "icon_image_id": "discard-card-image"
+      }
+    },
+    {
+      "id": "add-plague-effect-icon",
+      "name": "Add Plague",
+      "kind": "effect-icons",
+      "category": "effect-icon",
+      "summary": "",
+      "color": null,
+      "data": {
+        "effect_type": "add_plague",
+        "icon_image_id": "effect-add-plague"
+      }
+    },
+    {
+      "id": "add-unrest-effect-icon",
+      "name": "Add Unrest",
+      "kind": "effect-icons",
+      "category": "effect-icon",
+      "summary": "",
+      "color": null,
+      "data": {
+        "effect_type": "add_unrest",
+        "icon_image_id": "effect-add-unrest"
+      }
+    },
+    {
+      "id": "add-fortified-effect-icon",
+      "name": "Add Fortified",
+      "kind": "effect-icons",
+      "category": "effect-icon",
+      "summary": "",
+      "color": null,
+      "data": {
+        "effect_type": "add_fortified",
+        "icon_image_id": "effect-add-fortified"
+      }
+    },
+    {
+      "id": "add-building-slots-effect-icon",
+      "name": "Add Building Slots",
+      "kind": "effect-icons",
+      "category": "effect-icon",
+      "summary": "",
+      "color": null,
+      "data": {
+        "effect_type": "add_building_slots",
+        "icon_image_id": "effect-add-building-slots"
+      }
+    },
+    {
+      "id": "storage-effect-icon",
+      "name": "Storage",
+      "kind": "effect-icons",
+      "category": "effect-icon",
+      "summary": "",
+      "color": null,
+      "data": {
+        "effect_type": "storage",
+        "icon_image_id": "storage"
+      }
+    }
+  ]
+}
