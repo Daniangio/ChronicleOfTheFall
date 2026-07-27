@@ -246,6 +246,10 @@ An Event may make its Choice Minister draw one card from the Empire Deck. If the
 Event has no Choice Minister, or the named Ministry is vacant, the Minister of
 the Empire draws instead.
 
+Event token effects use a signed amount for Plague, Unrest, or Fortified.
+Positive values add tokens and negative values remove tokens from the selected
+City or the Empire. A token count can never fall below zero.
+
 Example:
 
 **Ratborne Fever**

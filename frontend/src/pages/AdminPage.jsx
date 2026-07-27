@@ -1087,9 +1087,9 @@ const effectIconCodeOptions = [
   { value: "destroy_building", label: "Destroy Building" },
   { value: "remove_all_resources", label: "Remove All Resources" },
   { value: "discard_cards", label: "Discard Cards" },
-  { value: "add_plague", label: "Add Plague" },
-  { value: "add_unrest", label: "Add Unrest" },
-  { value: "add_fortified", label: "Add Fortified" },
+  { value: "modify_plague", label: "Modify Plague" },
+  { value: "modify_unrest", label: "Modify Unrest" },
+  { value: "modify_fortified", label: "Modify Fortified" },
   { value: "waive_next_structure_tag_requirement", label: "Waive Next Structure Tag Requirement" },
   { value: "add_building_slots", label: "Add Building Slots" },
   { value: "storage", label: "Storage" },
@@ -1473,9 +1473,9 @@ const eventEffectOptions = [
   { value: "destroy_building", label: "Destroy building" },
   { value: "remove_all_resources", label: "Remove all remaining resources" },
   { value: "discard_cards", label: "Discard cards from hand" },
-  { value: "add_plague", label: "Add Plague token" },
-  { value: "add_unrest", label: "Add Unrest token" },
-  { value: "add_fortified", label: "Add Fortified token" },
+  { value: "modify_plague", label: "Add or remove Plague tokens" },
+  { value: "modify_unrest", label: "Add or remove Unrest tokens" },
+  { value: "modify_fortified", label: "Add or remove Fortified tokens" },
   { value: "waive_next_structure_tag_requirement", label: "Waive 1 tag on next Structure" },
 ];
 
@@ -1600,20 +1600,20 @@ const EventEffects = ({ effects, setEffects, tagEntries, pillarEntries }) => {
                   <NumberField label="Cards" value={effect.payload?.amount ?? 1} onChange={(amount) => updatePayload(index, { amount: Math.max(1, amount), target: "all_players" })} />
                 )}
               </>
-            ) : ["add_plague", "add_unrest", "add_fortified"].includes(effect.effect_type) ? (
+            ) : ["modify_plague", "modify_unrest", "modify_fortified"].includes(effect.effect_type) ? (
               <>
                 <SelectField
                   label="Placement"
-                  value={effect.payload?.scope || (effect.effect_type === "add_unrest" ? "unspecified" : "city")}
+                  value={effect.payload?.scope || (effect.effect_type === "modify_unrest" ? "unspecified" : "city")}
                   options={[
                     { value: "city", label: "City" },
-                    ...(effect.effect_type === "add_unrest"
+                    ...(effect.effect_type === "modify_unrest"
                       ? [{ value: "global", label: "Global" }, { value: "unspecified", label: "Minister decides" }]
                       : []),
                   ]}
                   onChange={(scope) => updatePayload(index, { scope })}
                 />
-                <NumberField label="Tokens" value={effect.payload?.amount ?? 1} onChange={(amount) => updatePayload(index, { amount: Math.max(1, amount) })} />
+                <NumberField label="Change" value={effect.payload?.amount ?? 1} onChange={(amount) => updatePayload(index, { amount })} />
               </>
             ) : (
               <p className="self-end pb-2 text-sm text-slate-400 sm:col-span-2">Applies to the shared Empire pool.</p>

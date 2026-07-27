@@ -458,9 +458,9 @@ def _validate_event_effects(value: Any) -> None:
         "destroy_building",
         "remove_all_resources",
         "discard_cards",
-        "add_plague",
-        "add_unrest",
-        "add_fortified",
+        "modify_plague",
+        "modify_unrest",
+        "modify_fortified",
         "waive_next_structure_tag_requirement",
     }
     for effect in effects:
@@ -497,6 +497,9 @@ def _validate_event_effects(value: Any) -> None:
                 raise ValueError("Conversion destination must be an existing volatile resource.")
             if source_id and source_id == target_id:
                 raise ValueError("Conversion source and destination must differ.")
+        if effect.get("effect_type") in {"modify_plague", "modify_unrest", "modify_fortified"}:
+            if int((effect.get("payload") or {}).get("amount") or 0) == 0:
+                raise ValueError("Token effects must add or remove at least one token.")
         condition = effect.get("condition")
         if condition and (
             not isinstance(condition, dict)

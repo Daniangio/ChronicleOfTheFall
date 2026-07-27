@@ -355,36 +355,36 @@
       }
     },
     {
-      "id": "effect-add-plague",
-      "name": "Add Plague Effect",
+      "id": "token-plague-image",
+      "name": "Plague Token Image",
       "kind": "images",
       "category": "image",
       "summary": "",
       "color": null,
       "data": {
-        "src": "/game-assets/effects/add-plague.svg"
+        "src": "/game-assets/effects/token-plague.svg"
       }
     },
     {
-      "id": "effect-add-unrest",
-      "name": "Add Unrest Effect",
+      "id": "token-unrest-image",
+      "name": "Unrest Token Image",
       "kind": "images",
       "category": "image",
       "summary": "",
       "color": null,
       "data": {
-        "src": "/game-assets/effects/add-unrest.svg"
+        "src": "/game-assets/effects/token-unrest.svg"
       }
     },
     {
-      "id": "effect-add-fortified",
-      "name": "Add Fortified Effect",
+      "id": "token-fortified-image",
+      "name": "Fortified Token Image",
       "kind": "images",
       "category": "image",
       "summary": "",
       "color": null,
       "data": {
-        "src": "/game-assets/effects/add-fortified.svg"
+        "src": "/game-assets/effects/token-fortified.svg"
       }
     },
     {

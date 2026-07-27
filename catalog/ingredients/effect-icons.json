@@ -99,39 +99,39 @@
       }
     },
     {
-      "id": "add-plague-effect-icon",
-      "name": "Add Plague",
+      "id": "modify-plague-effect-icon",
+      "name": "Modify Plague",
       "kind": "effect-icons",
       "category": "effect-icon",
       "summary": "",
       "color": null,
       "data": {
-        "effect_type": "add_plague",
-        "icon_image_id": "effect-add-plague"
+        "effect_type": "modify_plague",
+        "icon_image_id": "token-plague-image"
       }
     },
     {
-      "id": "add-unrest-effect-icon",
-      "name": "Add Unrest",
+      "id": "modify-unrest-effect-icon",
+      "name": "Modify Unrest",
       "kind": "effect-icons",
       "category": "effect-icon",
       "summary": "",
       "color": null,
       "data": {
-        "effect_type": "add_unrest",
-        "icon_image_id": "effect-add-unrest"
+        "effect_type": "modify_unrest",
+        "icon_image_id": "token-unrest-image"
       }
     },
     {
-      "id": "add-fortified-effect-icon",
-      "name": "Add Fortified",
+      "id": "modify-fortified-effect-icon",
+      "name": "Modify Fortified",
       "kind": "effect-icons",
       "category": "effect-icon",
       "summary": "",
       "color": null,
       "data": {
-        "effect_type": "add_fortified",
-        "icon_image_id": "effect-add-fortified"
+        "effect_type": "modify_fortified",
+        "icon_image_id": "token-fortified-image"
       }
     },
     {

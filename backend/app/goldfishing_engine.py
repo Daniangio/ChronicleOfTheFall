@@ -1258,16 +1258,15 @@ def _apply_event_effects(
                 )
         elif effect_type == "discard_cards":
             _discard_for_event(state, payload, event)
-        elif effect_type in {"add_plague", "add_unrest", "add_fortified"}:
-            token = effect_type.removeprefix("add_")
+        elif effect_type in {"modify_plague", "modify_unrest", "modify_fortified"}:
+            token_id = f"{effect_type.removeprefix('modify_')}-token"
             if payload.get("scope") == "global":
-                state.setdefault("condition_tokens", {})[token] = (
-                    int(state.setdefault("condition_tokens", {}).get(token, 0)) + max(1, amount)
-                )
+                _modify_token_count(state.setdefault("condition_tokens", {}), token_id, amount)
             elif state.get("cities"):
-                city = state["cities"][0]
-                city.setdefault("condition_tokens", {})[token] = (
-                    int(city.setdefault("condition_tokens", {}).get(token, 0)) + max(1, amount)
+                _modify_token_count(
+                    state["cities"][0].setdefault("condition_tokens", {}),
+                    token_id,
+                    amount,
                 )
         elif effect_type == "waive_next_structure_tag_requirement":
             state["structure_tag_requirement_waivers"] = (
@@ -1280,6 +1279,14 @@ def _modify_resource_pool(state: dict[str, Any], resource_id: str, amount: int) 
     pool = Counter(_counts(state.get("global_resource_pool")))
     pool[resource_id] = max(0, int(pool.get(resource_id, 0)) + amount)
     state["global_resource_pool"] = _positive_counts(pool)
+
+
+def _modify_token_count(tokens: dict[str, int], token_id: str, amount: int) -> None:
+    next_amount = max(0, int(tokens.get(token_id, 0)) + amount)
+    if next_amount:
+        tokens[token_id] = next_amount
+    else:
+        tokens.pop(token_id, None)
 
 
 def _event_resource_choices(state: dict[str, Any], amount: int) -> list[str]:

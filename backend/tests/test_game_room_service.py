@@ -581,6 +581,55 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
                     )
                 )
 
+    def test_event_token_effects_add_remove_and_clamp_at_zero(self):
+        state = build_state()
+        event = state["catalog"]["events"][0]
+        event["data"].update(
+            {
+                "requirements": [],
+                "main_effects": [
+                    {
+                        "effect_type": "modify_plague",
+                        "payload": {"scope": "city", "amount": 2},
+                    }
+                ],
+            }
+        )
+        state["phase"] = "reveal"
+        state["council_stack"] = [
+            {
+                "id": "add-plague",
+                "item_id": event["id"],
+                "kind": "events",
+                "owner_player_id": "",
+                "face_up": False,
+            }
+        ]
+
+        state = perform_action(state, "reveal_next", {})
+        self.assertEqual(state["cities"][0]["condition_tokens"], {"plague-token": 2})
+
+        event["data"]["main_effects"] = [
+            {
+                "effect_type": "modify_plague",
+                "payload": {"scope": "city", "amount": -3},
+            }
+        ]
+        state["catalog"]["events"][0] = event
+        state["phase"] = "reveal"
+        state["council_stack"] = [
+            {
+                "id": "remove-plague",
+                "item_id": event["id"],
+                "kind": "events",
+                "owner_player_id": "",
+                "face_up": False,
+            }
+        ]
+
+        state = perform_action(state, "reveal_next", {})
+        self.assertEqual(state["cities"][0]["condition_tokens"], {})
+
     def test_specific_and_generic_storage_are_validated(self):
         warehouse = catalog_entry(
             "warehouse",

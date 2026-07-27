@@ -55,9 +55,9 @@ const effectFallbackIcon = (effectType) => ({
   destroy_building: Hammer,
   remove_all_resources: Coins,
   discard_cards: ScrollText,
-  add_plague: HeartPulse,
-  add_unrest: Flame,
-  add_fortified: Shield,
+  modify_plague: HeartPulse,
+  modify_unrest: Flame,
+  modify_fortified: Shield,
   waive_next_structure_tag_requirement: CirclePlus,
   add_building_slots: Grid2X2,
   storage: Archive,
@@ -431,12 +431,12 @@ const EventEffectToken = ({ effect, eventMinistry, ministryLookup, effectIconLoo
       </span>
     );
   }
-  if (["add_plague", "add_unrest", "add_fortified"].includes(effect?.effect_type)) {
-    const fallback = effect.effect_type === "add_plague" ? HeartPulse : effect.effect_type === "add_unrest" ? Flame : Shield;
+  if (["modify_plague", "modify_unrest", "modify_fortified"].includes(effect?.effect_type)) {
+    const fallback = effect.effect_type === "modify_plague" ? HeartPulse : effect.effect_type === "modify_unrest" ? Flame : Shield;
     return (
       <span className="inline-flex items-center gap-1">
-        <EventEffectIcon effectType={effect.effect_type} effectIconLookup={effectIconLookup} imageLookup={imageLookup} fallback={fallback} label={humanizeKey(effect.effect_type)} tone={effect.effect_type === "add_fortified" ? "emerald" : "rose"} />
-        {amount > 1 ? <span className="text-xs font-bold text-rose-200">{amount}</span> : null}
+        <EventEffectIcon effectType={effect.effect_type} effectIconLookup={effectIconLookup} imageLookup={imageLookup} fallback={fallback} label={humanizeKey(effect.effect_type)} tone={amount >= 0 ? "emerald" : "rose"} />
+        <span className={`text-xs font-bold ${amount >= 0 ? "text-emerald-200" : "text-rose-200"}`}>{amount >= 0 ? `+${amount}` : amount}</span>
       </span>
     );
   }
