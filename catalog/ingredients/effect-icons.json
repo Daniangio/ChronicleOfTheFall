@@ -39,6 +39,18 @@
       }
     },
     {
+      "id": "convert-resources-effect-icon",
+      "name": "Convert Resources",
+      "kind": "effect-icons",
+      "category": "effect-icon",
+      "summary": "",
+      "color": null,
+      "data": {
+        "effect_type": "convert_resources",
+        "icon_image_id": "effect-convert-resources"
+      }
+    },
+    {
       "id": "destroy-building-effect-icon",
       "name": "Destroy Building",
       "kind": "effect-icons",

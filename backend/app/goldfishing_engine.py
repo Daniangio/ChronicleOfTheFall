@@ -180,6 +180,7 @@ def build_goldfishing_state(
         "revealed_cards": [],
         "pending_placement": None,
         "pending_event_resource_effect": None,
+        "pending_event_resource_conversion": None,
         "structure_tag_requirement_waivers": 0,
         "stalled_projects": [],
         "queued_projects": [],
@@ -241,6 +242,7 @@ def perform_action(state: dict[str, Any], action: str, payload: dict[str, Any] |
         "move_docket_card": _move_docket_card,
         "confirm_docket_order": _confirm_docket_order,
         "choose_event_resource": _choose_event_resource,
+        "choose_event_conversion_resource": _choose_event_conversion_resource,
         "reveal_next": _reveal_next,
         "place_revealed_card": _place_revealed_card,
         "place_queued_project": _place_queued_project,
@@ -869,6 +871,18 @@ def _possible_actions(state: dict[str, Any]) -> list[dict[str, Any]]:
         ]
         return [*actions, {"type": "confirm_docket_order", "player_id": active}]
     if phase == "reveal":
+        pending_conversion = state.get("pending_event_resource_conversion")
+        if pending_conversion:
+            return [
+                {
+                    "type": "choose_event_conversion_resource",
+                    "player_id": pending_conversion["decision_player_id"],
+                    "resource_id": resource_id,
+                    "stage": pending_conversion["stage"],
+                    "amount": pending_conversion["amount"],
+                }
+                for resource_id in pending_conversion["resource_ids"]
+            ]
         pending_resource = state.get("pending_event_resource_effect")
         if pending_resource:
             return [
@@ -898,6 +912,18 @@ def _possible_actions(state: dict[str, Any]) -> list[dict[str, Any]]:
             for project_id in ["", *[project["id"] for project in state["stalled_projects"]]]
         ]
     if phase == "crisis":
+        pending_conversion = state.get("pending_event_resource_conversion")
+        if pending_conversion:
+            return [
+                {
+                    "type": "choose_event_conversion_resource",
+                    "player_id": pending_conversion["decision_player_id"],
+                    "resource_id": resource_id,
+                    "stage": pending_conversion["stage"],
+                    "amount": pending_conversion["amount"],
+                }
+                for resource_id in pending_conversion["resource_ids"]
+            ]
         pending_resource = state.get("pending_event_resource_effect")
         if pending_resource:
             return [
@@ -1174,6 +1200,54 @@ def _apply_event_effects(
                 }
                 state["active_player_id"] = decision_player
                 return False
+        elif effect_type == "convert_resources":
+            source_id = str(payload.get("source_resource_id") or "")
+            target_id = str(payload.get("target_resource_id") or "")
+            if not source_id:
+                source_choices = [
+                    resource_id
+                    for resource_id in _event_resource_choices(state, -1)
+                    if resource_id != target_id
+                ]
+                if not source_choices:
+                    continue
+                _set_pending_event_conversion(
+                    state,
+                    event,
+                    amount=max(1, amount),
+                    source_id="",
+                    target_id=target_id,
+                    stage="source",
+                    resource_ids=source_choices,
+                    remaining_effects=list(effects[index + 1:]),
+                    continuation=continuation,
+                    requirements_met=requirements_met,
+                )
+                return False
+            if int(state.get("global_resource_pool", {}).get(source_id, 0)) <= 0:
+                continue
+            if not target_id:
+                target_choices = [
+                    resource_id
+                    for resource_id in _event_resource_choices(state, 1)
+                    if resource_id != source_id
+                ]
+                if not target_choices:
+                    continue
+                _set_pending_event_conversion(
+                    state,
+                    event,
+                    amount=max(1, amount),
+                    source_id=source_id,
+                    target_id="",
+                    stage="target",
+                    resource_ids=target_choices,
+                    remaining_effects=list(effects[index + 1:]),
+                    continuation=continuation,
+                    requirements_met=requirements_met,
+                )
+                return False
+            _convert_resources(state, source_id, target_id, max(1, amount))
         elif effect_type == "discard_cards":
             _discard_for_event(state, payload, event)
         elif effect_type in {"add_plague", "add_unrest", "add_fortified"}:
@@ -1225,6 +1299,104 @@ def _event_decision_player(
             or state["minister_of_empire_player_id"]
         )
     return _ministry_holder(state, fallback_role) or state["minister_of_empire_player_id"]
+
+
+def _set_pending_event_conversion(
+    state: dict[str, Any],
+    event: dict[str, Any],
+    *,
+    amount: int,
+    source_id: str,
+    target_id: str,
+    stage: str,
+    resource_ids: list[str],
+    remaining_effects: list[dict[str, Any]],
+    continuation: str,
+    requirements_met: bool,
+) -> None:
+    decision_player = _event_decision_player(state, event, fallback_role="health")
+    state["pending_event_resource_conversion"] = {
+        "event_id": event["id"],
+        "amount": amount,
+        "source_resource_id": source_id,
+        "target_resource_id": target_id,
+        "stage": stage,
+        "resource_ids": resource_ids,
+        "remaining_effects": remaining_effects,
+        "continuation": continuation,
+        "requirements_met": requirements_met,
+        "decision_player_id": decision_player,
+    }
+    state["active_player_id"] = decision_player
+
+
+def _convert_resources(
+    state: dict[str, Any],
+    source_resource_id: str,
+    target_resource_id: str,
+    amount: int,
+) -> None:
+    pool = Counter(_counts(state.get("global_resource_pool")))
+    converted = min(max(0, amount), int(pool.get(source_resource_id, 0)))
+    if converted:
+        pool[source_resource_id] -= converted
+        pool[target_resource_id] += converted
+    state["global_resource_pool"] = _positive_counts(pool)
+
+
+def _choose_event_conversion_resource(state: dict[str, Any], payload: dict[str, Any]) -> None:
+    pending = state.get("pending_event_resource_conversion")
+    if not pending:
+        raise ValueError("No event resource conversion choice is pending.")
+    _require_decision_player(state, payload, pending["decision_player_id"])
+    resource_id = str(payload.get("resource_id") or "")
+    if resource_id not in pending["resource_ids"]:
+        raise ValueError("That resource is not an eligible conversion choice.")
+    if pending["stage"] == "source":
+        pending["source_resource_id"] = resource_id
+        if pending["target_resource_id"]:
+            _finish_event_resource_conversion(state, pending)
+            return
+        pending["stage"] = "target"
+        pending["resource_ids"] = [
+            candidate
+            for candidate in _event_resource_choices(state, 1)
+            if candidate != resource_id
+        ]
+        if not pending["resource_ids"]:
+            _resume_after_event_resource_conversion(state, pending)
+        return
+    pending["target_resource_id"] = resource_id
+    _finish_event_resource_conversion(state, pending)
+
+
+def _finish_event_resource_conversion(state: dict[str, Any], pending: dict[str, Any]) -> None:
+    _convert_resources(
+        state,
+        pending["source_resource_id"],
+        pending["target_resource_id"],
+        int(pending["amount"]),
+    )
+    _resume_after_event_resource_conversion(state, pending)
+
+
+def _resume_after_event_resource_conversion(state: dict[str, Any], pending: dict[str, Any]) -> None:
+    event = event_by_id(state, pending["event_id"])
+    state["pending_event_resource_conversion"] = None
+    completed = _apply_event_effects(
+        state,
+        event,
+        pending["remaining_effects"],
+        continuation=pending["continuation"],
+        requirements_met=bool(pending["requirements_met"]),
+    )
+    if completed:
+        _complete_event_resolution(
+            state,
+            event,
+            continuation=pending["continuation"],
+            requirements_met=bool(pending["requirements_met"]),
+        )
 
 
 def _choose_event_resource(state: dict[str, Any], payload: dict[str, Any]) -> None:

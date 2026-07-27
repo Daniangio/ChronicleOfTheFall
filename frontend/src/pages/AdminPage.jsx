@@ -1082,6 +1082,7 @@ const MinistryGuidedFields = ({ data, setField, imageEntries }) => {
 const effectIconCodeOptions = [
   { value: "modify_pillar", label: "Modify Pillar" },
   { value: "modify_resources", label: "Modify Resources" },
+  { value: "convert_resources", label: "Convert Resources" },
   { value: "destroy_building", label: "Destroy Building" },
   { value: "remove_all_resources", label: "Remove All Resources" },
   { value: "discard_cards", label: "Discard Cards" },
@@ -1466,6 +1467,7 @@ const DevelopmentCardGuidedFields = ({ category, data, setField, tagEntries, pil
 const eventEffectOptions = [
   { value: "modify_pillar", label: "Modify pillar" },
   { value: "modify_resources", label: "Add or remove resources" },
+  { value: "convert_resources", label: "Convert resources" },
   { value: "destroy_building", label: "Destroy building" },
   { value: "remove_all_resources", label: "Remove all remaining resources" },
   { value: "discard_cards", label: "Discard cards from hand" },
@@ -1536,6 +1538,38 @@ const EventEffects = ({ effects, setEffects, tagEntries, pillarEntries }) => {
                   label="Change"
                   value={effect.payload?.amount ?? 1}
                   onChange={(amount) => updatePayload(index, { amount })}
+                />
+              </>
+            ) : effect.effect_type === "convert_resources" ? (
+              <>
+                <SelectField
+                  label="From"
+                  value={effect.payload?.source_resource_id || ""}
+                  options={[
+                    { value: "", label: "General - minister chooses" },
+                    ...resources.map((resource) => ({ value: resource.id, label: resource.name })),
+                  ]}
+                  onChange={(sourceResourceId) => updatePayload(index, {
+                    source_resource_id: sourceResourceId,
+                  })}
+                />
+                <SelectField
+                  label="To"
+                  value={effect.payload?.target_resource_id || ""}
+                  options={[
+                    { value: "", label: "General - minister chooses" },
+                    ...resources
+                      .filter((resource) => resource.id !== effect.payload?.source_resource_id)
+                      .map((resource) => ({ value: resource.id, label: resource.name })),
+                  ]}
+                  onChange={(targetResourceId) => updatePayload(index, {
+                    target_resource_id: targetResourceId,
+                  })}
+                />
+                <NumberField
+                  label="Up to"
+                  value={effect.payload?.amount ?? 1}
+                  onChange={(amount) => updatePayload(index, { amount: Math.max(1, amount) })}
                 />
               </>
             ) : effect.effect_type === "destroy_building" ? (

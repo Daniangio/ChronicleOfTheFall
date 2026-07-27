@@ -453,6 +453,7 @@ def _validate_event_effects(value: Any) -> None:
     allowed = {
         "modify_pillar",
         "modify_resources",
+        "convert_resources",
         "destroy_building",
         "remove_all_resources",
         "discard_cards",
@@ -477,6 +478,24 @@ def _validate_event_effects(value: Any) -> None:
             }
             if resource_id and resource_id not in volatile_ids:
                 raise ValueError("Resource effects must reference an existing volatile resource.")
+        if effect.get("effect_type") == "convert_resources":
+            payload = effect.get("payload") or {}
+            if int(payload.get("amount") or 0) < 1:
+                raise ValueError("Resource conversions must convert at least one resource.")
+            volatile_ids = {
+                str(entry.get("id") or "")
+                for entry in load_static_catalog_entries()
+                if entry.get("kind") == "tags"
+                and (entry.get("data") or {}).get("resource_type") == "volatile"
+            }
+            source_id = str(payload.get("source_resource_id") or "")
+            target_id = str(payload.get("target_resource_id") or "")
+            if source_id and source_id not in volatile_ids:
+                raise ValueError("Conversion source must be an existing volatile resource.")
+            if target_id and target_id not in volatile_ids:
+                raise ValueError("Conversion destination must be an existing volatile resource.")
+            if source_id and source_id == target_id:
+                raise ValueError("Conversion source and destination must differ.")
         condition = effect.get("condition")
         if condition and (
             not isinstance(condition, dict)

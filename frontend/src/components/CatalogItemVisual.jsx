@@ -1,4 +1,4 @@
-import { Archive, CirclePlus, Coins, Flame, Grid2X2, Hammer, HeartPulse, RotateCcw, ScrollText, Shield, ShieldX, Zap } from "lucide-react";
+import { Archive, ArrowRight, CirclePlus, Coins, Flame, Grid2X2, Hammer, HeartPulse, RotateCcw, ScrollText, Shield, ShieldX, Zap } from "lucide-react";
 import CardVisual from "./CardVisual.jsx";
 import TagIcon from "./TagIcon.jsx";
 import { buildAssetUrl } from "../utils/connection.js";
@@ -50,6 +50,7 @@ const catalogIcon = (entry, imageLookup) => {
 const effectFallbackIcon = (effectType) => ({
   modify_pillar: ShieldX,
   modify_resources: Coins,
+  convert_resources: ArrowRight,
   destroy_building: Hammer,
   remove_all_resources: Coins,
   discard_cards: ScrollText,
@@ -367,6 +368,26 @@ const EventEffectToken = ({ effect, ministryLookup, effectIconLookup, pillarLook
           <EventEffectIcon effectType="modify_resources" effectIconLookup={effectIconLookup} imageLookup={imageLookup} fallback={Coins} label="Resource chosen by Health & Harvest" tone={amount >= 0 ? "emerald" : "rose"} />
         )}
         <span className={`text-xs font-bold ${amount >= 0 ? "text-emerald-200" : "text-rose-200"}`}>{amount >= 0 ? `+${amount}` : amount}</span>
+      </span>
+    );
+  }
+  if (effect?.effect_type === "convert_resources") {
+    const source = tagLookup[normalizeTagId(payload.source_resource_id)];
+    const target = tagLookup[normalizeTagId(payload.target_resource_id)];
+    return (
+      <span className="inline-flex items-center gap-1">
+        {payload.source_resource_id ? (
+          <TagIcon tag={source} label={payload.source_resource_id} size="sm" />
+        ) : (
+          <EventEffectIcon effectType="convert_resources" effectIconLookup={effectIconLookup} imageLookup={imageLookup} fallback={Coins} label="Minister chooses source resource" tone="amber" />
+        )}
+        <ArrowRight className="h-4 w-4 text-amber-300" aria-hidden="true" />
+        {payload.target_resource_id ? (
+          <TagIcon tag={target} label={payload.target_resource_id} size="sm" />
+        ) : (
+          <EventEffectIcon effectType="convert_resources" effectIconLookup={effectIconLookup} imageLookup={imageLookup} fallback={Coins} label="Minister chooses destination resource" tone="amber" />
+        )}
+        <span className="text-xs font-bold text-amber-100">×{Math.max(1, amount)}</span>
       </span>
     );
   }

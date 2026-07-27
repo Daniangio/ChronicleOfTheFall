@@ -253,6 +253,31 @@ const GameRoomPage = () => {
   const boardWidth = Math.max(760, (gameState.cities?.length || 1) * 610);
 
   const renderPhaseControls = () => {
+    const conversionChoices = actions.filter((entry) => entry.type === "choose_event_conversion_resource");
+    if (conversionChoices.length) {
+      const stage = conversionChoices[0].stage;
+      return (
+        <div>
+          <p className="mb-2 text-sm font-semibold text-amber-100">
+            Choose the {stage === "source" ? "resource to convert" : "destination resource"}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {conversionChoices.map((entry) => (
+              <button
+                key={entry.resource_id}
+                className="rounded-md border border-amber-800 bg-stone-950 p-2 hover:bg-amber-950/50 disabled:opacity-50"
+                disabled={busy}
+                onClick={() => performAction(entry)}
+                title={tagLookup[normalize(entry.resource_id)]?.name || entry.resource_id}
+                type="button"
+              >
+                <TagIcon tag={tagLookup[normalize(entry.resource_id)]} label={entry.resource_id} size="sm" />
+              </button>
+            ))}
+          </div>
+        </div>
+      );
+    }
     const resourceChoices = actions.filter((entry) => entry.type === "choose_event_resource");
     if (resourceChoices.length) {
       const amount = Number(resourceChoices[0].amount || 0);

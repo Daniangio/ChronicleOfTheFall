@@ -236,6 +236,12 @@ Structure is built, even if all of its tag requirements were already satisfied.
 It cannot waive resource costs, placement rules, or more than one missing tag.
 An unused waiver expires at the end of the Era.
 
+An Event may convert up to X units of one volatile resource into the same number
+of another volatile resource. It converts the smaller of X and the amount
+currently available. The source, destination, or both may be general. General
+resource types are chosen by the Event's Choice Minister, or by the Minister of
+Health & Harvest under the normal rules. Source and destination must differ.
+
 Example:
 
 **Ratborne Fever**

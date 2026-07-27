@@ -459,6 +459,73 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
             all(action["player_id"] == war_player_id for action in state["possible_actions"])
         )
 
+    def test_event_converts_general_source_to_general_destination(self):
+        state = finish_ministry_draft(build_state())
+        health_player_id = next(
+            holder
+            for ministry_id, holder in state["ministry_assignments"].items()
+            if "health" in ministry_id
+        )
+        event = state["catalog"]["events"][0]
+        event["data"].update(
+            {
+                "requirements": [],
+                "main_effects": [
+                    {
+                        "effect_type": "convert_resources",
+                        "payload": {
+                            "source_resource_id": "",
+                            "target_resource_id": "",
+                            "amount": 2,
+                        },
+                    },
+                    {
+                        "effect_type": "modify_pillar",
+                        "payload": {"pillar_id": "morale", "amount": 1},
+                    },
+                ],
+            }
+        )
+        state.update(
+            {
+                "phase": "reveal",
+                "global_resource_pool": {"labor": 3},
+                "council_stack": [
+                    {
+                        "id": "conversion-event",
+                        "item_id": event["id"],
+                        "kind": "events",
+                        "owner_player_id": "",
+                        "face_up": False,
+                    }
+                ],
+            }
+        )
+
+        state = perform_action(state, "reveal_next", {})
+        self.assertEqual(state["active_player_id"], health_player_id)
+        self.assertEqual(
+            [(action["stage"], action["resource_id"]) for action in state["possible_actions"]],
+            [("source", "labor")],
+        )
+
+        state = perform_action(
+            state,
+            "choose_event_conversion_resource",
+            state["possible_actions"][0],
+        )
+        self.assertTrue(
+            all(action["stage"] == "target" for action in state["possible_actions"])
+        )
+        wealth_action = next(
+            action for action in state["possible_actions"] if action["resource_id"] == "wealth"
+        )
+        state = perform_action(state, "choose_event_conversion_resource", wealth_action)
+
+        self.assertEqual(state["global_resource_pool"], {"labor": 1, "wealth": 2})
+        self.assertEqual(state["pillars"]["morale"], 6)
+        self.assertEqual(state["current_reveal"]["status"], "resolved")
+
     def test_specific_and_generic_storage_are_validated(self):
         warehouse = catalog_entry(
             "warehouse",
