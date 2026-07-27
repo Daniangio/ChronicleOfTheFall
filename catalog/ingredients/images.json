@@ -311,17 +311,6 @@
       }
     },
     {
-      "id": "tag-unrest",
-      "name": "tag unrest",
-      "kind": "images",
-      "category": "image",
-      "summary": "",
-      "color": null,
-      "data": {
-        "src": "/game-assets/tags/tag-unrest.png"
-      }
-    },
-    {
       "id": "effect-modify-pillar",
       "name": "Modify Pillar Effect",
       "kind": "images",

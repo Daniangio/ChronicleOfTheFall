@@ -1689,11 +1689,15 @@ const updateCountMap = (value, itemId, count) => {
 };
 
 const DevelopmentCardGuidedFields = ({ category, data, setField, tagEntries, pillarEntries, tokenEntries = [], imageEntries = [] }) => {
-  const resources = volatileResourceTags(tagEntries);
-  const permanentTags = permanentOnlyTags(tagEntries);
   const onBuildEffects = Array.isArray(data.on_build_effects) ? data.on_build_effects : [];
   const persistentEffects = Array.isArray(data.persistent_effects) ? data.persistent_effects : [];
   const imageLookup = Object.fromEntries((imageEntries || []).map((image) => [image.id, image]));
+  const resolvedTagEntries = (tagEntries || []).map((tag) => {
+    const iconSrc = imageLookup[tag.data?.icon_image_id]?.data?.src;
+    return iconSrc ? { ...tag, data: { ...(tag.data || {}), icon: iconSrc } } : tag;
+  });
+  const resources = volatileResourceTags(resolvedTagEntries);
+  const permanentTags = permanentOnlyTags(resolvedTagEntries);
 
   const updateEffect = (field, effects, index, patch) => {
     const next = [...effects];

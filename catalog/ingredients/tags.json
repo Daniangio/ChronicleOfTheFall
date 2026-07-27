@@ -87,18 +87,6 @@
       }
     },
     {
-      "id": "unrest",
-      "name": "Unrest",
-      "kind": "tags",
-      "category": "permanent",
-      "summary": "Commitment and crisis tag used for sabotage thresholds.",
-      "color": "#554e50",
-      "data": {
-        "resource_type": "permanent",
-        "icon_image_id": "tag-unrest"
-      }
-    },
-    {
       "id": "favor",
       "name": "Favor",
       "kind": "tags",

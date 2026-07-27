@@ -115,8 +115,8 @@ def test_new_database_catalog_starts_with_repository_ingredients(tmp_path):
         )
 
         summary = asyncio.run(admin_catalog_summary(_admin=admin, db=db))
-        assert summary.tags == 15
-        assert summary.images == 37
+        assert summary.tags == 14
+        assert summary.images == 36
         assert summary.cards == 0
         assert summary.ministries == 5
         assert summary.pillars == 3
@@ -454,7 +454,7 @@ def test_admin_can_export_and_import_catalog_entries(tmp_path):
 
         exported = asyncio.run(admin_export_catalog(kind="tags", _admin=admin, db=db))
         assert exported["kind"] == "tags"
-        assert len(exported["entries"]) == 15
+        assert len(exported["entries"]) == 14
         labor_before = next(entry for entry in exported["entries"] if entry["id"] == "labor")
 
         result = asyncio.run(
