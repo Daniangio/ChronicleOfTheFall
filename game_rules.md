@@ -242,6 +242,10 @@ currently available. The source, destination, or both may be general. General
 resource types are chosen by the Event's Choice Minister, or by the Minister of
 Health & Harvest under the normal rules. Source and destination must differ.
 
+An Event may make its Choice Minister draw one card from the Empire Deck. If the
+Event has no Choice Minister, or the named Ministry is vacant, the Minister of
+the Empire draws instead.
+
 Example:
 
 **Ratborne Fever**
@@ -531,8 +535,6 @@ The Minister of State governs imperial legitimacy and political disorder.
 When an effect places Unrest and does not specify whether it is City Unrest or Global Unrest, the Minister of State chooses.
 
 If City Unrest is chosen, the Minister of State also chooses the City.
-
-When an effects destroys a Building, the Minister of State decides which building to destroy.
 
 During Cleanup, the Minister of State draws up to 2 cards instead of 1, without exceeding the hand limit.
 

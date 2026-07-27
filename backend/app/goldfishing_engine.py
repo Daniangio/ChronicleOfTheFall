@@ -1248,6 +1248,14 @@ def _apply_event_effects(
                 )
                 return False
             _convert_resources(state, source_id, target_id, max(1, amount))
+        elif effect_type == "draw_card":
+            player_id = _event_choice_minister_player(state, event)
+            drawn = _draw_empire(state, 1)
+            _player(state, player_id)["hand"].extend(drawn)
+            if drawn:
+                state["log"].append(
+                    f"{_player(state, player_id)['name']} drew a card for {event.get('name', event['id'])}."
+                )
         elif effect_type == "discard_cards":
             _discard_for_event(state, payload, event)
         elif effect_type in {"add_plague", "add_unrest", "add_fortified"}:
@@ -1299,6 +1307,15 @@ def _event_decision_player(
             or state["minister_of_empire_player_id"]
         )
     return _ministry_holder(state, fallback_role) or state["minister_of_empire_player_id"]
+
+
+def _event_choice_minister_player(state: dict[str, Any], event: dict[str, Any]) -> str:
+    ministry_id = str((event.get("data") or {}).get("ministry_id") or "")
+    if ministry_id:
+        holder = str(state.get("ministry_assignments", {}).get(ministry_id) or "")
+        if holder:
+            return holder
+    return state["minister_of_empire_player_id"]
 
 
 def _set_pending_event_conversion(

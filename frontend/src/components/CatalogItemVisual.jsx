@@ -51,6 +51,7 @@ const effectFallbackIcon = (effectType) => ({
   modify_pillar: ShieldX,
   modify_resources: Coins,
   convert_resources: ArrowRight,
+  draw_card: ScrollText,
   destroy_building: Hammer,
   remove_all_resources: Coins,
   discard_cards: ScrollText,
@@ -339,7 +340,7 @@ const EventEffectIcon = ({ effectType, effectIconLookup, imageLookup, fallback, 
   return <SmallIcon src={catalogIcon(entry, imageLookup)} fallback={fallback} label={label || entry?.name || effectType} tone={tone} size={size} />;
 };
 
-const EventEffectToken = ({ effect, ministryLookup, effectIconLookup, pillarLookup, tagLookup, imageLookup }) => {
+const EventEffectToken = ({ effect, eventMinistry, ministryLookup, effectIconLookup, pillarLookup, tagLookup, imageLookup }) => {
   const payload = effect?.payload || {};
   const amount = Number(payload.amount || 1);
   if (effect?.effect_type === "modify_pillar") {
@@ -388,6 +389,21 @@ const EventEffectToken = ({ effect, ministryLookup, effectIconLookup, pillarLook
           <EventEffectIcon effectType="convert_resources" effectIconLookup={effectIconLookup} imageLookup={imageLookup} fallback={Coins} label="Minister chooses destination resource" tone="amber" />
         )}
         <span className="text-xs font-bold text-amber-100">×{Math.max(1, amount)}</span>
+      </span>
+    );
+  }
+  if (effect?.effect_type === "draw_card") {
+    const empireMinistry = Object.values(ministryLookup).find((ministry) => {
+      const identity = `${ministry?.id || ""} ${ministry?.name || ""} ${ministry?.data?.role || ""}`.toLowerCase();
+      return identity.includes("minister-of-the-empire")
+        || identity.includes("minister of the empire")
+        || ministry?.data?.is_minister_of_empire;
+    });
+    const drawingMinistry = eventMinistry || empireMinistry;
+    return (
+      <span className="inline-flex items-center gap-1">
+        <SmallIcon src={ministryIcon(drawingMinistry, imageLookup)} label={drawingMinistry?.name || "Minister of the Empire"} tone="amber" size="sm" />
+        <EventEffectIcon effectType="draw_card" effectIconLookup={effectIconLookup} imageLookup={imageLookup} fallback={ScrollText} label="Draw one card" tone="emerald" />
       </span>
     );
   }
@@ -462,7 +478,7 @@ const EventRequirementCost = ({ requirements, tagLookup, pillarLookup, imageLook
   );
 };
 
-const EventEffectRow = ({ title, effects, tone, ministryLookup, effectIconLookup, pillarLookup, tagLookup, imageLookup }) => {
+const EventEffectRow = ({ title, effects, tone, eventMinistry, ministryLookup, effectIconLookup, pillarLookup, tagLookup, imageLookup }) => {
   if (!effects?.length) return null;
   return (
     <div className={`min-h-[4.25rem] rounded-md border ${tone === "success" ? "border-emerald-900/70 bg-emerald-950/15" : "border-rose-900/70 bg-rose-950/15"} p-1.5`}>
@@ -506,6 +522,7 @@ const EventEffectRow = ({ title, effects, tone, ministryLookup, effectIconLookup
             ) : null}
             <EventEffectToken
               effect={effect}
+              eventMinistry={eventMinistry}
               ministryLookup={ministryLookup}
               effectIconLookup={effectIconLookup}
               pillarLookup={pillarLookup}
@@ -548,8 +565,8 @@ const EventCardVisual = ({ entry, eventMinistry, ministryLookup, effectIconLooku
         {entry.summary ? <p className="line-clamp-3 text-center text-[0.62rem] leading-4 text-stone-300">{entry.summary}</p> : null}
         {mainEffects.length || alternativeEffects.length ? (
           <div className={`grid gap-2 ${mainEffects.length && alternativeEffects.length ? "grid-cols-2" : ""}`}>
-            <EventEffectRow title="Resolved" effects={mainEffects} tone="success" ministryLookup={ministryLookup} effectIconLookup={effectIconLookup} pillarLookup={pillarLookup} tagLookup={tagLookup} imageLookup={imageLookup} />
-            <EventEffectRow title="Unresolved" effects={alternativeEffects} tone="failure" ministryLookup={ministryLookup} effectIconLookup={effectIconLookup} pillarLookup={pillarLookup} tagLookup={tagLookup} imageLookup={imageLookup} />
+            <EventEffectRow title="Resolved" effects={mainEffects} tone="success" eventMinistry={eventMinistry} ministryLookup={ministryLookup} effectIconLookup={effectIconLookup} pillarLookup={pillarLookup} tagLookup={tagLookup} imageLookup={imageLookup} />
+            <EventEffectRow title="Unresolved" effects={alternativeEffects} tone="failure" eventMinistry={eventMinistry} ministryLookup={ministryLookup} effectIconLookup={effectIconLookup} pillarLookup={pillarLookup} tagLookup={tagLookup} imageLookup={imageLookup} />
           </div>
         ) : null}
         {actions ? <div className="flex flex-wrap gap-2 border-t border-amber-900/40 pt-3">{actions}</div> : null}

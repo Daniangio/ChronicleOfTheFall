@@ -454,6 +454,7 @@ def _validate_event_effects(value: Any) -> None:
         "modify_pillar",
         "modify_resources",
         "convert_resources",
+        "draw_card",
         "destroy_building",
         "remove_all_resources",
         "discard_cards",

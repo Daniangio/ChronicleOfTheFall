@@ -51,6 +51,18 @@
       }
     },
     {
+      "id": "draw-card-effect-icon",
+      "name": "Draw a Card",
+      "kind": "effect-icons",
+      "category": "effect-icon",
+      "summary": "",
+      "color": null,
+      "data": {
+        "effect_type": "draw_card",
+        "icon_image_id": "effect-draw-card"
+      }
+    },
+    {
       "id": "destroy-building-effect-icon",
       "name": "Destroy Building",
       "kind": "effect-icons",

@@ -526,6 +526,61 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
         self.assertEqual(state["pillars"]["morale"], 6)
         self.assertEqual(state["current_reveal"]["status"], "resolved")
 
+    def test_event_draws_for_choice_minister_or_empire_fallback(self):
+        for use_choice_minister in (True, False):
+            with self.subTest(use_choice_minister=use_choice_minister):
+                state = finish_ministry_draft(build_state())
+                health_ministry_id, health_player_id = next(
+                    (ministry_id, holder)
+                    for ministry_id, holder in state["ministry_assignments"].items()
+                    if "health" in ministry_id
+                )
+                expected_player_id = (
+                    health_player_id
+                    if use_choice_minister
+                    else state["minister_of_empire_player_id"]
+                )
+                event = state["catalog"]["events"][0]
+                event["data"].update(
+                    {
+                        "ministry_id": health_ministry_id if use_choice_minister else "",
+                        "requirements": [],
+                        "main_effects": [{"effect_type": "draw_card", "payload": {}}],
+                    }
+                )
+                state.update(
+                    {
+                        "phase": "reveal",
+                        "council_stack": [
+                            {
+                                "id": "draw-event",
+                                "item_id": event["id"],
+                                "kind": "events",
+                                "owner_player_id": "",
+                                "face_up": False,
+                            }
+                        ],
+                    }
+                )
+                hand_sizes = {
+                    player["id"]: len(player["hand"])
+                    for player in state["players"]
+                }
+
+                state = perform_action(state, "reveal_next", {})
+
+                self.assertEqual(
+                    len(next(player for player in state["players"] if player["id"] == expected_player_id)["hand"]),
+                    hand_sizes[expected_player_id] + 1,
+                )
+                self.assertTrue(
+                    all(
+                        len(player["hand"]) == hand_sizes[player["id"]]
+                        for player in state["players"]
+                        if player["id"] != expected_player_id
+                    )
+                )
+
     def test_specific_and_generic_storage_are_validated(self):
         warehouse = catalog_entry(
             "warehouse",

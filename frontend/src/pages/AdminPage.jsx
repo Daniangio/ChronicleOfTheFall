@@ -1083,6 +1083,7 @@ const effectIconCodeOptions = [
   { value: "modify_pillar", label: "Modify Pillar" },
   { value: "modify_resources", label: "Modify Resources" },
   { value: "convert_resources", label: "Convert Resources" },
+  { value: "draw_card", label: "Draw a Card" },
   { value: "destroy_building", label: "Destroy Building" },
   { value: "remove_all_resources", label: "Remove All Resources" },
   { value: "discard_cards", label: "Discard Cards" },
@@ -1468,6 +1469,7 @@ const eventEffectOptions = [
   { value: "modify_pillar", label: "Modify pillar" },
   { value: "modify_resources", label: "Add or remove resources" },
   { value: "convert_resources", label: "Convert resources" },
+  { value: "draw_card", label: "Choice Minister draws a card" },
   { value: "destroy_building", label: "Destroy building" },
   { value: "remove_all_resources", label: "Remove all remaining resources" },
   { value: "discard_cards", label: "Discard cards from hand" },
@@ -1582,6 +1584,10 @@ const EventEffects = ({ effects, setEffects, tagEntries, pillarEntries }) => {
                 />
                 <NumberField label="Buildings" value={effect.payload?.amount ?? 1} onChange={(amount) => updatePayload(index, { amount: Math.max(1, amount), decider: "minister-of-state" })} />
               </>
+            ) : effect.effect_type === "draw_card" ? (
+              <p className="self-end pb-2 text-sm text-slate-400 sm:col-span-2">
+                The Choice Minister draws one card; the Minister of the Empire draws if missing.
+              </p>
             ) : effect.effect_type === "discard_cards" ? (
               <>
                 <SelectField
