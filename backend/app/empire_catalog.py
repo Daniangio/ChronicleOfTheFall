@@ -323,6 +323,22 @@ def _validate_catalog_data(
         _validate_card_effects(data.get("persistent_effects"), trigger="persistent")
         return
     if kind == "events":
+        obsolete_fields = {
+            "image",
+            "image_id",
+            "effects",
+            "success_effects",
+            "failure_effects",
+            "defense_requirement",
+            "thresholds",
+            "ministry_symbol",
+            "domain_id",
+        }
+        present_obsolete_fields = sorted(obsolete_fields.intersection(data))
+        if present_obsolete_fields:
+            raise ValueError(
+                f"Obsolete event fields are not supported: {', '.join(present_obsolete_fields)}."
+            )
         if str(data.get("subtype") or "") not in {"edict", "crisis"}:
             raise ValueError("Event subtype must be edict or crisis.")
         _validate_event_requirements(data.get("requirements"))
@@ -436,6 +452,7 @@ def _validate_event_effects(value: Any) -> None:
         raise ValueError("Event effects must be a list.")
     allowed = {
         "modify_pillar",
+        "modify_resources",
         "destroy_building",
         "remove_all_resources",
         "discard_cards",
@@ -446,6 +463,19 @@ def _validate_event_effects(value: Any) -> None:
     for effect in effects:
         if not isinstance(effect, dict) or str(effect.get("effect_type") or "") not in allowed:
             raise ValueError("Unsupported event effect.")
+        if effect.get("effect_type") == "modify_resources":
+            payload = effect.get("payload") or {}
+            if int(payload.get("amount") or 0) == 0:
+                raise ValueError("Resource effects must add or remove at least one resource.")
+            resource_id = str(payload.get("resource_id") or "")
+            volatile_ids = {
+                str(entry.get("id") or "")
+                for entry in load_static_catalog_entries()
+                if entry.get("kind") == "tags"
+                and (entry.get("data") or {}).get("resource_type") == "volatile"
+            }
+            if resource_id and resource_id not in volatile_ids:
+                raise ValueError("Resource effects must reference an existing volatile resource.")
         condition = effect.get("condition")
         if condition and (
             not isinstance(condition, dict)

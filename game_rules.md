@@ -213,6 +213,12 @@ Incidents are immediate disturbances or opportunities.
 
 They may add or remove resources, place Condition Tokens, modify Pillars, discard cards, or trigger local effects.
 
+A resource effect has a signed amount. A positive amount adds resources to the
+Global Resource Pool and a negative amount removes them, without reducing a
+resource below zero. The effect may name a specific resource. If it is general,
+the Minister of Health & Harvest chooses the affected resource; if that Ministry
+is vacant, the Minister of the Empire chooses.
+
 Example:
 
 **Ratborne Fever**

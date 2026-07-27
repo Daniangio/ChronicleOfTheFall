@@ -1,4 +1,4 @@
-import { Archive, CirclePlus, Coins, Flame, Grid2X2, Hammer, HeartPulse, RotateCcw, ScrollText, Shield, ShieldX, Users, Zap } from "lucide-react";
+import { Archive, CirclePlus, Coins, Flame, Grid2X2, Hammer, HeartPulse, RotateCcw, ScrollText, Shield, ShieldX, Zap } from "lucide-react";
 import CardVisual from "./CardVisual.jsx";
 import TagIcon from "./TagIcon.jsx";
 import { buildAssetUrl } from "../utils/connection.js";
@@ -49,6 +49,7 @@ const catalogIcon = (entry, imageLookup) => {
 
 const effectFallbackIcon = (effectType) => ({
   modify_pillar: ShieldX,
+  modify_resources: Coins,
   destroy_building: Hammer,
   remove_all_resources: Coins,
   discard_cards: ScrollText,
@@ -336,15 +337,7 @@ const EventEffectIcon = ({ effectType, effectIconLookup, imageLookup, fallback, 
   return <SmallIcon src={catalogIcon(entry, imageLookup)} fallback={fallback} label={label || entry?.name || effectType} tone={tone} size={size} />;
 };
 
-const EventTargetIcon = ({ target, eventMinistry, ministryLookup, effectIconLookup, imageLookup }) => {
-  if (target === "all_players") {
-    return <EventEffectIcon effectType="all_players" effectIconLookup={effectIconLookup} imageLookup={imageLookup} fallback={Users} label="All players" tone="amber" size="sm" />;
-  }
-  const ministry = target === "event_minister" || !target ? eventMinistry : ministryLookup[normalizeTagId(target)];
-  return <SmallIcon src={ministryIcon(ministry, imageLookup)} label={ministry?.name || target || "Minister"} tone="amber" size="sm" />;
-};
-
-const EventEffectToken = ({ effect, eventMinistry, ministryLookup, effectIconLookup, pillarLookup, tagLookup, imageLookup }) => {
+const EventEffectToken = ({ effect, ministryLookup, effectIconLookup, pillarLookup, tagLookup, imageLookup }) => {
   const payload = effect?.payload || {};
   const amount = Number(payload.amount || 1);
   if (effect?.effect_type === "modify_pillar") {
@@ -352,6 +345,26 @@ const EventEffectToken = ({ effect, eventMinistry, ministryLookup, effectIconLoo
     return (
       <span className="inline-flex items-center gap-1">
         <SmallIcon src={catalogIcon(pillar, imageLookup)} label={pillar?.name || payload.pillar || "Pillar"} tone={amount >= 0 ? "emerald" : "rose"} size="sm" />
+        <span className={`text-xs font-bold ${amount >= 0 ? "text-emerald-200" : "text-rose-200"}`}>{amount >= 0 ? `+${amount}` : amount}</span>
+      </span>
+    );
+  }
+  if (effect?.effect_type === "modify_resources") {
+    const resource = tagLookup[normalizeTagId(payload.resource_id)];
+    const healthMinistry = Object.values(ministryLookup).find((ministry) => {
+      const identity = `${ministry?.id || ""} ${ministry?.name || ""} ${ministry?.data?.role || ""}`.toLowerCase();
+      return identity.includes("health") || identity.includes("harvest");
+    });
+    return (
+      <span className="inline-flex items-center gap-1">
+        {!payload.resource_id ? (
+          <SmallIcon src={ministryIcon(healthMinistry, imageLookup)} label={healthMinistry?.name || "Minister of Health & Harvest decides"} tone="amber" size="sm" />
+        ) : null}
+        {payload.resource_id ? (
+          <TagIcon tag={resource} label={payload.resource_id} size="sm" />
+        ) : (
+          <EventEffectIcon effectType="modify_resources" effectIconLookup={effectIconLookup} imageLookup={imageLookup} fallback={Coins} label="Resource chosen by Health & Harvest" tone={amount >= 0 ? "emerald" : "rose"} />
+        )}
         <span className={`text-xs font-bold ${amount >= 0 ? "text-emerald-200" : "text-rose-200"}`}>{amount >= 0 ? `+${amount}` : amount}</span>
       </span>
     );
@@ -415,7 +428,7 @@ const EventRequirementCost = ({ requirements, tagLookup, pillarLookup, imageLook
   );
 };
 
-const EventEffectRow = ({ title, effects, tone, eventMinistry, ministryLookup, effectIconLookup, pillarLookup, tagLookup, imageLookup }) => {
+const EventEffectRow = ({ title, effects, tone, ministryLookup, effectIconLookup, pillarLookup, tagLookup, imageLookup }) => {
   if (!effects?.length) return null;
   return (
     <div className={`min-h-[4.25rem] rounded-md border ${tone === "success" ? "border-emerald-900/70 bg-emerald-950/15" : "border-rose-900/70 bg-rose-950/15"} p-1.5`}>
@@ -449,7 +462,6 @@ const EventEffectRow = ({ title, effects, tone, eventMinistry, ministryLookup, e
             ) : null}
             <EventEffectToken
               effect={effect}
-              eventMinistry={eventMinistry}
               ministryLookup={ministryLookup}
               effectIconLookup={effectIconLookup}
               pillarLookup={pillarLookup}
@@ -465,15 +477,20 @@ const EventEffectRow = ({ title, effects, tone, eventMinistry, ministryLookup, e
 
 const EventCardVisual = ({ entry, eventMinistry, ministryLookup, effectIconLookup, pillarLookup, tagLookup, imageLookup, actions }) => {
   const data = entry?.data || {};
-  const eventImage = assetSrc(data.image || imageLookup[data.image_id]?.data?.src || "");
   const mainEffects = Array.isArray(data.main_effects) ? data.main_effects : [];
   const alternativeEffects = Array.isArray(data.alternative_effects) ? data.alternative_effects : [];
   return (
     <article className="flex aspect-[5/7] w-[clamp(12rem,16vw,15rem)] shrink-0 flex-col overflow-hidden rounded-lg border border-amber-900/70 bg-stone-950 p-3 shadow-xl">
       <div className="grid grid-cols-[3rem_minmax(0,1fr)] gap-2">
-        <span className="inline-flex h-8 items-center justify-center rounded-md border border-amber-900/70 px-1 text-[0.55rem] font-bold uppercase text-amber-300">
-          {data.subtype || "event"}
-        </span>
+        <div className="flex flex-col items-center gap-1">
+          <SmallIcon
+            src={ministryIcon(eventMinistry, imageLookup)}
+            label={eventMinistry?.name || "No minister assigned"}
+            tone="amber"
+            size="sm"
+          />
+          <span className="text-[0.5rem] font-bold uppercase text-amber-500">{data.subtype || "event"}</span>
+        </div>
         <div className="min-w-0 text-right">
           <h3 className="line-clamp-2 text-[0.82rem] font-bold leading-tight text-amber-50">{entry.name}</h3>
           <div className="mt-2 flex justify-end">
@@ -481,13 +498,12 @@ const EventCardVisual = ({ entry, eventMinistry, ministryLookup, effectIconLooku
           </div>
         </div>
       </div>
-      {eventImage ? <img alt="" className="mt-2 h-20 w-full rounded-md object-cover opacity-80" src={eventImage} /> : null}
       <div className="flex flex-1 flex-col justify-end gap-2 pt-2">
-        {entry.summary && !eventImage ? <p className="line-clamp-3 text-center text-[0.62rem] leading-4 text-stone-300">{entry.summary}</p> : null}
+        {entry.summary ? <p className="line-clamp-3 text-center text-[0.62rem] leading-4 text-stone-300">{entry.summary}</p> : null}
         {mainEffects.length || alternativeEffects.length ? (
           <div className={`grid gap-2 ${mainEffects.length && alternativeEffects.length ? "grid-cols-2" : ""}`}>
-            <EventEffectRow title="Resolved" effects={mainEffects} tone="success" eventMinistry={eventMinistry} ministryLookup={ministryLookup} effectIconLookup={effectIconLookup} pillarLookup={pillarLookup} tagLookup={tagLookup} imageLookup={imageLookup} />
-            <EventEffectRow title="Unresolved" effects={alternativeEffects} tone="failure" eventMinistry={eventMinistry} ministryLookup={ministryLookup} effectIconLookup={effectIconLookup} pillarLookup={pillarLookup} tagLookup={tagLookup} imageLookup={imageLookup} />
+            <EventEffectRow title="Resolved" effects={mainEffects} tone="success" ministryLookup={ministryLookup} effectIconLookup={effectIconLookup} pillarLookup={pillarLookup} tagLookup={tagLookup} imageLookup={imageLookup} />
+            <EventEffectRow title="Unresolved" effects={alternativeEffects} tone="failure" ministryLookup={ministryLookup} effectIconLookup={effectIconLookup} pillarLookup={pillarLookup} tagLookup={tagLookup} imageLookup={imageLookup} />
           </div>
         ) : null}
         {actions ? <div className="flex flex-wrap gap-2 border-t border-amber-900/40 pt-3">{actions}</div> : null}
@@ -514,7 +530,6 @@ const CatalogItemVisual = ({ entry, tags = [], cards = [], groups = [], ministri
     return keys.map((key) => [key, effectIcon]);
   }));
   const eventMinistry = (ministries || []).find((ministry) => ministry.id === visualEntry?.data?.ministry_id);
-  const eventMinistryIcon = ministryIcon(eventMinistry, imageLookup);
   const currentMinistryIcon = ministryIcon(visualEntry, imageLookup);
   const currentCatalogIcon = catalogIcon(visualEntry, imageLookup);
   const dataEntries = Object.entries(visualEntry?.data || {}).filter(([key]) => !["src", "icon", "image"].includes(key)).slice(0, 6);
@@ -575,15 +590,6 @@ const CatalogItemVisual = ({ entry, tags = [], cards = [], groups = [], ministri
                     <span className="font-semibold">{String(ministrySymbol(entry) || entry.category || "").slice(0, 3).toUpperCase()}</span>
                   )}
                   {String(ministrySymbol(entry) || "ministry").toUpperCase()}
-                </span>
-              ) : entry.kind === "events" && eventMinistry ? (
-                <span className="inline-flex items-center gap-1 rounded bg-slate-800 px-2 py-1 text-xs font-medium text-slate-300">
-                  {eventMinistryIcon ? (
-                    <img alt="" className="h-4 w-4 object-contain" src={eventMinistryIcon} />
-                  ) : (
-                    <span className="font-semibold">{String(ministrySymbol(eventMinistry) || entry.data?.ministry_symbol || "").slice(0, 3).toUpperCase()}</span>
-                  )}
-                  {eventMinistry.name}
                 </span>
               ) : (
                 <span className="rounded bg-slate-800 px-2 py-1 text-xs font-medium text-slate-300">

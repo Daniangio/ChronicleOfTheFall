@@ -116,12 +116,12 @@ def test_new_database_catalog_starts_with_repository_ingredients(tmp_path):
 
         summary = asyncio.run(admin_catalog_summary(_admin=admin, db=db))
         assert summary.tags == 14
-        assert summary.images == 36
+        assert summary.images == 37
         assert summary.cards == 0
         assert summary.ministries == 5
         assert summary.pillars == 3
         assert summary.tokens == 3
-        assert summary.effect_icons == 10
+        assert summary.effect_icons == 11
         assert summary.agendas == 0
         assert summary.events == 0
         assert summary.groups == 0
@@ -153,6 +153,7 @@ def test_new_database_catalog_starts_with_repository_ingredients(tmp_path):
         assert {entry.data["effect_type"] for entry in effect_icons} == {
             "modify_pillar",
             "modify_token",
+            "modify_resources",
             "destroy_building",
             "remove_all_resources",
             "discard_cards",
@@ -240,7 +241,7 @@ def test_repository_ingredients_are_loaded_and_read_only(tmp_path):
 
         effect_icons = asyncio.run(admin_list_effect_icons(_admin=admin, db=db))
         discard = next(entry for entry in effect_icons if entry.data["effect_type"] == "discard_cards")
-        assert len(effect_icons) == 10
+        assert len(effect_icons) == 11
         assert discard.data["icon_image_id"] == "discard-card-image"
 
         for kind in STATIC_CATALOG_KINDS:

@@ -179,6 +179,7 @@ def build_goldfishing_state(
         "current_reveal": None,
         "revealed_cards": [],
         "pending_placement": None,
+        "pending_event_resource_effect": None,
         "stalled_projects": [],
         "queued_projects": [],
         "votes": {},
@@ -238,6 +239,7 @@ def perform_action(state: dict[str, Any], action: str, payload: dict[str, Any] |
         "commit_none": _commit_none,
         "move_docket_card": _move_docket_card,
         "confirm_docket_order": _confirm_docket_order,
+        "choose_event_resource": _choose_event_resource,
         "reveal_next": _reveal_next,
         "place_revealed_card": _place_revealed_card,
         "place_queued_project": _place_queued_project,
@@ -439,13 +441,17 @@ def _reveal_next(state: dict[str, Any], _payload: dict[str, Any]) -> None:
         resolved = _event_requirements_met(state, data.get("requirements") or [])
         if resolved:
             _pay_event_resource_cost(state, data.get("requirements") or [])
-        _apply_event_effects(
+        completed = _apply_event_effects(
             state,
             item,
             data.get("main_effects", []) if resolved else data.get("alternative_effects", []),
+            continuation="reveal",
+            requirements_met=resolved,
         )
-        reveal["status"] = "resolved"
-        _discard_empire_item(state, item["id"])
+        if completed:
+            _complete_event_resolution(state, item, continuation="reveal", requirements_met=resolved)
+        else:
+            reveal["status"] = "awaiting_resource_choice"
         return
     _resolve_buildable_item(state, item, source="reveal", reference_id=commitment["id"])
 
@@ -522,15 +528,15 @@ def _resolve_crisis(state: dict[str, Any], payload: dict[str, Any]) -> None:
     resolved = _event_requirements_met(state, data.get("requirements") or [])
     if resolved:
         _pay_event_resource_cost(state, data.get("requirements") or [])
-    _apply_event_effects(
+    completed = _apply_event_effects(
         state,
         event,
         data.get("main_effects", []) if resolved else data.get("alternative_effects", []),
+        continuation="crisis",
+        requirements_met=resolved,
     )
-    state["log"].append(f"{event.get('name', crisis_id)} {'resolved' if resolved else 'was unresolved'}.")
-    state["crisis_discard"].append(crisis_id)
-    state["current_crisis_id"] = ""
-    _begin_storage(state)
+    if completed:
+        _complete_event_resolution(state, event, continuation="crisis", requirements_met=resolved)
 
 
 def _store_resources(state: dict[str, Any], payload: dict[str, Any]) -> None:
@@ -861,6 +867,17 @@ def _possible_actions(state: dict[str, Any]) -> list[dict[str, Any]]:
         ]
         return [*actions, {"type": "confirm_docket_order", "player_id": active}]
     if phase == "reveal":
+        pending_resource = state.get("pending_event_resource_effect")
+        if pending_resource:
+            return [
+                {
+                    "type": "choose_event_resource",
+                    "player_id": pending_resource["decision_player_id"],
+                    "resource_id": resource_id,
+                    "amount": pending_resource["amount"],
+                }
+                for resource_id in pending_resource["resource_ids"]
+            ]
         pending = state.get("pending_placement")
         if pending:
             return [
@@ -879,6 +896,17 @@ def _possible_actions(state: dict[str, Any]) -> list[dict[str, Any]]:
             for project_id in ["", *[project["id"] for project in state["stalled_projects"]]]
         ]
     if phase == "crisis":
+        pending_resource = state.get("pending_event_resource_effect")
+        if pending_resource:
+            return [
+                {
+                    "type": "choose_event_resource",
+                    "player_id": pending_resource["decision_player_id"],
+                    "resource_id": resource_id,
+                    "amount": pending_resource["amount"],
+                }
+                for resource_id in pending_resource["resource_ids"]
+            ]
         if not state.get("current_crisis_id"):
             return [{"type": "continue_phase"}]
         actions = [{"type": "resolve_crisis", "use_war_power": False}]
@@ -1096,8 +1124,15 @@ def _pay_event_resource_cost(state: dict[str, Any], requirements: list[dict[str,
     state["global_resource_pool"] = _positive_counts(pool)
 
 
-def _apply_event_effects(state: dict[str, Any], event: dict[str, Any], effects: list[dict[str, Any]]) -> None:
-    for effect in effects or []:
+def _apply_event_effects(
+    state: dict[str, Any],
+    event: dict[str, Any],
+    effects: list[dict[str, Any]],
+    *,
+    continuation: str,
+    requirements_met: bool,
+) -> bool:
+    for index, effect in enumerate(effects or []):
         if not _effect_condition_met(state, effect.get("condition")):
             continue
         payload = effect.get("payload") or {}
@@ -1109,6 +1144,26 @@ def _apply_event_effects(state: dict[str, Any], event: dict[str, Any], effects: 
             _destroy_buildings(state, str(payload.get("tag_id") or ""), max(1, amount))
         elif effect_type == "remove_all_resources":
             state["global_resource_pool"] = {}
+        elif effect_type == "modify_resources":
+            resource_id = str(payload.get("resource_id") or "")
+            if resource_id:
+                _modify_resource_pool(state, resource_id, amount)
+            else:
+                resource_ids = _event_resource_choices(state, amount)
+                if not resource_ids:
+                    continue
+                decision_player = _ministry_holder(state, "health") or state["minister_of_empire_player_id"]
+                state["pending_event_resource_effect"] = {
+                    "event_id": event["id"],
+                    "amount": amount,
+                    "resource_ids": resource_ids,
+                    "remaining_effects": list(effects[index + 1:]),
+                    "continuation": continuation,
+                    "requirements_met": requirements_met,
+                    "decision_player_id": decision_player,
+                }
+                state["active_player_id"] = decision_player
+                return False
         elif effect_type == "discard_cards":
             _discard_for_event(state, payload, event)
         elif effect_type in {"add_plague", "add_unrest", "add_fortified"}:
@@ -1122,6 +1177,76 @@ def _apply_event_effects(state: dict[str, Any], event: dict[str, Any], effects: 
                 city.setdefault("condition_tokens", {})[token] = (
                     int(city.setdefault("condition_tokens", {}).get(token, 0)) + max(1, amount)
                 )
+    return True
+
+
+def _modify_resource_pool(state: dict[str, Any], resource_id: str, amount: int) -> None:
+    pool = Counter(_counts(state.get("global_resource_pool")))
+    pool[resource_id] = max(0, int(pool.get(resource_id, 0)) + amount)
+    state["global_resource_pool"] = _positive_counts(pool)
+
+
+def _event_resource_choices(state: dict[str, Any], amount: int) -> list[str]:
+    volatile_ids = [
+        entry["id"]
+        for entry in state.get("catalog", {}).get("tags", [])
+        if (entry.get("data") or {}).get("resource_type") == "volatile"
+    ]
+    if amount < 0:
+        pool = _counts(state.get("global_resource_pool"))
+        return [resource_id for resource_id in volatile_ids if int(pool.get(resource_id, 0)) > 0]
+    return volatile_ids
+
+
+def _choose_event_resource(state: dict[str, Any], payload: dict[str, Any]) -> None:
+    pending = state.get("pending_event_resource_effect")
+    if not pending:
+        raise ValueError("No event resource choice is pending.")
+    _require_decision_player(state, payload, pending["decision_player_id"])
+    resource_id = str(payload.get("resource_id") or "")
+    if resource_id not in pending["resource_ids"]:
+        raise ValueError("That resource is not an eligible choice.")
+    _modify_resource_pool(state, resource_id, int(pending["amount"]))
+    event = event_by_id(state, pending["event_id"])
+    remaining_effects = pending["remaining_effects"]
+    continuation = pending["continuation"]
+    requirements_met = bool(pending["requirements_met"])
+    state["pending_event_resource_effect"] = None
+    completed = _apply_event_effects(
+        state,
+        event,
+        remaining_effects,
+        continuation=continuation,
+        requirements_met=requirements_met,
+    )
+    if completed:
+        _complete_event_resolution(
+            state,
+            event,
+            continuation=continuation,
+            requirements_met=requirements_met,
+        )
+
+
+def _complete_event_resolution(
+    state: dict[str, Any],
+    event: dict[str, Any],
+    *,
+    continuation: str,
+    requirements_met: bool,
+) -> None:
+    event_id = event["id"]
+    if continuation == "reveal":
+        if state.get("current_reveal"):
+            state["current_reveal"]["status"] = "resolved"
+        _discard_empire_item(state, event_id)
+        return
+    state["log"].append(
+        f"{event.get('name', event_id)} {'resolved' if requirements_met else 'was unresolved'}."
+    )
+    state["crisis_discard"].append(event_id)
+    state["current_crisis_id"] = ""
+    _begin_storage(state)
 
 
 def _effect_condition_met(state: dict[str, Any], condition: dict[str, Any] | None) -> bool:

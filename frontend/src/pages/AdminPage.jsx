@@ -1037,108 +1037,6 @@ const CardGuidedFields = ({ category, data, setField, tagEntries, cardEntries, g
   );
 };
 
-const DeckGuidedFields = ({ data, setField, items, title = "Deck Items" }) => {
-  const selectedIds = Array.isArray(data.item_ids) ? data.item_ids : [];
-  const copyCounts = selectedIds.reduce((counts, itemId) => {
-    return { ...counts, [itemId]: Number(counts[itemId] || 0) + 1 };
-  }, {});
-
-  const setCopies = (itemId, copies) => {
-    const normalizedCopies = Math.max(0, Math.min(99, Number(copies) || 0));
-    const withoutItem = selectedIds.filter((id) => id !== itemId);
-    setField("item_ids", [...withoutItem, ...Array.from({ length: normalizedCopies }, () => itemId)]);
-  };
-
-  return (
-    <>
-      <div>
-        <p className="mb-2 text-sm font-medium text-slate-300">{title}</p>
-        <div className="grid gap-2 sm:grid-cols-2">
-          {items.map((item) => {
-            const copies = Number(copyCounts[item.id] || 0);
-            return (
-              <div
-                key={item.id}
-                className={`rounded-md border px-3 py-2 text-sm transition ${
-                  copies > 0
-                    ? "border-teal-400 bg-teal-400/10 text-teal-100"
-                    : "border-slate-800 bg-slate-950 text-slate-300"
-                }`}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <span className="min-w-0">
-                    <span className="block truncate font-semibold">{item.name}</span>
-                    <span className="mt-1 block text-xs text-slate-500">{item.category || item.id}</span>
-                  </span>
-                  <span className="flex shrink-0 items-center gap-1">
-                    <button
-                      className="h-7 w-7 rounded border border-slate-700 text-slate-300 hover:bg-slate-800 disabled:opacity-40"
-                      disabled={copies <= 0}
-                      onClick={() => setCopies(item.id, copies - 1)}
-                      type="button"
-                    >
-                      -
-                    </button>
-                    <input
-                      aria-label={`${item.name} copies`}
-                      className="h-7 w-12 rounded border border-slate-700 bg-slate-950 px-1 text-center text-sm text-white outline-none focus:border-teal-400"
-                      min="0"
-                      max="99"
-                      onChange={(event) => setCopies(item.id, event.target.value)}
-                      type="number"
-                      value={copies}
-                    />
-                    <button
-                      className="h-7 w-7 rounded border border-slate-700 text-slate-300 hover:bg-slate-800"
-                      onClick={() => setCopies(item.id, copies + 1)}
-                      type="button"
-                    >
-                      +
-                    </button>
-                  </span>
-                </div>
-              </div>
-            );
-          })}
-          {items.length === 0 ? <p className="text-sm text-slate-500">No valid items available.</p> : null}
-        </div>
-      </div>
-    </>
-  );
-};
-
-const LevelGuidedFields = ({ data, setField, cardEntries, empireDeckEntries, eventDeckEntries }) => {
-  const cityCards = cardEntries.filter((card) => String(card.category || "").toLowerCase() === "city");
-  return (
-    <>
-      <SelectField
-        label="Initial City Card"
-        value={data.initial_city_card_id || ""}
-        options={[{ value: "", label: "Select city card" }, ...cityCards.map((card) => ({ value: card.id, label: card.name }))]}
-        onChange={(value) => setField("initial_city_card_id", value)}
-      />
-      <SelectField
-        label="Empire Deck"
-        value={data.empire_deck_id || ""}
-        options={[{ value: "", label: "Select empire deck" }, ...empireDeckEntries.map((deck) => ({ value: deck.id, label: deck.name }))]}
-        onChange={(value) => setField("empire_deck_id", value)}
-      />
-      <SelectField
-        label="Crisis Deck"
-        value={data.event_deck_id || ""}
-        options={[{ value: "", label: "Select event deck" }, ...eventDeckEntries.map((deck) => ({ value: deck.id, label: deck.name }))]}
-        onChange={(value) => setField("event_deck_id", value)}
-      />
-      <SelectField
-        label="Base Card Pool"
-        value={data.common_pool_deck_id || ""}
-        options={[{ value: "", label: "Select base card pool" }, ...empireDeckEntries.map((deck) => ({ value: deck.id, label: deck.name }))]}
-        onChange={(value) => setField("common_pool_deck_id", value)}
-      />
-    </>
-  );
-};
-
 const MinistryGuidedFields = ({ data, setField, imageEntries }) => {
   const ministerSymbol = data.symbol ?? "";
   const ministerIconImageId = data.icon_image_id ?? "";
@@ -1181,19 +1079,9 @@ const MinistryGuidedFields = ({ data, setField, imageEntries }) => {
   );
 };
 
-const emptyEventEffect = { effect_type: "modify_pillar", payload: { pillar: "treasury", amount: -1 } };
-const emptyEventThreshold = { tag_id: "unrest", amount: 1, effects: [emptyEventEffect] };
-const eventEffectTypeOptions = [
-  { value: "generate_resource", label: "Generate resource" },
-  { value: "modify_resource", label: "Modify global resource" },
-  { value: "modify_pillar", label: "Modify pillar" },
-  { value: "destroy_building_with_tag", label: "Destroy building" },
-  { value: "discard_card", label: "Discard card" },
-  { value: "freeze_resource_generation", label: "Freeze resource" },
-  { value: "block_minister_next_year", label: "Block minister" },
-];
 const effectIconCodeOptions = [
   { value: "modify_pillar", label: "Modify Pillar" },
+  { value: "modify_resources", label: "Modify Resources" },
   { value: "destroy_building", label: "Destroy Building" },
   { value: "remove_all_resources", label: "Remove All Resources" },
   { value: "discard_cards", label: "Discard Cards" },
@@ -1215,176 +1103,6 @@ const effectIconCatalogIdentity = (effectType) => {
   };
 };
 
-const EventEffectEditor = ({ effects, setEffects, resourceTags, allTags, ministryEntries, pillarEntries = [] }) => {
-  const updateEffect = (index, patch) => {
-    const next = [...effects];
-    next[index] = { ...next[index], ...patch };
-    setEffects(next);
-  };
-  const updatePayload = (index, patch) => {
-    const current = effects[index] || emptyEventEffect;
-    updateEffect(index, { payload: { ...(current.payload || {}), ...patch } });
-  };
-
-  return (
-    <div className="space-y-2">
-      {effects.map((effect, index) => (
-        <div key={index} className="grid gap-2 rounded-md border border-slate-800 bg-slate-950 p-3 sm:grid-cols-[12rem_1fr_7rem_auto]">
-          <SelectField
-            label="Effect"
-            value={effect.effect_type || "modify_pillar"}
-            options={eventEffectTypeOptions}
-            onChange={(value) => updateEffect(index, { effect_type: value, payload: {} })}
-          />
-          {["generate_resource", "modify_resource"].includes(effect.effect_type) ? (
-            <>
-              <SelectField
-                label="Resource"
-                value={effect.payload?.resource_id || ""}
-                options={[{ value: "", label: "Select resource" }, ...resourceTags.map((tag) => ({ value: tag.id, label: tag.name }))]}
-                onChange={(value) => updatePayload(index, { resource_id: value })}
-              />
-              <NumberField label="Change" value={effect.payload?.amount || 1} onChange={(value) => updatePayload(index, { amount: value })} />
-            </>
-          ) : effect.effect_type === "modify_pillar" ? (
-            <>
-              <SelectField
-                label="Pillar"
-                value={effect.payload?.pillar || "treasury"}
-                options={[
-                  { value: "", label: "Select pillar" },
-                  ...pillarEntries.map((pillar) => ({ value: pillar.id, label: pillar.name })),
-                ]}
-                onChange={(value) => updatePayload(index, { pillar: value })}
-              />
-              <NumberField label="Amount" value={effect.payload?.amount || -1} onChange={(value) => updatePayload(index, { amount: value })} />
-            </>
-          ) : effect.effect_type === "destroy_building_with_tag" ? (
-            <>
-              <SelectField
-                label="Tag"
-                value={effect.payload?.tag_id || ""}
-                options={[{ value: "", label: "Select tag" }, ...permanentOnlyTags(allTags).map((tag) => ({ value: tag.id, label: tag.name }))]}
-                onChange={(value) => updatePayload(index, { tag_id: value, decider: "minister-of-cities" })}
-              />
-              <NumberField label="Amount" value={effect.payload?.amount || 1} onChange={(value) => updatePayload(index, { amount: value })} />
-            </>
-          ) : effect.effect_type === "discard_card" ? (
-            <>
-              <SelectField
-                label="Target"
-                value={effect.payload?.target || "all_players"}
-                options={[
-                  { value: "all_players", label: "All players" },
-              { value: "event_minister", label: "Event minister" },
-              ...ministryEntries.map((ministry) => ({ value: ministry.id, label: ministry.name })),
-                ]}
-                onChange={(value) => updatePayload(index, { target: value })}
-              />
-              <NumberField label="Cards" value={effect.payload?.amount || 1} onChange={(value) => updatePayload(index, { amount: value })} />
-            </>
-          ) : effect.effect_type === "freeze_resource_generation" ? (
-            <>
-              <SelectField
-                label="Resource"
-                value={effect.payload?.resource_id || ""}
-                options={[{ value: "", label: "Select resource" }, ...resourceTags.map((tag) => ({ value: tag.id, label: tag.name }))]}
-                onChange={(value) => updatePayload(index, { resource_id: value, duration: "next_year" })}
-              />
-              <span />
-            </>
-          ) : (
-            <>
-              <SelectField
-                label="Minister"
-                value={effect.payload?.ministry_id || ""}
-                options={[{ value: "", label: "Event minister" }, ...ministryEntries.map((ministry) => ({ value: ministry.id, label: ministry.name }))]}
-                onChange={(value) => updatePayload(index, { ministry_id: value, duration: "next_year" })}
-              />
-              <span />
-            </>
-          )}
-          <button
-            className="mt-7 text-xs font-semibold text-rose-300 hover:text-rose-200"
-            onClick={() => setEffects(effects.filter((_, itemIndex) => itemIndex !== index))}
-            type="button"
-          >
-            Remove
-          </button>
-          <div className="space-y-2 border-t border-slate-800 pt-3 sm:col-span-4">
-            <label className="flex items-center gap-2 text-sm font-medium text-slate-300">
-              <input
-                checked={Boolean(effect.condition)}
-                onChange={(event) => updateEffect(index, {
-                  condition: event.target.checked
-                    ? { source_type: "tag", source_id: "", operator: "gte", amount: 1 }
-                    : null,
-                })}
-                type="checkbox"
-              />
-              Apply only when an Empire condition is met
-            </label>
-            {effect.condition ? (
-              <div className="grid gap-2 sm:grid-cols-4">
-                <SelectField
-                  label="Count"
-                  value={effect.condition.source_type || "tag"}
-                  options={[
-                    { value: "tag", label: "Permanent tag" },
-                    { value: "resource", label: "Global resource" },
-                    { value: "pillar", label: "Pillar value" },
-                  ]}
-                  onChange={(sourceType) => updateEffect(index, {
-                    condition: { ...effect.condition, source_type: sourceType, source_id: "" },
-                  })}
-                />
-                <SelectField
-                  label="Item"
-                  value={effect.condition.source_id || ""}
-                  options={[
-                    { value: "", label: "Select item" },
-                    ...(effect.condition.source_type === "resource"
-                      ? resourceTags
-                      : effect.condition.source_type === "pillar"
-                        ? pillarEntries
-                        : permanentOnlyTags(allTags)
-                    ).map((entry) => ({ value: entry.id, label: entry.name })),
-                  ]}
-                  onChange={(sourceId) => updateEffect(index, { condition: { ...effect.condition, source_id: sourceId } })}
-                />
-                <SelectField
-                  label="Comparison"
-                  value={effect.condition.operator || "gte"}
-                  options={[
-                    { value: "gt", label: "More than" },
-                    { value: "gte", label: "At least" },
-                    { value: "lt", label: "Less than" },
-                    { value: "lte", label: "At most" },
-                    { value: "eq", label: "Exactly" },
-                  ]}
-                  onChange={(operator) => updateEffect(index, { condition: { ...effect.condition, operator } })}
-                />
-                <NumberField
-                  label="Value"
-                  value={effect.condition.amount ?? 1}
-                  onChange={(amount) => updateEffect(index, { condition: { ...effect.condition, amount } })}
-                />
-              </div>
-            ) : null}
-          </div>
-        </div>
-      ))}
-      <button
-        className="rounded-md border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800"
-        onClick={() => setEffects([...effects, emptyEventEffect])}
-        type="button"
-      >
-        Add effect
-      </button>
-    </div>
-  );
-};
-
 const NumberField = ({ label, value, onChange }) => (
   <label className="block">
     <span className="text-sm font-medium text-slate-300">{label}</span>
@@ -1396,137 +1114,6 @@ const NumberField = ({ label, value, onChange }) => (
     />
   </label>
 );
-
-const EventGuidedFields = ({ data, setField, tagEntries, ministryEntries, imageEntries, pillarEntries }) => {
-  const resourceTags = volatileResourceTags(tagEntries);
-  const defenseTags = permanentOnlyTags(tagEntries);
-  const thresholds = Array.isArray(data.thresholds) ? data.thresholds : [];
-  const selectedMinistryId = data.ministry_id || "";
-  const ministryOptions = ministryEntries.map((ministry) => {
-    const symbol = ministry.data?.symbol || ministry.id;
-    return { value: ministry.id, label: `${ministry.name} (${String(symbol).toUpperCase()})` };
-  });
-
-  const updateCount = (field, tagId, count) => {
-    const current = data[field] && typeof data[field] === "object" && !Array.isArray(data[field]) ? { ...data[field] } : {};
-    if (count <= 0) delete current[tagId];
-    else current[tagId] = count;
-    setField(field, current);
-  };
-
-  return (
-    <>
-      <SelectField
-        label="Jurisdiction Minister"
-        value={selectedMinistryId}
-        options={[{ value: "", label: "Select minister" }, ...ministryOptions]}
-        onChange={(value) => {
-          const selected = ministryEntries.find((ministry) => ministry.id === value);
-          setField("ministry_id", value);
-          setField("ministry_symbol", selected ? selected.data?.symbol || "" : "");
-        }}
-      />
-      <ImageAssetSelect
-        label="Event Image"
-        images={imageEntries}
-        selectedId={data.image_id || ""}
-        onSelect={(image) => {
-          setField("image_id", image?.id || "");
-          setField("image", "");
-        }}
-      />
-      <TagCounterGroup
-        label="Defense Requirement"
-        tags={defenseTags}
-        values={data.defense_requirement || {}}
-        onChange={(tagId, count) => updateCount("defense_requirement", tagId, count)}
-      />
-
-      <div className="space-y-3">
-        <h4 className="text-sm font-semibold text-slate-300">Immediate Event Effects</h4>
-        <EventEffectEditor
-          effects={Array.isArray(data.effects) ? data.effects : []}
-          setEffects={(effects) => setField("effects", effects)}
-          resourceTags={resourceTags}
-          allTags={tagEntries}
-          ministryEntries={ministryEntries}
-          pillarEntries={pillarEntries}
-        />
-      </div>
-
-      <div className="space-y-3">
-        <h4 className="text-sm font-semibold text-slate-300">Success Effects</h4>
-        <EventEffectEditor
-          effects={Array.isArray(data.success_effects) ? data.success_effects : []}
-          setEffects={(effects) => setField("success_effects", effects)}
-          resourceTags={resourceTags}
-          allTags={tagEntries}
-          ministryEntries={ministryEntries}
-          pillarEntries={pillarEntries}
-        />
-      </div>
-      <div className="space-y-3">
-        <h4 className="text-sm font-semibold text-slate-300">Failure Effects</h4>
-        <EventEffectEditor
-          effects={Array.isArray(data.failure_effects) ? data.failure_effects : []}
-          setEffects={(effects) => setField("failure_effects", effects)}
-          resourceTags={resourceTags}
-          allTags={tagEntries}
-          ministryEntries={ministryEntries}
-          pillarEntries={pillarEntries}
-        />
-      </div>
-
-      <div className="space-y-3">
-        <div className="flex items-center justify-between gap-3">
-          <h4 className="text-sm font-semibold text-slate-300">Threshold Effects</h4>
-          <button
-            className="rounded-md border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800"
-            onClick={() => setField("thresholds", [...thresholds, emptyEventThreshold])}
-            type="button"
-          >
-            Add threshold
-          </button>
-        </div>
-        {thresholds.map((threshold, index) => {
-          const updateThreshold = (patch) => {
-            const next = [...thresholds];
-            next[index] = { ...next[index], ...patch };
-            setField("thresholds", next);
-          };
-          return (
-            <div key={index} className="space-y-3 rounded-md border border-slate-800 bg-slate-950 p-3">
-              <div className="grid gap-3 sm:grid-cols-2">
-                <SelectField
-                  label="Threshold Tag"
-                  value={threshold.tag_id || ""}
-                  options={[{ value: "", label: "Select tag" }, ...tagEntries.map((tag) => ({ value: tag.id, label: tag.name }))]}
-                  onChange={(value) => updateThreshold({ tag_id: value })}
-                />
-                <NumberField label="Amount" value={threshold.amount || 1} onChange={(value) => updateThreshold({ amount: value })} />
-              </div>
-              <EventEffectEditor
-                effects={Array.isArray(threshold.effects) ? threshold.effects : []}
-                setEffects={(effects) => updateThreshold({ effects })}
-                resourceTags={resourceTags}
-                allTags={tagEntries}
-                ministryEntries={ministryEntries}
-                pillarEntries={pillarEntries}
-              />
-              <button
-                className="text-xs font-semibold text-rose-300 hover:text-rose-200"
-                onClick={() => setField("thresholds", thresholds.filter((_, itemIndex) => itemIndex !== index))}
-                type="button"
-              >
-                Remove threshold
-              </button>
-            </div>
-          );
-        })}
-      </div>
-    </>
-  );
-};
 
 const AgendaGuidedFields = ({ data, setField, tagEntries, pillarEntries }) => {
   const conditions = Array.isArray(data.conditions) ? data.conditions : [];
@@ -1875,8 +1462,9 @@ const DevelopmentCardGuidedFields = ({ category, data, setField, tagEntries, pil
   );
 };
 
-const eventV2EffectOptions = [
+const eventEffectOptions = [
   { value: "modify_pillar", label: "Modify pillar" },
+  { value: "modify_resources", label: "Add or remove resources" },
   { value: "destroy_building", label: "Destroy building" },
   { value: "remove_all_resources", label: "Remove all remaining resources" },
   { value: "discard_cards", label: "Discard cards from hand" },
@@ -1885,7 +1473,7 @@ const eventV2EffectOptions = [
   { value: "add_fortified", label: "Add Fortified token" },
 ];
 
-const EventEffectsV2 = ({ effects, setEffects, tagEntries, pillarEntries }) => {
+const EventEffects = ({ effects, setEffects, tagEntries, pillarEntries }) => {
   const resources = volatileResourceTags(tagEntries);
   const permanentTags = permanentOnlyTags(tagEntries);
   const updateEffect = (index, patch) => {
@@ -1905,7 +1493,7 @@ const EventEffectsV2 = ({ effects, setEffects, tagEntries, pillarEntries }) => {
             <SelectField
               label="Effect"
               value={effect.effect_type || "modify_pillar"}
-              options={eventV2EffectOptions}
+              options={eventEffectOptions}
               onChange={(effectType) => updateEffect(index, { effect_type: effectType, payload: {} })}
             />
             {effect.effect_type === "modify_pillar" ? (
@@ -1917,6 +1505,36 @@ const EventEffectsV2 = ({ effects, setEffects, tagEntries, pillarEntries }) => {
                   onChange={(pillarId) => updatePayload(index, { pillar_id: pillarId })}
                 />
                 <NumberField label="Change" value={effect.payload?.amount ?? -1} onChange={(amount) => updatePayload(index, { amount })} />
+              </>
+            ) : effect.effect_type === "modify_resources" ? (
+              <>
+                <SelectField
+                  label="Resource"
+                  value={effect.payload?.resource_id ? "specific" : "general"}
+                  options={[
+                    { value: "general", label: "General - Health & Harvest decides" },
+                    { value: "specific", label: "Specified resource" },
+                  ]}
+                  onChange={(mode) => updateEffect(index, {
+                    payload: {
+                      amount: effect.payload?.amount || 1,
+                      resource_id: mode === "specific" ? resources[0]?.id || "" : "",
+                    },
+                  })}
+                />
+                {effect.payload?.resource_id ? (
+                  <SelectField
+                    label="Resource Type"
+                    value={effect.payload.resource_id}
+                    options={resources.map((resource) => ({ value: resource.id, label: resource.name }))}
+                    onChange={(resourceId) => updatePayload(index, { resource_id: resourceId })}
+                  />
+                ) : null}
+                <NumberField
+                  label="Change"
+                  value={effect.payload?.amount ?? 1}
+                  onChange={(amount) => updatePayload(index, { amount })}
+                />
               </>
             ) : effect.effect_type === "destroy_building" ? (
               <>
@@ -2032,7 +1650,7 @@ const EventEffectsV2 = ({ effects, setEffects, tagEntries, pillarEntries }) => {
   );
 };
 
-const EventGuidedFieldsV2 = ({ data, setField, tagEntries, imageEntries, pillarEntries }) => {
+const EventGuidedFields = ({ data, setField, tagEntries, ministryEntries, pillarEntries }) => {
   const requirements = Array.isArray(data.requirements) ? data.requirements : [];
   const updateRequirement = (index, patch) => {
     const next = [...requirements];
@@ -2041,6 +1659,15 @@ const EventGuidedFieldsV2 = ({ data, setField, tagEntries, imageEntries, pillarE
   };
   return (
     <>
+      <SelectField
+        label="Minister in Charge"
+        value={data.ministry_id || ""}
+        options={[
+          { value: "", label: "Select minister" },
+          ...ministryEntries.map((ministry) => ({ value: ministry.id, label: ministry.name })),
+        ]}
+        onChange={(ministryId) => setField("ministry_id", ministryId)}
+      />
       <SelectField
         label="Event Subtype"
         value={data.subtype || "edict"}
@@ -2116,7 +1743,7 @@ const EventGuidedFieldsV2 = ({ data, setField, tagEntries, imageEntries, pillarE
       </div>
       <div className="space-y-3">
         <h4 className="text-sm font-semibold text-slate-300">Main Effects</h4>
-        <EventEffectsV2
+        <EventEffects
           effects={Array.isArray(data.main_effects) ? data.main_effects : []}
           setEffects={(effects) => setField("main_effects", effects)}
           tagEntries={tagEntries}
@@ -2126,7 +1753,7 @@ const EventGuidedFieldsV2 = ({ data, setField, tagEntries, imageEntries, pillarE
       <div className="space-y-3">
         <h4 className="text-sm font-semibold text-slate-300">Alternative Effects</h4>
         <p className="text-xs text-slate-500">These resolve only when one or more requirements are not satisfied.</p>
-        <EventEffectsV2
+        <EventEffects
           effects={Array.isArray(data.alternative_effects) ? data.alternative_effects : []}
           setEffects={(effects) => setField("alternative_effects", effects)}
           tagEntries={tagEntries}
@@ -2206,7 +1833,7 @@ const UnifiedDeckGuidedFields = ({ data, setField, items }) => {
   );
 };
 
-const LevelGuidedFieldsV2 = ({ data, setField, cardEntries, deckEntries }) => {
+const LevelGuidedFields = ({ data, setField, cardEntries, deckEntries }) => {
   const cityCards = cardEntries.filter((card) => card.category === "city");
   return (
     <>
@@ -2341,7 +1968,7 @@ const GuidedMetadataEditor = ({
         />
       ) : null}
       {hasLevelGuidance ? (
-        <LevelGuidedFieldsV2
+        <LevelGuidedFields
           data={data}
           setField={setField}
           cardEntries={cardEntries}
@@ -2356,11 +1983,11 @@ const GuidedMetadataEditor = ({
         />
       ) : null}
       {hasEventGuidance ? (
-        <EventGuidedFieldsV2
+        <EventGuidedFields
           data={data}
           setField={setField}
           tagEntries={tagEntries}
-          imageEntries={imageEntries}
+          ministryEntries={ministryEntries}
           pillarEntries={pillarEntries}
         />
       ) : null}

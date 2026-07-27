@@ -27,6 +27,18 @@
       }
     },
     {
+      "id": "modify-resources-effect-icon",
+      "name": "Modify Resources",
+      "kind": "effect-icons",
+      "category": "effect-icon",
+      "summary": "",
+      "color": null,
+      "data": {
+        "effect_type": "modify_resources",
+        "icon_image_id": "effect-modify-resources"
+      }
+    },
+    {
       "id": "destroy-building-effect-icon",
       "name": "Destroy Building",
       "kind": "effect-icons",
