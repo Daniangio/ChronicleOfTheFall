@@ -1,11 +1,13 @@
 import {
   Archive,
+  ArrowLeft,
+  ArrowRight,
   Castle,
+  Check,
   Crown,
   LogOut,
   Minus,
   Plus,
-  ScrollText,
   Shield,
   Users,
   Vote,
@@ -29,14 +31,6 @@ const withResolvedTagIcon = (tag, imageLookup = {}) => {
 
 const buildTagLookup = (tags = [], imageLookup = {}) =>
   Object.fromEntries(tags.map((tag) => [normalize(tag.id), withResolvedTagIcon(tag, imageLookup)]));
-
-const FaceDownCard = ({ label = "Anonymous" }) => (
-  <article className="flex aspect-[5/7] w-[clamp(9rem,11vw,11rem)] shrink-0 flex-col items-center justify-center rounded-lg border border-amber-900/70 bg-stone-950 p-4 text-center shadow-xl">
-    <ScrollText className="h-9 w-9 text-amber-700" aria-hidden="true" />
-    <p className="mt-3 text-xs font-bold uppercase text-amber-100">{label}</p>
-    <p className="mt-1 text-[0.65rem] text-amber-800">Face down</p>
-  </article>
-);
 
 const ItemVisual = ({ item, catalogs, tagLookup, storageIconSrc = "", actionLabel = "", onAction, disabled = false }) => {
   if (!item) return null;
@@ -287,6 +281,20 @@ const GameRoomPage = () => {
     if (["production", "queued_projects"].includes(phase) && actions.some((entry) => entry.type === "continue_phase")) {
       return <button className="rounded-md bg-amber-300 px-4 py-2 text-sm font-bold text-stone-950 hover:bg-amber-200 disabled:opacity-50" disabled={busy} onClick={() => perform("continue_phase")} type="button">Resolve phase</button>;
     }
+    if (phase === "docket_ordering") {
+      const confirmAction = actions.find((entry) => entry.type === "confirm_docket_order");
+      return (
+        <button
+          className="inline-flex items-center gap-2 rounded-md bg-amber-300 px-4 py-2 text-sm font-bold text-stone-950 hover:bg-amber-200 disabled:opacity-50"
+          disabled={busy || !confirmAction}
+          onClick={() => performAction(confirmAction)}
+          type="button"
+        >
+          <Check className="h-4 w-4" aria-hidden="true" />
+          Confirm Docket order
+        </button>
+      );
+    }
     if (phase === "reveal" && actions.some((entry) => entry.type === "reveal_next")) {
       return <button className="rounded-md bg-amber-300 px-4 py-2 text-sm font-bold text-stone-950 hover:bg-amber-200 disabled:opacity-50" disabled={busy} onClick={() => perform("reveal_next")} type="button">{gameState.council_stack?.length ? "Reveal next card" : "Finish reveal"}</button>;
     }
@@ -467,12 +475,58 @@ const GameRoomPage = () => {
 
             <aside className="space-y-4">
               <section className="border border-slate-800 bg-slate-900 p-3">
-                <h2 className="text-sm font-bold text-white">Council Stack</h2>
-                <p className="mt-1 text-xs text-slate-500">{gameState.council_stack?.length || 0} cards remain</p>
+                <h2 className="text-sm font-bold text-white">Council Docket</h2>
+                <p className="mt-1 text-xs text-slate-500">
+                  {phase === "docket_ordering"
+                    ? "The Minister of the Empire decides the resolution order."
+                    : `${gameState.council_stack?.length || 0} cards remain`}
+                </p>
                 <div className="mt-3 flex max-h-[22rem] flex-wrap gap-2 overflow-auto">
-                  {(gameState.council_stack || []).map((commitment, index) => commitment.face_up ? (
-                    <ItemVisual key={commitment.id} item={itemLookup[normalize(commitment.item_id)]} catalogs={catalogs} tagLookup={tagLookup} storageIconSrc={storageIconSrc} />
-                  ) : <FaceDownCard key={commitment.id} label={`Council ${index + 1}`} />)}
+                  {(gameState.council_stack || []).map((commitment, index) => {
+                    const moveLeft = actions.find((entry) =>
+                      entry.type === "move_docket_card"
+                      && entry.commitment_id === commitment.id
+                      && entry.direction === -1
+                    );
+                    const moveRight = actions.find((entry) =>
+                      entry.type === "move_docket_card"
+                      && entry.commitment_id === commitment.id
+                      && entry.direction === 1
+                    );
+                    return (
+                      <div key={commitment.id} className="space-y-2">
+                        <div className="flex items-center justify-between text-xs text-slate-500">
+                          <span>Order {index + 1}</span>
+                          {commitment.face_up ? (
+                            <span>{players.find((player) => player.id === commitment.owner_player_id)?.name}</span>
+                          ) : <span>Anonymous</span>}
+                        </div>
+                        <ItemVisual item={itemLookup[normalize(commitment.item_id)]} catalogs={catalogs} tagLookup={tagLookup} storageIconSrc={storageIconSrc} />
+                        {phase === "docket_ordering" ? (
+                          <div className="flex justify-center gap-2">
+                            <button
+                              className="h-8 w-8 border border-slate-700 text-slate-300 hover:bg-slate-800 disabled:opacity-30"
+                              disabled={busy || !moveLeft}
+                              onClick={() => performAction(moveLeft)}
+                              title="Resolve earlier"
+                              type="button"
+                            >
+                              <ArrowLeft className="mx-auto h-4 w-4" aria-hidden="true" />
+                            </button>
+                            <button
+                              className="h-8 w-8 border border-slate-700 text-slate-300 hover:bg-slate-800 disabled:opacity-30"
+                              disabled={busy || !moveRight}
+                              onClick={() => performAction(moveRight)}
+                              title="Resolve later"
+                              type="button"
+                            >
+                              <ArrowRight className="mx-auto h-4 w-4" aria-hidden="true" />
+                            </button>
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })}
                   {!gameState.council_stack?.length ? <p className="text-xs text-slate-600">No committed cards.</p> : null}
                 </div>
               </section>

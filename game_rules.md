@@ -14,7 +14,7 @@ The Empire does not win. The Empire will fall.
 
 Each player secretly represents a faction with a Hidden Agenda. Players must help the Empire survive long enough to shape it, but they are not trying to preserve the same future. When the Empire collapses, Hidden Agendas are revealed. A player wins if the final state of the Empire satisfies their Agenda.
 
-The central mechanic of the game is the **Anonymous Council**. Each Era, players secretly commit cards into the machinery of government. These cards are shuffled and revealed one at a time. Some cards build the Empire. Others disturb it. Since most cards are anonymous, players must infer who is shaping the Empire, who is protecting it, and who is accelerating its fall.
+The central mechanic of the game is the **Anonymous Council**. Each Era, players secretly commit cards into the machinery of government. The cards are revealed anonymously into the Council Docket, ordered by the Minister of the Empire, and then resolved one at a time. Some cards build the Empire. Others disturb it. Since most contributors are anonymous, players must infer who is shaping the Empire, who is protecting it, and who is accelerating its fall.
 
 ---
 
@@ -265,7 +265,7 @@ Each game uses:
 * Event cards
 * Hidden Agenda cards
 * Ministry cards
-* Regent marker
+* Minister of the Empire marker
 * Suspicion tokens
 * Plague tokens
 * Unrest tokens
@@ -400,17 +400,24 @@ Cards in Scheme Slots do not count toward the hand limit.
 
 ---
 
-# 7. Ministries and Regent
+# 7. Ministries and the Minister of the Empire
 
-## 7.1 Regent
+## 7.1 Minister of the Empire
 
-The Regent is the first player of the Era and the default decision-maker when a Ministry is vacant.
+The Minister of the Empire is the Regent, the first player of the Era, and the
+default decision-maker when another Ministry is vacant.
 
-The Regent is not a Ministry.
+During the Council Docket Phase, the Minister of the Empire determines the order
+in which all committed cards resolve.
 
-At setup, choose a random player to receive the Regent marker.
+The Minister of the Empire cannot receive Suspicion and cannot be blocked or
+otherwise prevented from holding this office. An effect that would block that
+player may still prevent them from selecting another Ministry, but it cannot
+remove or skip their position as Minister of the Empire.
 
-At the beginning of each new Era after the first, pass the Regent marker clockwise.
+At setup, choose a random player to become Minister of the Empire.
+
+At the beginning of each new Era after the first, pass the office clockwise.
 
 ---
 
@@ -470,7 +477,7 @@ A Ministry may be vacant because:
 * a card effect disables it;
 * no player currently holds it.
 
-If a vacant Ministry must make a decision, the Regent makes that decision instead.
+If a vacant Ministry must make a decision, the Minister of the Empire makes that decision instead.
 
 ---
 
@@ -536,18 +543,18 @@ When an effect places Fortified, the Minister of War chooses the city.
 
 Each Era follows this sequence:
 
-1. Rotate Regent and Ministries
+1. Rotate the Minister of the Empire and Ministries
 2. Suspicion Phase
 3. Production Phase
 4. Queued Project Resolution
 5. Plotting Phase
-6. Anonymous Reveal Phase
+6. Council Docket Phase
 7. Stalled Project Vote
 8. Condition Phase
 9. Storage Phase
 10. Scheme / Draw / Cleanup
 
-During the first Era, do not rotate Regent or Ministries after setup. Begin with Suspicion.
+During the first Era, do not rotate the Minister of the Empire or Ministries after setup. Begin with Suspicion.
 
 ---
 
@@ -555,14 +562,16 @@ During the first Era, do not rotate Regent or Ministries after setup. Begin with
 
 Suspicion represents public blame, court rumors, and political distrust.
 
-At the beginning of each Era, after Regent and Ministries are set, each player places one Suspicion token.
+At the beginning of each Era, after the Minister of the Empire and Ministries are set, each player places one Suspicion token.
 
-Starting with the Regent and proceeding clockwise, each player places their Suspicion token on:
+Starting with the Minister of the Empire and proceeding clockwise, each player places their Suspicion token on:
 
 * another player;
 * or no one.
 
 A player may not place Suspicion on themselves.
+
+A player may not place Suspicion on the Minister of the Empire.
 
 Suspicion tokens are public.
 
@@ -583,7 +592,7 @@ The player suffers both effects for this Era:
 1. They lose their Ministry for this Era, if they have one.
 2. They must commit their card face-up during the Plotting Phase.
 
-A lost Ministry becomes vacant until the end of the Era. If that Ministry must make a decision, the Regent decides instead.
+A lost Ministry becomes vacant until the end of the Era. If that Ministry must make a decision, the Minister of the Empire decides instead.
 
 The player still participates normally in all other parts of the Era.
 
@@ -657,9 +666,10 @@ A player with 2+ Suspicion must commit face-up.
 
 ---
 
-## 13.1 Anonymous Council Stack
+## 13.1 Anonymous Commitments
 
-All face-down committed cards are shuffled into the Council Stack.
+All committed cards are collected without revealing who contributed each
+face-down card.
 
 Players should not know which player submitted which face-down card.
 
@@ -672,20 +682,31 @@ If a player must commit face-up, the card remains visibly associated with that p
 For physical play:
 
 * place the real card face-up in front of that player;
-* place a face-down placeholder into the Council Stack;
-* when that placeholder is revealed, resolve the face-up card.
+* place a face-down placeholder among the commitments;
+* when commitments enter the Council Docket, replace that placeholder with the
+  associated face-up card.
 
-For digital play, the interface may randomize the reveal position while showing that the card belongs to the suspected player.
+For digital play, the Docket shows that the card belongs to the suspected player.
 
 ---
 
-# 14. Anonymous Reveal Phase
+# 14. Council Docket Phase
 
-Reveal cards from the Council Stack one at a time.
+After every player has committed or declared that they cannot commit:
 
-Resolve each card fully before revealing the next card.
+1. Reveal all committed cards into the **Council Docket**.
+2. Keep each normal contributor anonymous. A card committed face-up because of
+   Suspicion remains associated with its contributor.
+3. The Minister of the Empire orders every card in the Docket.
+4. Lock the chosen order.
+5. Resolve the first card, then continue through the Docket from left to right.
 
-If any effect changes the Global Resource Pool, that change applies immediately and may affect later revealed cards.
+The Docket is not shuffled and its resolution order is not random.
+
+Resolve each card fully before resolving the next card.
+
+If any effect changes the Global Resource Pool, that change applies immediately
+and may affect cards later in the Docket.
 
 If any effect causes a Pillar to reach 0, finish resolving that card, then the game ends immediately.
 
@@ -793,7 +814,7 @@ Events never enter the Stalled Row.
 
 ## 17.1 Stalled Project Vote
 
-After all cards in the Council Stack have been resolved, players vote on which Stalled Projects should remain possible.
+After all cards in the Council Docket have been resolved, players vote on which Stalled Projects should remain possible.
 
 Each player has 1 vote.
 
@@ -1104,7 +1125,7 @@ Because Player B has 2+ Suspicion:
 * Player B loses the Ministry of State for this Era;
 * Player B must commit their card face-up.
 
-The Ministry of State is vacant this Era. If the Minister of State would make a decision, the Regent decides instead.
+The Ministry of State is vacant this Era. If the Minister of State would make a decision, the Minister of the Empire decides instead.
 
 ---
 
@@ -1129,7 +1150,9 @@ Each player commits one card.
 
 Player B must commit face-up because of Suspicion.
 
-The other committed cards are shuffled anonymously.
+All committed cards are revealed into the Council Docket. Player B remains
+associated with their card; the other contributors remain anonymous. The
+Minister of the Empire orders the Docket before the first card resolves.
 
 ---
 
@@ -1143,9 +1166,9 @@ Effect: Add 2 Wealth. Then, if Morale is 4 or lower, place 1 Unrest.
 
 Morale is 4, so the Unrest is placed.
 
-The Minister of State is vacant, so the Regent chooses whether the Unrest is Global or City Unrest.
+The Minister of State is vacant, so the Minister of the Empire chooses whether the Unrest is Global or City Unrest.
 
-The Regent places it on the Capital.
+The Minister of the Empire places it on the Capital.
 
 Global Resource Pool becomes:
 

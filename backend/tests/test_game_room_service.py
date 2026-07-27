@@ -3,7 +3,12 @@ from __future__ import annotations
 import unittest
 
 from backend.app.game_room_service import GameRoomService, ROOM_STATE_FINISHED, ROOM_STATE_IN_GAME
-from backend.app.goldfishing_engine import _apply_on_build_effects, build_goldfishing_state, perform_action
+from backend.app.goldfishing_engine import (
+    _apply_on_build_effects,
+    _begin_ministry_assignment,
+    build_goldfishing_state,
+    perform_action,
+)
 from backend.app.server_models import User
 
 
@@ -173,7 +178,7 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
         state = build_state()
 
         self.assertEqual(state["phase"], "ministry_assignment")
-        self.assertEqual(state["rules_version"], "anonymous-council-v0.2")
+        self.assertEqual(state["rules_version"], "anonymous-council-v0.3")
         self.assertEqual(state["cities"][0]["city_card_id"], "capital")
         self.assertEqual(state["cities"][0]["building_slots"], 4)
         self.assertTrue(all(len(player["hand"]) == 5 for player in state["players"]))
@@ -212,6 +217,95 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
         commitment = state["commitments"][-1]
         self.assertTrue(commitment["face_up"])
         self.assertEqual(commitment["item_id"], "farm")
+
+    def test_minister_of_empire_cannot_receive_suspicion(self):
+        state = finish_ministry_draft(build_state())
+        empire_player_id = state["minister_of_empire_player_id"]
+
+        self.assertNotIn(
+            empire_player_id,
+            {action["target_player_id"] for action in state["possible_actions"]},
+        )
+        with self.assertRaisesRegex(ValueError, "cannot receive Suspicion"):
+            perform_action(
+                state,
+                "place_suspicion",
+                {
+                    "player_id": state["active_player_id"],
+                    "target_player_id": empire_player_id,
+                },
+            )
+
+    def test_blocking_cannot_skip_next_minister_of_empire(self):
+        state = build_state()
+        state["blocked_players_next_era"] = ["player-2"]
+
+        _begin_ministry_assignment(state, rotate=True)
+
+        self.assertEqual(state["minister_of_empire_player_id"], "player-2")
+        self.assertNotIn("player-2", state["blocked_players"])
+
+    def test_minister_of_empire_orders_and_locks_council_docket(self):
+        state = build_state()
+        state.update(
+            {
+                "phase": "docket_ordering",
+                "active_player_id": state["minister_of_empire_player_id"],
+                "council_stack": [
+                    {"id": "first", "item_id": "farm", "kind": "cards", "owner_player_id": "", "face_up": False},
+                    {"id": "second", "item_id": "tax-riots", "kind": "events", "owner_player_id": "", "face_up": False},
+                    {"id": "third", "item_id": "garrison", "kind": "cards", "owner_player_id": "", "face_up": False},
+                ],
+            }
+        )
+
+        state = perform_action(
+            state,
+            "move_docket_card",
+            {
+                "player_id": state["minister_of_empire_player_id"],
+                "commitment_id": "third",
+                "direction": -1,
+            },
+        )
+        self.assertEqual(
+            [entry["id"] for entry in state["council_stack"]],
+            ["first", "third", "second"],
+        )
+
+        state = perform_action(
+            state,
+            "confirm_docket_order",
+            {"player_id": state["minister_of_empire_player_id"]},
+        )
+        self.assertEqual(state["phase"], "reveal")
+        self.assertEqual(state["possible_actions"], [{"type": "reveal_next"}])
+
+    def test_plotting_reveals_commitments_into_unshuffled_docket(self):
+        state = build_state()
+        state["phase"] = "plotting"
+        state["commitments"] = [
+            {"id": "first", "item_id": "farm", "kind": "cards", "owner_player_id": "", "face_up": False},
+            {"id": "second", "item_id": "tax-riots", "kind": "events", "owner_player_id": "", "face_up": False},
+            {"id": "third", "item_id": "garrison", "kind": "cards", "owner_player_id": "", "face_up": False},
+        ]
+        for player in state["players"][:3]:
+            player["committed"] = True
+        state["players"][3]["hand"] = ["farm"]
+        state["active_player_id"] = "player-4"
+
+        state = perform_action(
+            state,
+            "commit_card",
+            {"player_id": "player-4", "source": "hand", "index": 0},
+        )
+
+        self.assertEqual(state["phase"], "docket_ordering")
+        self.assertEqual(state["active_player_id"], state["minister_of_empire_player_id"])
+        self.assertEqual(
+            [entry["id"] for entry in state["council_stack"][:3]],
+            ["first", "second", "third"],
+        )
 
     def test_production_combines_storage_and_all_built_cards(self):
         state = finish_ministry_draft(build_state())

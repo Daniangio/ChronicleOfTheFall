@@ -20,6 +20,7 @@ PHASES = (
     "production",
     "queued_projects",
     "plotting",
+    "docket_ordering",
     "reveal",
     "stalled_vote",
     "crisis",
@@ -156,7 +157,7 @@ def build_goldfishing_state(
 
     state: dict[str, Any] = {
         "mode": "goldfishing",
-        "rules_version": "anonymous-council-v0.2",
+        "rules_version": "anonymous-council-v0.3",
         "room_id": room_id,
         "era": 1,
         "epoch": 1,
@@ -235,6 +236,8 @@ def perform_action(state: dict[str, Any], action: str, payload: dict[str, Any] |
         "continue_phase": _continue_phase,
         "commit_card": _commit_card,
         "commit_none": _commit_none,
+        "move_docket_card": _move_docket_card,
+        "confirm_docket_order": _confirm_docket_order,
         "reveal_next": _reveal_next,
         "place_revealed_card": _place_revealed_card,
         "place_queued_project": _place_queued_project,
@@ -293,6 +296,8 @@ def _place_suspicion(state: dict[str, Any], payload: dict[str, Any]) -> None:
     _require_phase(state, "suspicion")
     player_id = _require_active_player(state, payload)
     target_id = str(payload.get("target_player_id") or "")
+    if target_id == state.get("minister_of_empire_player_id"):
+        raise ValueError("The Minister of the Empire cannot receive Suspicion.")
     if target_id == player_id:
         raise ValueError("A player cannot place Suspicion on themselves.")
     if target_id and target_id not in {player["id"] for player in state["players"]}:
@@ -383,6 +388,32 @@ def _commit_none(state: dict[str, Any], payload: dict[str, Any]) -> None:
     _player(state, player_id)["committed"] = True
     state["log"].append(f"{_player(state, player_id)['name']} could not commit a card.")
     _advance_plotting(state)
+
+
+def _move_docket_card(state: dict[str, Any], payload: dict[str, Any]) -> None:
+    _require_phase(state, "docket_ordering")
+    _require_active_player(state, payload)
+    commitment_id = str(payload.get("commitment_id") or "")
+    direction = int(payload.get("direction") or 0)
+    if direction not in {-1, 1}:
+        raise ValueError("Docket cards can only move one position at a time.")
+    docket = state.get("council_stack", [])
+    index = next((position for position, entry in enumerate(docket) if entry["id"] == commitment_id), -1)
+    destination = index + direction
+    if index < 0:
+        raise ValueError("Docket card not found.")
+    if destination < 0 or destination >= len(docket):
+        raise ValueError("Docket card is already at that edge.")
+    docket[index], docket[destination] = docket[destination], docket[index]
+
+
+def _confirm_docket_order(state: dict[str, Any], payload: dict[str, Any]) -> None:
+    _require_phase(state, "docket_ordering")
+    _require_active_player(state, payload)
+    state["phase"] = "reveal"
+    state["current_reveal"] = None
+    state["revealed_cards"] = []
+    state["log"].append("The Minister of the Empire ordered the Council Docket.")
 
 
 def _reveal_next(state: dict[str, Any], _payload: dict[str, Any]) -> None:
@@ -577,12 +608,10 @@ def _begin_ministry_assignment(state: dict[str, Any], *, rotate: bool) -> None:
         current_index = (current_index + 1) % len(players)
     blocked = set(state.pop("blocked_players_next_era", []))
     state["blocked_players"] = list(blocked)
-    for _ in range(len(players)):
-        candidate = players[current_index]
-        if candidate["id"] not in blocked:
-            break
-        current_index = (current_index + 1) % len(players)
     empire_player_id = players[current_index]["id"]
+    state["blocked_players"] = [
+        player_id for player_id in state["blocked_players"] if player_id != empire_player_id
+    ]
     state["phase"] = "ministry_assignment"
     state["minister_of_empire_player_id"] = empire_player_id
     state["active_player_id"] = empire_player_id
@@ -668,14 +697,12 @@ def _advance_plotting(state: dict[str, Any]) -> None:
     if len(committed) < len(state["players"]):
         _advance_ordered_player(state, completed_ids=committed)
         return
-    stack = list(state["commitments"])
-    random.Random(f"{state['room_id']}:{state['era']}:council").shuffle(stack)
-    state["council_stack"] = stack
-    state["phase"] = "reveal"
+    state["council_stack"] = list(state["commitments"])
+    state["phase"] = "docket_ordering"
     state["active_player_id"] = state["minister_of_empire_player_id"]
     state["current_reveal"] = None
     state["revealed_cards"] = []
-    state["log"].append("Anonymous Reveal Phase began.")
+    state["log"].append("The committed cards were revealed anonymously into the Council Docket.")
 
 
 def _resolve_buildable_item(
@@ -777,9 +804,17 @@ def _possible_actions(state: dict[str, Any]) -> list[dict[str, Any]]:
             for ministry_id in _available_ministry_ids(state)
         ]
     if phase == "suspicion":
+        protected_player_id = state.get("minister_of_empire_player_id")
         return [
             {"type": "place_suspicion", "player_id": active, "target_player_id": target}
-            for target in ["", *[player["id"] for player in state["players"] if player["id"] != active]]
+            for target in [
+                "",
+                *[
+                    player["id"]
+                    for player in state["players"]
+                    if player["id"] not in {active, protected_player_id}
+                ],
+            ]
         ]
     if phase == "production":
         return [{"type": "continue_phase"}]
@@ -811,6 +846,20 @@ def _possible_actions(state: dict[str, Any]) -> list[dict[str, Any]]:
             for source, index, item_id in _legal_commit_options(state, player)
         ]
         return actions or [{"type": "commit_none", "player_id": active}]
+    if phase == "docket_ordering":
+        docket = state.get("council_stack", [])
+        actions = [
+            {
+                "type": "move_docket_card",
+                "player_id": active,
+                "commitment_id": commitment["id"],
+                "direction": direction,
+            }
+            for index, commitment in enumerate(docket)
+            for direction in (-1, 1)
+            if 0 <= index + direction < len(docket)
+        ]
+        return [*actions, {"type": "confirm_docket_order", "player_id": active}]
     if phase == "reveal":
         pending = state.get("pending_placement")
         if pending:

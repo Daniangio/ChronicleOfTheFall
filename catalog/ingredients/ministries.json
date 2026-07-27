@@ -91,7 +91,7 @@
       "name": "Minister of the Empire",
       "kind": "ministries",
       "category": "ministry",
-      "summary": "The sovereign. Acts first, blocks one player during Council, and decides unassigned edicts.",
+      "summary": "The sovereign. Cannot receive Suspicion or be blocked, orders the Council Docket, acts first, and decides when a Ministry is vacant.",
       "color": null,
       "data": {
         "domain_id": "sovereign",
@@ -100,6 +100,9 @@
         "can_finalize_projects": true,
         "abilities": [
           "select_blocked_player",
+          "order_council_docket",
+          "immune_to_suspicion",
+          "immune_to_block",
           "administration_first_turn",
           "finalize_projects",
           "fallback_event_decider"
@@ -108,6 +111,9 @@
         "icon_image_id": "minister-empire",
         "first_administration_turn": true,
         "can_block_player_council": true,
+        "orders_council_docket": true,
+        "immune_to_suspicion": true,
+        "immune_to_block": true,
         "fallback_event_decider": true,
         "symbol": "EMP"
       }

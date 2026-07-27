@@ -2047,12 +2047,6 @@ const EventGuidedFieldsV2 = ({ data, setField, tagEntries, imageEntries, pillarE
         options={[{ value: "edict", label: "Edict" }, { value: "crisis", label: "Crisis" }]}
         onChange={(subtype) => setField("subtype", subtype)}
       />
-      <ImageAssetSelect
-        label="Event Image"
-        images={imageEntries}
-        selectedId={data.image_id || ""}
-        onSelect={(image) => setField("image_id", image?.id || "")}
-      />
       <div className="space-y-3">
         <div className="flex items-center justify-between gap-3">
           <h4 className="text-sm font-semibold text-slate-300">Resolution Requirements</h4>
