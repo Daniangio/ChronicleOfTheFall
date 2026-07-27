@@ -116,7 +116,7 @@ def test_new_database_catalog_starts_with_repository_ingredients(tmp_path):
 
         summary = asyncio.run(admin_catalog_summary(_admin=admin, db=db))
         assert summary.tags == 14
-        assert summary.images == 40
+        assert summary.images == 39
         assert summary.cards == 0
         assert summary.ministries == 5
         assert summary.pillars == 3
@@ -244,8 +244,10 @@ def test_repository_ingredients_are_loaded_and_read_only(tmp_path):
 
         effect_icons = asyncio.run(admin_list_effect_icons(_admin=admin, db=db))
         discard = next(entry for entry in effect_icons if entry.data["effect_type"] == "discard_cards")
+        draw = next(entry for entry in effect_icons if entry.data["effect_type"] == "draw_card")
         assert len(effect_icons) == 14
         assert discard.data["icon_image_id"] == "discard-card-image"
+        assert draw.data["icon_image_id"] == "draw-card-image"
 
         for kind in STATIC_CATALOG_KINDS:
             with pytest.raises(HTTPException) as exc_info:

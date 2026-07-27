@@ -59,7 +59,7 @@
       "color": null,
       "data": {
         "effect_type": "draw_card",
-        "icon_image_id": "effect-draw-card"
+        "icon_image_id": "draw-card-image"
       }
     },
     {

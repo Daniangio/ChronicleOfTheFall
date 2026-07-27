@@ -344,17 +344,6 @@
       }
     },
     {
-      "id": "effect-draw-card",
-      "name": "Draw Card Effect",
-      "kind": "images",
-      "category": "image",
-      "summary": "",
-      "color": null,
-      "data": {
-        "src": "/game-assets/effects/draw-card.svg"
-      }
-    },
-    {
       "id": "effect-remove-all-resources",
       "name": "Remove All Resources Effect",
       "kind": "images",
