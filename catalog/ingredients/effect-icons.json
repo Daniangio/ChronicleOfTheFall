@@ -111,6 +111,18 @@
       }
     },
     {
+      "id": "waive-next-structure-tag-requirement-effect-icon",
+      "name": "Waive Next Structure Tag Requirement",
+      "kind": "effect-icons",
+      "category": "effect-icon",
+      "summary": "",
+      "color": null,
+      "data": {
+        "effect_type": "waive_next_structure_tag_requirement",
+        "icon_image_id": "effect-waive-structure-tag"
+      }
+    },
+    {
       "id": "add-building-slots-effect-icon",
       "name": "Add Building Slots",
       "kind": "effect-icons",

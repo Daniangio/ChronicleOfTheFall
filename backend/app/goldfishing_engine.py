@@ -180,6 +180,7 @@ def build_goldfishing_state(
         "revealed_cards": [],
         "pending_placement": None,
         "pending_event_resource_effect": None,
+        "structure_tag_requirement_waivers": 0,
         "stalled_projects": [],
         "queued_projects": [],
         "votes": {},
@@ -794,6 +795,7 @@ def _end_era(state: dict[str, Any]) -> None:
     state["era"] = int(state.get("era", 1)) + 1
     state["epoch"] = state["era"]
     state["war_power_used"] = False
+    state["structure_tag_requirement_waivers"] = 0
     state["suspicion_placements"] = {}
     state["votes"] = {}
     _begin_ministry_assignment(state, rotate=True)
@@ -1006,7 +1008,12 @@ def _legal_placements(state: dict[str, Any], card: dict[str, Any]) -> list[str]:
         if len(city.get("cards", [])) >= int(city.get("building_slots", 0)):
             continue
         city_tags = _city_tag_counts(state, city)
-        if all(int(city_tags.get(tag_id, 0)) >= amount for tag_id, amount in required.items()):
+        missing_tags = sum(
+            max(0, amount - int(city_tags.get(tag_id, 0)))
+            for tag_id, amount in required.items()
+        )
+        waiver_available = int(state.get("structure_tag_requirement_waivers", 0)) > 0
+        if missing_tags == 0 or (waiver_available and missing_tags == 1):
             placements.append(city["id"])
     return placements
 
@@ -1029,6 +1036,9 @@ def _build_card(state: dict[str, Any], card: dict[str, Any], city_id: str) -> No
             raise ValueError("City not found.")
         city["cards"].append(card["id"])
         state["log"].append(f"{card['name']} was built in {city['name']}.")
+        if int(state.get("structure_tag_requirement_waivers", 0)) > 0:
+            state["structure_tag_requirement_waivers"] -= 1
+            state["log"].append("The Structure consumed a temporary tag-requirement waiver.")
     for effect in (card.get("data") or {}).get("persistent_effects", []):
         if effect.get("effect_type") == "add_building_slots":
             city["building_slots"] = int(city.get("building_slots", 0)) + max(
@@ -1152,7 +1162,7 @@ def _apply_event_effects(
                 resource_ids = _event_resource_choices(state, amount)
                 if not resource_ids:
                     continue
-                decision_player = _ministry_holder(state, "health") or state["minister_of_empire_player_id"]
+                decision_player = _event_decision_player(state, event, fallback_role="health")
                 state["pending_event_resource_effect"] = {
                     "event_id": event["id"],
                     "amount": amount,
@@ -1177,6 +1187,10 @@ def _apply_event_effects(
                 city.setdefault("condition_tokens", {})[token] = (
                     int(city.setdefault("condition_tokens", {}).get(token, 0)) + max(1, amount)
                 )
+        elif effect_type == "waive_next_structure_tag_requirement":
+            state["structure_tag_requirement_waivers"] = (
+                int(state.get("structure_tag_requirement_waivers", 0)) + 1
+            )
     return True
 
 
@@ -1196,6 +1210,21 @@ def _event_resource_choices(state: dict[str, Any], amount: int) -> list[str]:
         pool = _counts(state.get("global_resource_pool"))
         return [resource_id for resource_id in volatile_ids if int(pool.get(resource_id, 0)) > 0]
     return volatile_ids
+
+
+def _event_decision_player(
+    state: dict[str, Any],
+    event: dict[str, Any],
+    *,
+    fallback_role: str,
+) -> str:
+    ministry_id = str((event.get("data") or {}).get("ministry_id") or "")
+    if ministry_id:
+        return (
+            str(state.get("ministry_assignments", {}).get(ministry_id) or "")
+            or state["minister_of_empire_player_id"]
+        )
+    return _ministry_holder(state, fallback_role) or state["minister_of_empire_player_id"]
 
 
 def _choose_event_resource(state: dict[str, Any], payload: dict[str, Any]) -> None:
@@ -1260,7 +1289,10 @@ def _effect_condition_met(state: dict[str, Any], condition: dict[str, Any] | Non
         current = int(state.get("global_resource_pool", {}).get(source_id, 0))
     else:
         current = int(_empire_tag_counts(state).get(source_id, 0))
-    target = int(condition.get("amount", condition.get("value", 0)))
+    if condition.get("target_type") == "tag":
+        target = int(_empire_tag_counts(state).get(str(condition.get("target_id") or ""), 0))
+    else:
+        target = int(condition.get("amount", condition.get("value", 0)))
     operator = str(condition.get("operator") or "gte")
     comparisons = {
         "gt": current > target,

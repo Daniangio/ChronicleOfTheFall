@@ -1088,6 +1088,7 @@ const effectIconCodeOptions = [
   { value: "add_plague", label: "Add Plague" },
   { value: "add_unrest", label: "Add Unrest" },
   { value: "add_fortified", label: "Add Fortified" },
+  { value: "waive_next_structure_tag_requirement", label: "Waive Next Structure Tag Requirement" },
   { value: "add_building_slots", label: "Add Building Slots" },
   { value: "storage", label: "Storage" },
 ];
@@ -1471,6 +1472,7 @@ const eventEffectOptions = [
   { value: "add_plague", label: "Add Plague token" },
   { value: "add_unrest", label: "Add Unrest token" },
   { value: "add_fortified", label: "Add Fortified token" },
+  { value: "waive_next_structure_tag_requirement", label: "Waive 1 tag on next Structure" },
 ];
 
 const EventEffects = ({ effects, setEffects, tagEntries, pillarEntries }) => {
@@ -1589,7 +1591,7 @@ const EventEffects = ({ effects, setEffects, tagEntries, pillarEntries }) => {
               checked={Boolean(effect.condition)}
               onChange={(event) => updateEffect(index, {
                 condition: event.target.checked
-                  ? { source_type: "resource", source_id: "", operator: "gte", amount: 1 }
+                  ? { source_type: "resource", source_id: "", operator: "gte", target_type: "number", amount: 1 }
                   : null,
               })}
               type="checkbox"
@@ -1597,7 +1599,7 @@ const EventEffects = ({ effects, setEffects, tagEntries, pillarEntries }) => {
             Apply only when a condition is met
           </label>
           {effect.condition ? (
-            <div className="grid gap-2 sm:grid-cols-4">
+            <div className="grid gap-2 sm:grid-cols-5">
               <SelectField
                 label="Condition Type"
                 value={effect.condition.source_type || "resource"}
@@ -1606,7 +1608,15 @@ const EventEffects = ({ effects, setEffects, tagEntries, pillarEntries }) => {
                   { value: "tag", label: "Tag" },
                   { value: "pillar", label: "Pillar" },
                 ]}
-                onChange={(sourceType) => updateEffect(index, { condition: { ...effect.condition, source_type: sourceType, source_id: "" } })}
+                onChange={(sourceType) => updateEffect(index, {
+                  condition: {
+                    ...effect.condition,
+                    source_type: sourceType,
+                    source_id: "",
+                    target_type: sourceType === "tag" ? effect.condition.target_type || "number" : "number",
+                    target_id: "",
+                  },
+                })}
               />
               <SelectField
                 label="Value"
@@ -1634,7 +1644,39 @@ const EventEffects = ({ effects, setEffects, tagEntries, pillarEntries }) => {
                 ]}
                 onChange={(operator) => updateEffect(index, { condition: { ...effect.condition, operator } })}
               />
-              <NumberField label="Amount" value={effect.condition.amount ?? 1} onChange={(amount) => updateEffect(index, { condition: { ...effect.condition, amount } })} />
+              <SelectField
+                label="Compare Against"
+                value={effect.condition.target_type || "number"}
+                options={[
+                  { value: "number", label: "Fixed number" },
+                  ...(effect.condition.source_type === "tag"
+                    ? [{ value: "tag", label: "Another tag count" }]
+                    : []),
+                ]}
+                onChange={(targetType) => updateEffect(index, {
+                  condition: {
+                    ...effect.condition,
+                    target_type: targetType,
+                    target_id: "",
+                    amount: targetType === "number" ? effect.condition.amount ?? 1 : undefined,
+                  },
+                })}
+              />
+              {effect.condition.target_type === "tag" ? (
+                <SelectField
+                  label="Comparison Tag"
+                  value={effect.condition.target_id || ""}
+                  options={[
+                    { value: "", label: "Select tag" },
+                    ...permanentTags.map((tag) => ({ value: tag.id, label: tag.name })),
+                  ]}
+                  onChange={(targetId) => updateEffect(index, {
+                    condition: { ...effect.condition, target_id: targetId },
+                  })}
+                />
+              ) : (
+                <NumberField label="Amount" value={effect.condition.amount ?? 1} onChange={(amount) => updateEffect(index, { condition: { ...effect.condition, amount } })} />
+              )}
             </div>
           ) : null}
         </div>
@@ -1660,10 +1702,10 @@ const EventGuidedFields = ({ data, setField, tagEntries, ministryEntries, pillar
   return (
     <>
       <SelectField
-        label="Minister in Charge"
+        label="Choice Minister (Optional)"
         value={data.ministry_id || ""}
         options={[
-          { value: "", label: "Select minister" },
+          { value: "", label: "None - use normal rules" },
           ...ministryEntries.map((ministry) => ({ value: ministry.id, label: ministry.name })),
         ]}
         onChange={(ministryId) => setField("ministry_id", ministryId)}

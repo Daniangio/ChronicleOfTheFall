@@ -219,6 +219,23 @@ resource below zero. The effect may name a specific resource. If it is general,
 the Minister of Health & Harvest chooses the affected resource; if that Ministry
 is vacant, the Minister of the Empire chooses.
 
+An Event may name an optional **Choice Minister**. If present, that Minister
+handles every choice created by that Event instead of the normal effect-specific
+Minister. If the named Ministry is vacant, the Minister of the Empire decides.
+If no Choice Minister is named, apply the normal decision rules for each effect.
+
+A conditional effect may compare a tag, resource, or Pillar value with a fixed
+number. A tag condition may instead compare its count with the current count of
+another tag, using the same greater-than, less-than, at-least, at-most, or equal
+operators.
+
+An Event may grant a **Structure Requirement Waiver** for the current Era. The
+next Structure built that Era may be missing at most one required tag instance
+in its destination City. The waiver is consumed automatically when that
+Structure is built, even if all of its tag requirements were already satisfied.
+It cannot waive resource costs, placement rules, or more than one missing tag.
+An unused waiver expires at the end of the Era.
+
 Example:
 
 **Ratborne Fever**

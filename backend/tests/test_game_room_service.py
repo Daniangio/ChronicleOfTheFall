@@ -420,6 +420,45 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
         self.assertEqual(state["current_reveal"]["status"], "resolved")
         self.assertIn(event["id"], state["empire_discard"])
 
+    def test_event_choice_minister_overrides_normal_decision_rule(self):
+        state = finish_ministry_draft(build_state())
+        war_ministry_id, war_player_id = next(
+            (ministry_id, holder)
+            for ministry_id, holder in state["ministry_assignments"].items()
+            if "war" in ministry_id
+        )
+        event = state["catalog"]["events"][0]
+        event["data"].update(
+            {
+                "ministry_id": war_ministry_id,
+                "requirements": [],
+                "main_effects": [
+                    {"effect_type": "modify_resources", "payload": {"resource_id": "", "amount": 1}}
+                ],
+            }
+        )
+        state.update(
+            {
+                "phase": "reveal",
+                "council_stack": [
+                    {
+                        "id": "minister-event",
+                        "item_id": event["id"],
+                        "kind": "events",
+                        "owner_player_id": "",
+                        "face_up": False,
+                    }
+                ],
+            }
+        )
+
+        state = perform_action(state, "reveal_next", {})
+
+        self.assertEqual(state["active_player_id"], war_player_id)
+        self.assertTrue(
+            all(action["player_id"] == war_player_id for action in state["possible_actions"])
+        )
+
     def test_specific_and_generic_storage_are_validated(self):
         warehouse = catalog_entry(
             "warehouse",
@@ -477,6 +516,101 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
 
         self.assertEqual(state["pillars"]["stability"], 4)
         self.assertEqual(state["pillars"]["treasury"], 5)
+
+    def test_event_effect_can_compare_one_tag_count_to_another(self):
+        state = build_state()
+        state["cities"][0]["cards"] = ["farm", "farm", "garrison"]
+        event = state["catalog"]["events"][0]
+        event["data"]["requirements"] = []
+        event["data"]["main_effects"] = [
+            {
+                "effect_type": "modify_pillar",
+                "payload": {"pillar_id": "morale", "amount": 1},
+                "condition": {
+                    "source_type": "tag",
+                    "source_id": "military",
+                    "operator": "lt",
+                    "target_type": "tag",
+                    "target_id": "food",
+                },
+            },
+            {
+                "effect_type": "modify_pillar",
+                "payload": {"pillar_id": "treasury", "amount": 1},
+                "condition": {
+                    "source_type": "tag",
+                    "source_id": "food",
+                    "operator": "lt",
+                    "target_type": "tag",
+                    "target_id": "military",
+                },
+            },
+        ]
+        state["phase"] = "reveal"
+        state["council_stack"] = [
+            {
+                "id": "tag-comparison-event",
+                "item_id": event["id"],
+                "kind": "events",
+                "owner_player_id": "",
+                "face_up": False,
+            }
+        ]
+
+        state = perform_action(state, "reveal_next", {})
+
+        self.assertEqual(state["pillars"]["morale"], 6)
+        self.assertEqual(state["pillars"]["treasury"], 5)
+
+    def test_event_waives_one_tag_for_only_the_next_structure_this_era(self):
+        temple = catalog_entry(
+            "temple",
+            "Temple",
+            "cards",
+            category="structure",
+            data={"required_tags": {"food": 1}, "tags": {"faith": 1}},
+        )
+        state = build_state(card_entries=[*CARDS, temple])
+        event = state["catalog"]["events"][0]
+        event["data"]["requirements"] = []
+        event["data"]["main_effects"] = [
+            {"effect_type": "waive_next_structure_tag_requirement", "payload": {}}
+        ]
+        state["phase"] = "reveal"
+        state["council_stack"] = [
+            {
+                "id": "waiver-event",
+                "item_id": event["id"],
+                "kind": "events",
+                "owner_player_id": "",
+                "face_up": False,
+            },
+            {
+                "id": "first-temple",
+                "item_id": "temple",
+                "kind": "cards",
+                "owner_player_id": "",
+                "face_up": False,
+            },
+            {
+                "id": "second-temple",
+                "item_id": "temple",
+                "kind": "cards",
+                "owner_player_id": "",
+                "face_up": False,
+            },
+        ]
+
+        state = perform_action(state, "reveal_next", {})
+        self.assertEqual(state["structure_tag_requirement_waivers"], 1)
+
+        state = perform_action(state, "reveal_next", {})
+        self.assertEqual(state["cities"][0]["cards"], ["temple"])
+        self.assertEqual(state["structure_tag_requirement_waivers"], 0)
+
+        state = perform_action(state, "reveal_next", {})
+        self.assertEqual(state["cities"][0]["cards"], ["temple"])
+        self.assertEqual([project["card_id"] for project in state["stalled_projects"]], ["temple"])
 
     def test_collapse_reveals_agendas_and_calculates_winners(self):
         state = build_state()

@@ -377,6 +377,17 @@
       }
     },
     {
+      "id": "effect-waive-structure-tag",
+      "name": "Waive Structure Tag Requirement Effect",
+      "kind": "images",
+      "category": "image",
+      "summary": "",
+      "color": null,
+      "data": {
+        "src": "/game-assets/effects/waive-structure-tag.svg"
+      }
+    },
+    {
       "id": "effect-add-building-slots",
       "name": "Add Building Slots Effect",
       "kind": "images",

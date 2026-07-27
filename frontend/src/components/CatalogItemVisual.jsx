@@ -56,6 +56,7 @@ const effectFallbackIcon = (effectType) => ({
   add_plague: HeartPulse,
   add_unrest: Flame,
   add_fortified: Shield,
+  waive_next_structure_tag_requirement: CirclePlus,
   add_building_slots: Grid2X2,
   storage: Archive,
   modify_token: CirclePlus,
@@ -402,6 +403,18 @@ const EventEffectToken = ({ effect, ministryLookup, effectIconLookup, pillarLook
       </span>
     );
   }
+  if (effect?.effect_type === "waive_next_structure_tag_requirement") {
+    return (
+      <EventEffectIcon
+        effectType="waive_next_structure_tag_requirement"
+        effectIconLookup={effectIconLookup}
+        imageLookup={imageLookup}
+        fallback={CirclePlus}
+        label="Next Structure may ignore one required tag"
+        tone="emerald"
+      />
+    );
+  }
   return (
     <span className="inline-flex items-center gap-1">
       <EventEffectIcon effectType={effect?.effect_type || "effect"} effectIconLookup={effectIconLookup} imageLookup={imageLookup} fallback={ShieldX} label={effect?.effect_type || "Effect"} />
@@ -455,8 +468,18 @@ const EventEffectRow = ({ title, effects, tone, ministryLookup, effectIconLookup
                 )}
                 <span className="text-[0.58rem] font-bold text-amber-200">
                   {{ gt: ">", gte: ">=", lt: "<", lte: "<=", eq: "=" }[effect.condition.operator] || ">="}
-                  {Number(effect.condition.amount || 0)}
                 </span>
+                {effect.condition.target_type === "tag" ? (
+                  <TagIcon
+                    tag={tagLookup[normalizeTagId(effect.condition.target_id)]}
+                    label={effect.condition.target_id}
+                    size="xs"
+                  />
+                ) : (
+                  <span className="text-[0.58rem] font-bold text-amber-200">
+                    {Number(effect.condition.amount || 0)}
+                  </span>
+                )}
                 <span className="text-amber-800">:</span>
               </>
             ) : null}
@@ -480,15 +503,17 @@ const EventCardVisual = ({ entry, eventMinistry, ministryLookup, effectIconLooku
   const mainEffects = Array.isArray(data.main_effects) ? data.main_effects : [];
   const alternativeEffects = Array.isArray(data.alternative_effects) ? data.alternative_effects : [];
   return (
-    <article className="flex aspect-[5/7] w-[clamp(12rem,16vw,15rem)] shrink-0 flex-col overflow-hidden rounded-lg border border-amber-900/70 bg-stone-950 p-3 shadow-xl">
+    <article className="flex aspect-[5/7] w-[clamp(12rem,16vw,15rem)] shrink-0 flex-col rounded-lg border border-amber-900/70 bg-stone-950 p-3 shadow-xl">
       <div className="grid grid-cols-[3rem_minmax(0,1fr)] gap-2">
         <div className="flex flex-col items-center gap-1">
-          <SmallIcon
-            src={ministryIcon(eventMinistry, imageLookup)}
-            label={eventMinistry?.name || "No minister assigned"}
-            tone="amber"
-            size="sm"
-          />
+          {eventMinistry ? (
+            <SmallIcon
+              src={ministryIcon(eventMinistry, imageLookup)}
+              label={`${eventMinistry.name} handles this event's choices`}
+              tone="amber"
+              size="sm"
+            />
+          ) : null}
           <span className="text-[0.5rem] font-bold uppercase text-amber-500">{data.subtype || "event"}</span>
         </div>
         <div className="min-w-0 text-right">

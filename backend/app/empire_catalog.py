@@ -459,6 +459,7 @@ def _validate_event_effects(value: Any) -> None:
         "add_plague",
         "add_unrest",
         "add_fortified",
+        "waive_next_structure_tag_requirement",
     }
     for effect in effects:
         if not isinstance(effect, dict) or str(effect.get("effect_type") or "") not in allowed:
@@ -483,6 +484,11 @@ def _validate_event_effects(value: Any) -> None:
             or condition.get("operator") not in {"gt", "gte", "lt", "lte", "eq"}
         ):
             raise ValueError("Event effect condition is invalid.")
+        if condition and condition.get("target_type", "number") not in {"number", "tag"}:
+            raise ValueError("Event effect condition target type is invalid.")
+        if condition and condition.get("target_type") == "tag":
+            if condition.get("source_type") != "tag" or not str(condition.get("target_id") or ""):
+                raise ValueError("Only a tag count can be compared with another tag count.")
 
 
 def _catalog_category(kind: CatalogKind, category: str, data: dict[str, Any]) -> str:
