@@ -71,13 +71,14 @@
       "name": "Minister of War",
       "kind": "ministries",
       "category": "ministry",
-      "summary": "The defender. Controls military event edicts and reconnaissance.",
+      "summary": "The defender. Resolves City Revolts and Imperial Unrest Crises, controls military event edicts, and performs reconnaissance.",
       "color": null,
       "data": {
         "domain_id": "military",
         "domain_symbol": "WAR",
         "abilities": [
           "military_event_edicts",
+          "resolve_unrest_crises",
           "peek_event_queue"
         ],
         "domain_icon_image_id": "minister-war",

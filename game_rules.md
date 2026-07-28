@@ -569,7 +569,7 @@ This protection applies only to forced discard. The Minister may still voluntari
 
 The Minister of War resolves revolts.
 
-When Global Unrest reaches its threshold, the Minister of State chooses how the Imperial Unrest Crisis is resolved.
+When Global Unrest reaches its threshold, the Minister of War chooses how the Imperial Unrest Crisis is resolved.
 
 When a City reaches 2 Unrest, the Minister of War chooses how that revolt is resolved.
 
@@ -996,7 +996,7 @@ Global Unrest is placed on the Empire.
 
 When the Empire reaches 3 Global Unrest tokens, an Imperial Unrest Crisis immediately triggers.
 
-The Minister of State chooses one resolution:
+The Minister of War chooses one resolution:
 
 ### Repression
 

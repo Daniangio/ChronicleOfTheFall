@@ -1,4 +1,4 @@
-import { Archive, ArrowRight, CirclePlus, Coins, Flame, Grid2X2, Hammer, HeartPulse, RotateCcw, ScrollText, Shield, ShieldX, Zap } from "lucide-react";
+import { Archive, ArrowRight, Building2, CirclePlus, Coins, Flame, Grid2X2, Hammer, HeartPulse, RotateCcw, ScrollText, Shield, ShieldX, Zap } from "lucide-react";
 import CardVisual from "./CardVisual.jsx";
 import TagIcon from "./TagIcon.jsx";
 import { buildAssetUrl } from "../utils/connection.js";
@@ -317,7 +317,10 @@ const MinisterAbilities = ({ entry, tagLookup }) => {
     ],
     state: ["Draws up to two cards during Cleanup without exceeding the hand limit."],
     health: ["Cannot be forced to discard cards from hand or Scheme Slots."],
-    war: ["May add +1 Crisis defense, or +2 while the Empire has a Military tag, once per Era."],
+    war: [
+      "Resolves City Revolts and Imperial Unrest Crises.",
+      "May add +1 Crisis defense, or +2 while the Empire has a Military tag, once per Era.",
+    ],
   };
   const abilities = abilitiesByRole[role] || [];
 
@@ -434,8 +437,15 @@ const EventEffectToken = ({ effect, eventMinistry, ministryLookup, effectIconLoo
   }
   if (["modify_plague", "modify_unrest", "modify_fortified"].includes(effect?.effect_type)) {
     const fallback = effect.effect_type === "modify_plague" ? HeartPulse : effect.effect_type === "modify_unrest" ? Flame : Shield;
+    const scope = payload.scope || (effect.effect_type === "modify_unrest" ? "unspecified" : "city");
     return (
       <span className="inline-flex items-center gap-1">
+        {scope === "city" ? (
+          <span className="inline-flex h-6 w-6 items-center justify-center text-amber-200" title="Place on a City">
+            <Building2 className="h-5 w-5" aria-hidden="true" />
+            <span className="sr-only">City</span>
+          </span>
+        ) : null}
         <EventEffectIcon effectType={effect.effect_type} effectIconLookup={effectIconLookup} imageLookup={imageLookup} fallback={fallback} label={humanizeKey(effect.effect_type)} tone={amount >= 0 ? "emerald" : "rose"} />
         <span className={`text-xs font-bold ${amount >= 0 ? "text-emerald-200" : "text-rose-200"}`}>{amount >= 0 ? `+${amount}` : amount}</span>
       </span>
@@ -496,9 +506,13 @@ const EventEffectRow = ({ title, effects, tone, eventMinistry, ministryLookup, e
   return (
     <div className={`min-h-[4.25rem] rounded-md border ${tone === "success" ? "border-emerald-900/70 bg-emerald-950/15" : "border-rose-900/70 bg-rose-950/15"} p-1.5`}>
       <p className={`mb-2 text-[0.65rem] font-bold uppercase tracking-normal ${tone === "success" ? "text-emerald-200" : "text-rose-200"}`}>{title}</p>
-      <div className="flex flex-wrap gap-1">
+      <div className="space-y-1">
         {effects.map((effect, index) => (
-          <span key={index} className="inline-flex items-center gap-1" title={effect.condition ? "Conditional effect" : undefined}>
+          <div
+            key={index}
+            className="flex min-h-7 w-full items-center gap-1 border-b border-current/10 pb-1 last:border-b-0 last:pb-0"
+            title={effect.condition ? "Conditional effect" : undefined}
+          >
             {effect.condition ? (
               <>
                 <span className="text-[0.58rem] font-bold uppercase text-amber-300">IF</span>
@@ -542,7 +556,7 @@ const EventEffectRow = ({ title, effects, tone, eventMinistry, ministryLookup, e
               tagLookup={tagLookup}
               imageLookup={imageLookup}
             />
-          </span>
+          </div>
         ))}
       </div>
     </div>
