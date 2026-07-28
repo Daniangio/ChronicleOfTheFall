@@ -1,5 +1,6 @@
 import { Archive, ArrowRight, Building2, CirclePlus, Coins, Flame, Grid2X2, Hammer, HeartPulse, RotateCcw, ScrollText, Shield, ShieldX, Zap } from "lucide-react";
 import CardVisual from "./CardVisual.jsx";
+import IconHoverInfo from "./IconHoverInfo.jsx";
 import TagIcon from "./TagIcon.jsx";
 import { buildAssetUrl } from "../utils/connection.js";
 
@@ -85,19 +86,13 @@ const smallIconSizes = {
 };
 
 const SmallIcon = ({ src, fallback, label, tone = "slate", size = "md" }) => {
-  const toneClass = tone === "rose"
-    ? "border-rose-800/70 text-rose-200"
-    : tone === "emerald"
-      ? "border-emerald-800/70 text-emerald-200"
-      : tone === "amber"
-        ? "border-amber-800/70 text-amber-200"
-        : "border-slate-700 text-slate-300";
   const Fallback = fallback;
   const iconSize = smallIconSizes[size] || smallIconSizes.md;
   return (
-    <span>
+    <IconHoverInfo label={label || "Icon"} tone={tone} className="items-center justify-center">
       {src ? <img alt="" className={`${iconSize} object-contain`} src={src} /> : Fallback ? <Fallback className={size === "xs" ? "h-3.5 w-3.5" : size === "sm" ? "h-4 w-4" : "h-5 w-5"} aria-hidden="true" /> : String(label || "").slice(0, 3).toUpperCase()}
-    </span>
+      <span className="sr-only">{label}</span>
+    </IconHoverInfo>
   );
 };
 
@@ -203,9 +198,9 @@ const LogicIconPill = ({ children, title, tone = "slate" }) => {
       ? "border-teal-700 text-teal-200"
       : "border-slate-700 text-slate-300";
   return (
-    <span className={`inline-flex h-8 min-w-8 items-center justify-center rounded-md border px-2 text-xs font-semibold ${toneClass}`} title={title}>
+    <IconHoverInfo label={title} tone={tone} className={`h-8 min-w-8 items-center justify-center rounded-md border px-2 text-xs font-semibold ${toneClass}`}>
       {children}
-    </span>
+    </IconHoverInfo>
   );
 };
 
@@ -442,10 +437,7 @@ const EventEffectToken = ({ effect, eventMinistry, ministryLookup, effectIconLoo
     return (
       <span className="inline-flex items-center gap-1">
         {scope === "city" ? (
-          <span className="inline-flex h-6 w-6 items-center justify-center text-amber-200" title="Place on a City">
-            <Building2 className="h-5 w-5" aria-hidden="true" />
-            <span className="sr-only">City</span>
-          </span>
+          <SmallIcon fallback={Building2} label="Place on a City" tone="amber" size="sm" />
         ) : null}
         <EventEffectIcon effectType={effect.effect_type} effectIconLookup={effectIconLookup} imageLookup={imageLookup} fallback={fallback} label={humanizeKey(effect.effect_type)} tone={amount >= 0 ? "emerald" : "rose"} />
         <span className={`text-xs font-bold ${amount >= 0 ? "text-emerald-200" : "text-rose-200"}`}>{amount >= 0 ? `+${amount}` : amount}</span>
@@ -460,10 +452,7 @@ const EventEffectToken = ({ effect, eventMinistry, ministryLookup, effectIconLoo
     ].filter(([tokenId]) => Number(payload.tokens?.[tokenId] || 0) !== 0);
     return (
       <span className="inline-flex items-center gap-1">
-        <span className="inline-flex h-6 w-6 items-center justify-center text-amber-200" title="Apply all tokens to the same City">
-          <Building2 className="h-5 w-5" aria-hidden="true" />
-          <span className="sr-only">Same City</span>
-        </span>
+        <SmallIcon fallback={Building2} label="Apply all tokens to the same City" tone="amber" size="sm" />
         {tokenEffects.map(([tokenId, effectType, fallback]) => {
           const tokenAmount = Number(payload.tokens[tokenId]);
           return (

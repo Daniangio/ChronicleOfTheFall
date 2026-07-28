@@ -1,4 +1,5 @@
 import { Archive, Grid2X2, Hand, Scale } from "lucide-react";
+import IconHoverInfo from "./IconHoverInfo.jsx";
 import TagIcon from "./TagIcon.jsx";
 
 const normalize = (value) => String(value || "").trim().toLowerCase().replace(/[\s_]+/g, "-");
@@ -25,9 +26,13 @@ const IconPill = ({ children, title, tone = "slate", compact = false }) => {
       ? "border-teal-700 text-teal-200"
       : "border-slate-700 text-slate-300";
   return (
-    <span className={`inline-flex items-center justify-center rounded-md border ${compact ? "h-6 min-w-6 px-1" : "h-7 min-w-7 px-2"} text-[0.65rem] font-semibold ${toneClass}`} title={title}>
+    <IconHoverInfo
+      label={title}
+      tone={tone}
+      className={`items-center justify-center rounded-md border ${compact ? "h-6 min-w-6 px-1" : "h-7 min-w-7 px-2"} text-[0.65rem] font-semibold ${toneClass}`}
+    >
       {children}
-    </span>
+    </IconHoverInfo>
   );
 };
 
