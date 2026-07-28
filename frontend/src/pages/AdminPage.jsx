@@ -21,7 +21,6 @@ const sections = [
   { key: "agendas", label: "Agendas", to: "/admin/agendas" },
   { key: "edicts", label: "Edicts", to: "/admin/edicts" },
   { key: "crises", label: "Crises", to: "/admin/crises" },
-  { key: "groups", label: "Groups", to: "/admin/groups" },
   { key: "decks", label: "Empire Decks", to: "/admin/decks" },
   { key: "levels", label: "Levels", to: "/admin/levels" },
 ];
@@ -36,7 +35,6 @@ const catalogSections = new Set([
   "effect-icons",
   "agendas",
   "events",
-  "groups",
   "levels",
   "decks",
 ]);
@@ -121,7 +119,6 @@ const placementOptions = [
 ];
 
 const emptyRequirement = { type: "not_condition", tag_id: "", card_id: "", scope: "city" };
-const emptyReplacementEffect = { type: "add_condition", tag_id: "", scope: "target", amount: 1 };
 const emptyEffect = { effect_type: "add_resources", payload: { resources: [] } };
 const defaultManualNode = {
   name: "Manual Action",
@@ -737,14 +734,12 @@ const LogicNodeEditor = ({ logicNodes, setLogicNodes, tagEntries }) => {
   );
 };
 
-const CardGuidedFields = ({ category, data, setField, tagEntries, cardEntries, groupEntries, pillarEntries }) => {
+const CardGuidedFields = ({ category, data, setField, tagEntries, cardEntries, pillarEntries }) => {
   const conditionTags = tagEntries.filter((tag) => tag.category === "condition");
   const resourceTags = volatileResourceTags(tagEntries);
   const permanentTags = permanentOnlyTags(tagEntries);
   const cardOptions = cardEntries.filter((entry) => entry.kind === "cards");
-  const groups = groupEntries.filter((entry) => entry.category === "mutually-exclusive" || entry.data?.type === "mutually_exclusive");
   const requirements = Array.isArray(data.requirements) ? data.requirements : [];
-  const replacementEffects = Array.isArray(data.replacement_effects) ? data.replacement_effects : [];
   const logicNodes = Array.isArray(data.logic_nodes) ? data.logic_nodes : [];
   const storage = data.storage && typeof data.storage === "object"
     ? data.storage
@@ -755,12 +750,6 @@ const CardGuidedFields = ({ category, data, setField, tagEntries, cardEntries, g
     const next = [...requirements];
     next[index] = { ...next[index], ...patch };
     setField("requirements", next);
-  };
-
-  const updateReplacementEffect = (index, patch) => {
-    const next = [...replacementEffects];
-    next[index] = { ...next[index], ...patch };
-    setField("replacement_effects", next);
   };
 
   return (
@@ -971,69 +960,6 @@ const CardGuidedFields = ({ category, data, setField, tagEntries, cardEntries, g
         ))}
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <SelectField
-          label="Mutually Exclusive Group"
-          value={data.mutually_exclusive_group || ""}
-          options={[
-            { value: "", label: "None" },
-            ...groups.map((group) => ({ value: group.id, label: group.name })),
-          ]}
-          onChange={(value) => setField("mutually_exclusive_group", value)}
-        />
-      </div>
-
-      <div className="space-y-3">
-        <div className="flex items-center justify-between gap-3">
-          <h4 className="text-sm font-semibold text-slate-300">Replacement Effects</h4>
-          <button
-            className="rounded-md border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800"
-            onClick={() => setField("replacement_effects", [...replacementEffects, emptyReplacementEffect])}
-            type="button"
-          >
-            Add effect
-          </button>
-        </div>
-        {replacementEffects.map((effect, index) => (
-          <div key={index} className="space-y-3 rounded-md border border-slate-800 bg-slate-950 p-3">
-            <div className="grid gap-3 sm:grid-cols-3">
-              <SelectField
-                label="Scope"
-                value={effect.scope || "target"}
-                options={[
-                  { value: "target", label: "Target zone" },
-                  { value: "empire", label: "Empire zone" },
-                  { value: "city", label: "City" },
-                ]}
-                onChange={(value) => updateReplacementEffect(index, { scope: value })}
-              />
-              <label className="block">
-                <span className="text-sm font-medium text-slate-300">Amount</span>
-                <input
-                  type="number"
-                  min="1"
-                  value={Number(effect.amount || 1)}
-                  onChange={(event) => updateReplacementEffect(index, { amount: Number(event.target.value || 1) })}
-                  className="mt-2 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none focus:border-teal-400"
-                />
-              </label>
-            </div>
-            <TagSingleSelect
-              label="Condition"
-              tags={conditionTags}
-              selectedId={effect.tag_id || ""}
-              onSelect={(tagId) => updateReplacementEffect(index, { tag_id: tagId })}
-            />
-            <button
-              className="text-xs font-semibold text-rose-300 hover:text-rose-200"
-              onClick={() => setField("replacement_effects", replacementEffects.filter((_, itemIndex) => itemIndex !== index))}
-              type="button"
-            >
-              Remove effect
-            </button>
-          </div>
-        ))}
-      </div>
     </>
   );
 };
@@ -1084,7 +1010,8 @@ const effectIconCodeOptions = [
   { value: "modify_pillar", label: "Modify Pillar" },
   { value: "modify_resources", label: "Modify Resources" },
   { value: "convert_resources", label: "Convert Resources" },
-  { value: "draw_card", label: "Draw 3, Keep 1" },
+  { value: "draw_card", label: "Pending Draw" },
+  { value: "reduce_refill_draws", label: "Reduce Refill Draws" },
   { value: "destroy_building", label: "Destroy Building" },
   { value: "remove_all_resources", label: "Remove All Resources" },
   { value: "discard_cards", label: "Discard Cards" },
@@ -1473,6 +1400,7 @@ const eventEffectOptions = [
   { value: "modify_resources", label: "Add or remove resources" },
   { value: "convert_resources", label: "Convert resources" },
   { value: "draw_card", label: "Choice Minister gains a pending draw" },
+  { value: "reduce_refill_draws", label: "All players draw 1 less during refill" },
   { value: "destroy_building", label: "Destroy building" },
   { value: "remove_all_resources", label: "Remove all remaining resources" },
   { value: "discard_cards", label: "Discard cards from hand" },
@@ -1592,6 +1520,10 @@ const EventEffects = ({ effects, setEffects, tagEntries, pillarEntries }) => {
             ) : effect.effect_type === "draw_card" ? (
               <p className="self-end pb-2 text-sm text-slate-400 sm:col-span-2">
                 The Choice Minister draws one additional card during this Era's Hand Refill. The Minister of the Empire receives it if missing.
+              </p>
+            ) : effect.effect_type === "reduce_refill_draws" ? (
+              <p className="self-end pb-2 text-sm text-slate-400 sm:col-span-2">
+                Every player draws one fewer card during this Era&apos;s Hand Refill.
               </p>
             ) : effect.effect_type === "discard_cards" ? (
               <>
@@ -1988,7 +1920,6 @@ const GuidedMetadataEditor = ({
   isEditing,
   tagEntries,
   cardEntries,
-  groupEntries,
   eventEntries,
   deckEntries,
   ministryEntries,
@@ -2173,7 +2104,6 @@ const AdminPage = () => {
   const [ministryEntries, setMinistryEntries] = useState([]);
   const [deckEntries, setDeckEntries] = useState([]);
   const [levelEntries, setLevelEntries] = useState([]);
-  const [groupEntries, setGroupEntries] = useState([]);
   const [catalogSummary, setCatalogSummary] = useState(null);
   const [editingEntry, setEditingEntry] = useState(null);
   const [catalogForm, setCatalogForm] = useState(emptyCatalogForm);
@@ -2249,9 +2179,6 @@ const AdminPage = () => {
       if (targetSection !== "cards") {
         requests.push(request("/api/admin/cards"));
       }
-      if (targetSection !== "groups") {
-        requests.push(request("/api/admin/groups"));
-      }
       if (targetSection !== "events") {
         requests.push(request("/api/admin/events"));
       }
@@ -2279,7 +2206,6 @@ const AdminPage = () => {
       const tags = targetSection === "tags" ? entries : results[resultIndex++];
       const images = targetSection === "images" ? entries : results[resultIndex++];
       const cards = targetSection === "cards" ? entries : results[resultIndex++];
-      const groups = targetSection === "groups" ? entries : results[resultIndex++];
       const events = targetSection === "events" ? entries : results[resultIndex++];
       const pillars = targetSection === "pillars" ? entries : results[resultIndex++];
       const tokens = targetSection === "tokens" ? entries : results[resultIndex++];
@@ -2292,7 +2218,6 @@ const AdminPage = () => {
       setTagEntries(targetSection === "tags" ? entries : tags);
       setImageEntries(targetSection === "images" ? entries : images);
       setCardEntries(targetSection === "cards" ? entries : cards);
-      setGroupEntries(targetSection === "groups" ? entries : groups);
       setEventEntries(targetSection === "events" ? entries : events);
       setPillarEntries(targetSection === "pillars" ? entries : pillars);
       setTokenEntries(targetSection === "tokens" ? entries : tokens);
@@ -2366,9 +2291,7 @@ const AdminPage = () => {
       ...emptyCatalogForm,
       color: activeCatalogKind === "tags" ? "#64748b" : "",
       category:
-        activeCatalogKind === "groups"
-          ? "mutually-exclusive"
-          : activeCatalogKind === "cards"
+        activeCatalogKind === "cards"
             ? "structure"
             : activeCatalogKind === "decks"
               ? "deck"
@@ -2386,9 +2309,7 @@ const AdminPage = () => {
               ? "image"
             : "",
       dataText:
-        activeCatalogKind === "groups"
-          ? stringifyData({ type: "mutually_exclusive" })
-            : activeCatalogKind === "decks"
+        activeCatalogKind === "decks"
               ? stringifyData({ item_ids: [], initial_setup: { "3": [], "4": [], "5": [] } })
             : activeCatalogKind === "levels"
               ? stringifyData({ initial_city_card_id: "", deck_id: "", suspicion_start_era: 5 })
@@ -2466,9 +2387,7 @@ const AdminPage = () => {
       const payload = {
         name: catalogName,
         category:
-          activeCatalogKind === "groups"
-            ? "mutually-exclusive"
-            : activeCatalogKind === "decks"
+          activeCatalogKind === "decks"
                 ? "deck"
               : activeCatalogKind === "levels"
                 ? "level"
@@ -2483,9 +2402,7 @@ const AdminPage = () => {
               : catalogForm.category,
         summary: catalogForm.summary,
         color: activeCatalogKind === "tags" ? catalogForm.color : null,
-        data: activeCatalogKind === "groups"
-          ? { ...normalizedData, type: "mutually_exclusive" }
-          : activeCatalogKind === "decks"
+        data: activeCatalogKind === "decks"
             ? {
                 ...normalizedData,
                 item_ids: Array.isArray(normalizedData.item_ids) ? normalizedData.item_ids : [],
@@ -2534,14 +2451,6 @@ const AdminPage = () => {
       }
       if (activeCatalogKind === "cards") {
         setCardEntries((entries) => {
-          const withoutSaved = entries.filter((entry) => entry.id !== saved.id);
-          return [...withoutSaved, saved].sort((a, b) =>
-            `${a.category}:${a.name}:${a.id}`.localeCompare(`${b.category}:${b.name}:${b.id}`)
-          );
-        });
-      }
-      if (activeCatalogKind === "groups") {
-        setGroupEntries((entries) => {
           const withoutSaved = entries.filter((entry) => entry.id !== saved.id);
           return [...withoutSaved, saved].sort((a, b) =>
             `${a.category}:${a.name}:${a.id}`.localeCompare(`${b.category}:${b.name}:${b.id}`)
@@ -2631,9 +2540,6 @@ const AdminPage = () => {
       }
       if (activeCatalogKind === "cards") {
         setCardEntries((entries) => entries.filter((candidate) => candidate.id !== entry.id));
-      }
-      if (activeCatalogKind === "groups") {
-        setGroupEntries((entries) => entries.filter((candidate) => candidate.id !== entry.id));
       }
       if (activeCatalogKind === "events") {
         setEventEntries((entries) => entries.filter((candidate) => candidate.id !== entry.id));
@@ -2990,7 +2896,7 @@ const AdminPage = () => {
                     type="button"
                   >
                     <Download className="h-4 w-4" aria-hidden="true" />
-                    Export Page
+                    {activeEventSubtype ? `Export ${activeEventSubtype === "crisis" ? "Crisis" : "Edict"} JSON` : "Export Page"}
                   </button>
                   <button
                     className="inline-flex items-center gap-2 rounded-md border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800 disabled:opacity-60"
@@ -3003,7 +2909,7 @@ const AdminPage = () => {
                   </button>
                   <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800">
                     <Upload className="h-4 w-4" aria-hidden="true" />
-                    Import Page
+                    {activeEventSubtype ? `Import ${activeEventSubtype === "crisis" ? "Crisis" : "Edict"} JSON` : "Import Page"}
                     <input
                       accept="application/json,.json"
                       className="hidden"
@@ -3079,7 +2985,6 @@ const AdminPage = () => {
                           entry={entry}
                           tags={tagEntries}
                           cards={cardEntries}
-                          groups={groupEntries}
                           ministries={ministryEntries}
                           images={imageEntries}
                           pillars={pillarEntries}
@@ -3197,7 +3102,6 @@ const AdminPage = () => {
                       value={catalogForm.category}
                       onChange={(event) => setCatalogForm((state) => ({ ...state, category: event.target.value }))}
                       className="mt-2 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none focus:border-teal-400 disabled:text-slate-500"
-                      disabled={activeCatalogKind === "groups"}
                     />
                   </label>
                 )}
@@ -3231,13 +3135,12 @@ const AdminPage = () => {
               </label>
 
               <GuidedMetadataEditor
-                activeSection={activeCatalogKind}
+                activeSection={activeSection}
                 catalogForm={catalogForm}
                 setCatalogForm={setCatalogForm}
                 isEditing={Boolean(editingEntry)}
                 tagEntries={tagEntries}
                 cardEntries={cardEntries}
-                groupEntries={groupEntries}
                 eventEntries={eventEntries}
                 deckEntries={deckEntries}
                 ministryEntries={ministryEntries}

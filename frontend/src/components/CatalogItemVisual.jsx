@@ -13,7 +13,6 @@ const tagKeyNames = new Set([
   "infrastructure_resources",
   "local_tags",
   "global_tags",
-  "replacement_effects",
 ]);
 
 const normalizeTagId = (value) =>
@@ -53,6 +52,7 @@ const effectFallbackIcon = (effectType) => ({
   modify_resources: Coins,
   convert_resources: ArrowRight,
   draw_card: ScrollText,
+  reduce_refill_draws: ScrollText,
   destroy_building: Hammer,
   remove_all_resources: Coins,
   discard_cards: ScrollText,
@@ -158,24 +158,6 @@ const RequirementValue = ({ value, tagLookup, cardLookup }) => {
   );
 };
 
-const ReplacementEffectsValue = ({ value, tagLookup }) => {
-  const effects = Array.isArray(value) ? value : [];
-  if (!effects.length) return <span className="text-slate-600">None</span>;
-  return (
-    <div className="flex flex-wrap gap-1.5">
-      {effects.map((effect, index) => {
-        const tag = tagLookup[normalizeTagId(effect?.tag_id)];
-        return (
-          <span key={index} className="inline-flex items-center gap-1 rounded-md border border-slate-700 bg-slate-950/60 px-2 py-1 text-xs text-slate-300">
-            {(effect?.scope || "target").toUpperCase()}
-            <TagIcon tag={tag} label={effect?.tag_id} count={effect?.amount || null} />
-          </span>
-        );
-      })}
-    </div>
-  );
-};
-
 const countRepeatedTags = (value) => {
   if (Array.isArray(value)) {
     return value.reduce((counts, tagId) => {
@@ -260,23 +242,12 @@ const LogicNodeValue = ({ value, tagLookup }) => {
   );
 };
 
-const DataValue = ({ itemKey, value, tagLookup, cardLookup, groupLookup }) => {
+const DataValue = ({ itemKey, value, tagLookup, cardLookup }) => {
   if (itemKey === "logic_nodes") {
     return <LogicNodeValue value={value} tagLookup={tagLookup} />;
   }
   if (itemKey === "requirements") {
     return <RequirementValue value={value} tagLookup={tagLookup} cardLookup={cardLookup} />;
-  }
-  if (itemKey === "replacement_effects") {
-    return <ReplacementEffectsValue value={value} tagLookup={tagLookup} />;
-  }
-  if (itemKey === "mutually_exclusive_group") {
-    const group = groupLookup[normalizeTagId(value)];
-    return (
-      <span className="rounded-md border border-slate-700 bg-slate-950/60 px-2 py-1 text-xs font-semibold text-slate-300">
-        {(group?.name || value || "").toUpperCase()}
-      </span>
-    );
   }
   if (tagKeyNames.has(itemKey)) return <TagValue value={value} tagLookup={tagLookup} />;
 
@@ -413,6 +384,14 @@ const EventEffectToken = ({ effect, eventMinistry, ministryLookup, effectIconLoo
         <SmallIcon src={ministryIcon(drawingMinistry, imageLookup)} label={drawingMinistry?.name || "Minister of the Empire"} tone="amber" size="sm" />
         <EventEffectIcon effectType="draw_card" effectIconLookup={effectIconLookup} imageLookup={imageLookup} fallback={ScrollText} label="Draw one additional card during Hand Refill" tone="emerald" />
         <span className="text-xs font-bold text-emerald-200">+1</span>
+      </span>
+    );
+  }
+  if (effect?.effect_type === "reduce_refill_draws") {
+    return (
+      <span className="inline-flex items-center gap-1">
+        <EventEffectIcon effectType="reduce_refill_draws" effectIconLookup={effectIconLookup} imageLookup={imageLookup} fallback={ScrollText} label="All players draw one fewer card during Hand Refill" tone="rose" />
+        <span className="text-xs font-bold text-rose-200">-1</span>
       </span>
     );
   }
@@ -634,10 +613,9 @@ const EventCardVisual = ({ entry, eventMinistry, ministryLookup, effectIconLooku
   );
 };
 
-const CatalogItemVisual = ({ entry, tags = [], cards = [], groups = [], ministries = [], images = [], pillars = [], tokens = [], effectIcons = [], actions = null }) => {
+const CatalogItemVisual = ({ entry, tags = [], cards = [], ministries = [], images = [], pillars = [], tokens = [], effectIcons = [], actions = null }) => {
   const color = entry?.color || fallbackColor;
   const cardLookup = Object.fromEntries((cards || []).map((card) => [normalizeTagId(card.id || card.name), card]));
-  const groupLookup = Object.fromEntries((groups || []).map((group) => [normalizeTagId(group.id || group.name), group]));
   const imageLookup = Object.fromEntries((images || []).map((image) => [image.id, image]));
   const tagLookup = buildTagLookup(tags, imageLookup);
   const visualEntry = entry?.kind === "tags" ? withResolvedTagIcon(entry, imageLookup) : entry;
@@ -743,7 +721,7 @@ const CatalogItemVisual = ({ entry, tags = [], cards = [], groups = [], ministri
               <div key={key} className="grid gap-1">
                 <dt className="text-slate-500">{humanizeKey(key)}</dt>
                 <dd className="min-w-0">
-                  <DataValue itemKey={key} value={value} tagLookup={tagLookup} cardLookup={cardLookup} groupLookup={groupLookup} />
+                  <DataValue itemKey={key} value={value} tagLookup={tagLookup} cardLookup={cardLookup} />
                 </dd>
               </div>
             ))}

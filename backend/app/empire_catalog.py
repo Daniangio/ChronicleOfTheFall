@@ -21,7 +21,6 @@ CatalogKind = Literal[
     "effect-icons",
     "agendas",
     "events",
-    "groups",
     "decks",
     "levels",
 ]
@@ -36,7 +35,6 @@ CATALOG_KINDS: tuple[CatalogKind, ...] = (
     "effect-icons",
     "agendas",
     "events",
-    "groups",
     "decks",
     "levels",
 )
@@ -458,6 +456,7 @@ def _validate_event_effects(value: Any) -> None:
         "modify_resources",
         "convert_resources",
         "draw_card",
+        "reduce_refill_draws",
         "suppress_plague_morale",
         "destroy_building",
         "remove_all_resources",

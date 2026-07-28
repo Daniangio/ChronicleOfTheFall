@@ -206,6 +206,5 @@ class AdminCatalogSummary(BaseModel):
     effect_icons: int = 0
     agendas: int = 0
     events: int = 0
-    groups: int = 0
     levels: int = 0
     decks: int = 0

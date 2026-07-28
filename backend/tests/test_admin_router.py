@@ -19,7 +19,6 @@ from backend.app.admin_router import (
     admin_list_decks,
     admin_list_effect_icons,
     admin_list_events,
-    admin_list_groups,
     admin_list_images,
     admin_list_ministries,
     admin_list_pillars,
@@ -116,15 +115,14 @@ def test_new_database_catalog_starts_with_repository_ingredients(tmp_path):
 
         summary = asyncio.run(admin_catalog_summary(_admin=admin, db=db))
         assert summary.tags == 14
-        assert summary.images == 40
+        assert summary.images == 37
         assert summary.cards == 0
         assert summary.ministries == 5
         assert summary.pillars == 3
         assert summary.tokens == 3
-        assert summary.effect_icons == 16
+        assert summary.effect_icons == 17
         assert summary.agendas == 0
         assert summary.events == 0
-        assert summary.groups == 0
         assert summary.levels == 0
         assert summary.decks == 0
 
@@ -137,7 +135,6 @@ def test_new_database_catalog_starts_with_repository_ingredients(tmp_path):
         effect_icons = asyncio.run(admin_list_effect_icons(_admin=admin, db=db))
         agendas = asyncio.run(admin_list_agendas(_admin=admin, db=db))
         events = asyncio.run(admin_list_events(_admin=admin, db=db))
-        groups = asyncio.run(admin_list_groups(_admin=admin, db=db))
         decks = asyncio.run(admin_list_decks(_admin=admin, db=db))
 
         assert {entry.id for entry in tags} >= {"culture", "military", "labor", "wealth"}
@@ -156,6 +153,7 @@ def test_new_database_catalog_starts_with_repository_ingredients(tmp_path):
             "modify_resources",
             "convert_resources",
             "draw_card",
+            "reduce_refill_draws",
             "destroy_building",
             "remove_all_resources",
             "discard_cards",
@@ -170,7 +168,6 @@ def test_new_database_catalog_starts_with_repository_ingredients(tmp_path):
         }
         assert agendas == []
         assert events == []
-        assert groups == []
         assert decks == []
 
         asyncio.run(
@@ -248,9 +245,11 @@ def test_repository_ingredients_are_loaded_and_read_only(tmp_path):
         effect_icons = asyncio.run(admin_list_effect_icons(_admin=admin, db=db))
         discard = next(entry for entry in effect_icons if entry.data["effect_type"] == "discard_cards")
         draw = next(entry for entry in effect_icons if entry.data["effect_type"] == "draw_card")
-        assert len(effect_icons) == 16
-        assert discard.data["icon_image_id"] == "discard-card-image"
+        reduce_refill = next(entry for entry in effect_icons if entry.data["effect_type"] == "reduce_refill_draws")
+        assert len(effect_icons) == 17
+        assert discard.data["icon_image_id"] == "reduce-refill-image"
         assert draw.data["icon_image_id"] == "draw-card-image"
+        assert reduce_refill.data["icon_image_id"] == "reduce-refill-image"
 
         for kind in STATIC_CATALOG_KINDS:
             with pytest.raises(HTTPException) as exc_info:
@@ -364,12 +363,12 @@ def test_admin_can_create_update_and_delete_catalog_entries(tmp_path):
 
         asyncio.run(
             admin_create_catalog_entry(
-                "groups",
+                "cards",
                 AdminCatalogEntryCreate(
                     id="occupied-id",
                     name="Occupied",
-                    category="mutually-exclusive",
-                    data={"type": "mutually_exclusive"},
+                    category="structure",
+                    data={},
                 ),
                 _admin=admin,
                 db=db,
@@ -391,7 +390,7 @@ def test_admin_can_create_update_and_delete_catalog_entries(tmp_path):
                 )
         )
         assert exc_info.value.status_code == 400
-        assert "groups:occupied-id" in exc_info.value.detail
+        assert "cards:occupied-id" in exc_info.value.detail
 
         deleted = asyncio.run(admin_delete_catalog_entry("agendas", "fleet-command-agenda", _admin=admin, db=db))
         assert deleted.status == "ok"
@@ -429,12 +428,12 @@ def test_catalog_inspector_finds_cross_kind_id_conflicts(tmp_path):
         with pytest.raises(HTTPException) as exc_info:
             asyncio.run(
                 admin_create_catalog_entry(
-                    "groups",
+                    "cards",
                     AdminCatalogEntryCreate(
                         id="shared-dynamic-id",
                         name="Shared Dynamic Id",
-                        category="mutually-exclusive",
-                        data={"type": "mutually_exclusive"},
+                        category="structure",
+                        data={},
                     ),
                     _admin=admin,
                     db=db,
@@ -529,7 +528,6 @@ def test_export_all_includes_every_catalog_admin_kind(tmp_path):
                 category="event",
                 data={"subtype": "edict", "requirements": [], "main_effects": [], "alternative_effects": []},
             ),
-            "groups": AdminCatalogEntryCreate(id="test-group", name="Test Group", category="mutually-exclusive", data={"type": "mutually_exclusive"}),
             "levels": AdminCatalogEntryCreate(
                 id="test-level",
                 name="Test Level",

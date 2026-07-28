@@ -3,28 +3,6 @@
   "kind": "images",
   "entries": [
     {
-      "id": "all-players-image",
-      "name": "All Players Image",
-      "kind": "images",
-      "category": "image",
-      "summary": "",
-      "color": null,
-      "data": {
-        "src": "/game-assets/effects/all-players.png"
-      }
-    },
-    {
-      "id": "depose-image",
-      "name": "Depose Image",
-      "kind": "images",
-      "category": "image",
-      "summary": "",
-      "color": null,
-      "data": {
-        "src": "/game-assets/effects/depose.png"
-      }
-    },
-    {
       "id": "destroy-building-image",
       "name": "Destroy Building Image",
       "kind": "images",
@@ -36,14 +14,14 @@
       }
     },
     {
-      "id": "discard-card-image",
-      "name": "Discard Card Image",
+      "id": "reduce-refill-image",
+      "name": "Reduce Refill Image",
       "kind": "images",
       "category": "image",
       "summary": "",
       "color": null,
       "data": {
-        "src": "/game-assets/effects/discard-card.png"
+        "src": "/game-assets/effects/reduce-refill.png"
       }
     },
     {
@@ -55,17 +33,6 @@
       "color": null,
       "data": {
         "src": "/game-assets/effects/draw-card.png"
-      }
-    },
-    {
-      "id": "freeze-image",
-      "name": "Freeze Image",
-      "kind": "images",
-      "category": "image",
-      "summary": "",
-      "color": null,
-      "data": {
-        "src": "/game-assets/effects/freeze.png"
       }
     },
     {

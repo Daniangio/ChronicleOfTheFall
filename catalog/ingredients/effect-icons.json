@@ -95,7 +95,19 @@
       "color": null,
       "data": {
         "effect_type": "discard_cards",
-        "icon_image_id": "discard-card-image"
+        "icon_image_id": "reduce-refill-image"
+      }
+    },
+    {
+      "id": "reduce-refill-draws-effect-icon",
+      "name": "Reduce Refill Draws",
+      "kind": "effect-icons",
+      "category": "effect-icon",
+      "summary": "",
+      "color": null,
+      "data": {
+        "effect_type": "reduce_refill_draws",
+        "icon_image_id": "reduce-refill-image"
       }
     },
     {

@@ -337,7 +337,18 @@ Draw effects do not cause immediate card draw during the Council Docket unless a
 
 ---
 
-## 4.10 Event Token Effects
+## 4.10 Reduced Refill Effects
+
+An Event may make every player draw 1 fewer card during the Hand Refill Phase of
+the current Era. Multiple reduced-refill effects stack, and a player can never
+draw fewer than 0 cards.
+
+Pending draw effects and reduced-refill effects are both applied when determining
+the final number of cards drawn.
+
+---
+
+## 4.11 Event Token Effects
 
 Event token effects use a signed amount for Plague, Unrest, or Fortified.
 
@@ -351,7 +362,7 @@ The Event's Choice Minister makes this decision. If none is named, or if that Mi
 
 ---
 
-## 4.11 Plague Suppression Effects
+## 4.12 Plague Suppression Effects
 
 An Event may state that **Plague does not reduce Morale until the end of the Era**.
 
@@ -1183,6 +1194,8 @@ Each player draws a new hand.
 * The Minister of State draws 4 cards.
 
 If a player has one or more pending draw effects, they draw 1 additional card for each pending draw effect.
+
+Subtract 1 card for each active reduced-refill effect, to a minimum of 0.
 
 After drawing, clear all pending draw effects.
 

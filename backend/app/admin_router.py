@@ -58,7 +58,6 @@ CATALOG_IMPORT_ORDER = {
             "events",
             "effect-icons",
             "agendas",
-            "groups",
             "decks",
             "levels",
         )
@@ -364,11 +363,6 @@ async def admin_list_agendas(_admin: User = Depends(require_admin), db: Session 
 @router.get("/admin/events", response_model=list[AdminCatalogEntry])
 async def admin_list_events(_admin: User = Depends(require_admin), db: Session = Depends(get_db)):
     return _catalog_response(db, "events")
-
-
-@router.get("/admin/groups", response_model=list[AdminCatalogEntry])
-async def admin_list_groups(_admin: User = Depends(require_admin), db: Session = Depends(get_db)):
-    return _catalog_response(db, "groups")
 
 
 @router.get("/admin/levels", response_model=list[AdminCatalogEntry])

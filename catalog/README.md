@@ -39,7 +39,7 @@ Import the files in dependency order:
 4. `levels.json`
 
 `chronicle-catalog-all.json` is the same dynamic template as a single convenience
-import. It intentionally excludes repository ingredients, agendas, and groups
+import. It intentionally excludes repository ingredients and agendas
 when no defaults for those kinds exist.
 
 All files use this envelope:

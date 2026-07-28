@@ -199,6 +199,7 @@ def build_goldfishing_state(
         "pending_event_destroy_building": None,
         "structure_tag_requirement_waivers": 0,
         "plague_morale_suppressed": False,
+        "refill_draw_penalty": 0,
         "war_power_used": False,
         "refill_completed": [],
         "agendas_revealed": False,
@@ -567,7 +568,12 @@ def _refill_hand(state: dict[str, Any], payload: dict[str, Any]) -> None:
     player_id = _require_active_player(state, payload)
     player = _player(state, player_id)
     draw_amount = STATE_REFILL_SIZE if _player_has_ministry(state, player_id, "state") else NORMAL_REFILL_SIZE
-    draw_amount += max(0, int(player.get("pending_draws", 0)))
+    draw_amount = max(
+        0,
+        draw_amount
+        + max(0, int(player.get("pending_draws", 0)))
+        - max(0, int(state.get("refill_draw_penalty", 0))),
+    )
     player["hand"].extend(_draw_empire(state, draw_amount))
     player["pending_draws"] = 0
     state["log"].append(f"{player['name']} refilled with {draw_amount} cards.")
@@ -783,6 +789,7 @@ def _end_era(state: dict[str, Any]) -> None:
     state["war_power_used"] = False
     state["structure_tag_requirement_waivers"] = 0
     state["plague_morale_suppressed"] = False
+    state["refill_draw_penalty"] = 0
     state["suspicion_placements"] = {}
     _assign_ministries(state, rotate=True)
 
@@ -967,7 +974,12 @@ def _possible_actions(state: dict[str, Any]) -> list[dict[str, Any]]:
         return [{"type": "continue_phase"}]
     if phase == "hand_refill":
         draw_amount = STATE_REFILL_SIZE if _player_has_ministry(state, active, "state") else NORMAL_REFILL_SIZE
-        draw_amount += max(0, int(_player(state, active).get("pending_draws", 0)))
+        draw_amount = max(
+            0,
+            draw_amount
+            + max(0, int(_player(state, active).get("pending_draws", 0)))
+            - max(0, int(state.get("refill_draw_penalty", 0))),
+        )
         return [{"type": "refill_hand", "player_id": active, "draw_amount": draw_amount}]
     return []
 
@@ -1280,6 +1292,9 @@ def _apply_event_effects(
             player = _player(state, player_id)
             player["pending_draws"] = int(player.get("pending_draws", 0)) + max(1, amount)
             state["log"].append(f"{player['name']} gained a pending draw.")
+        elif effect_type == "reduce_refill_draws":
+            state["refill_draw_penalty"] = int(state.get("refill_draw_penalty", 0)) + 1
+            state["log"].append("All players will draw one fewer card during Hand Refill.")
         elif effect_type == "suppress_plague_morale":
             state["plague_morale_suppressed"] = True
         elif effect_type == "discard_cards":

@@ -1021,6 +1021,45 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
             4,
         )
 
+    def test_event_reduces_every_players_refill_by_one(self):
+        state = build_state()
+        event = state["catalog"]["events"][0]
+        event["data"].update(
+            {
+                "requirements": [],
+                "main_effects": [{"effect_type": "reduce_refill_draws", "payload": {}}],
+            }
+        )
+        state["phase"] = "reveal"
+        state["council_stack"] = [
+            {
+                "id": "refill-penalty",
+                "item_id": event["id"],
+                "kind": "events",
+                "owner_player_id": "",
+                "face_up": False,
+            }
+        ]
+
+        state = perform_action(state, "reveal_next", {})
+
+        self.assertEqual(state["refill_draw_penalty"], 1)
+        state_player_id = next(
+            holder for ministry_id, holder in state["ministry_assignments"].items()
+            if "state" in ministry_id
+        )
+        ordinary_player = next(player for player in state["players"] if player["id"] != state_player_id)
+        state["phase"] = "hand_refill"
+        state["active_player_id"] = ordinary_player["id"]
+        state["refill_completed"] = []
+        ordinary_player["hand"] = []
+        state = perform_action(state, "refill_hand", {"player_id": ordinary_player["id"]})
+
+        self.assertEqual(
+            len(next(player for player in state["players"] if player["id"] == ordinary_player["id"])["hand"]),
+            2,
+        )
+
     def test_fifth_era_crisis_intake_and_hand_reset_preserve_crises(self):
         state = build_state()
         state["era"] = 5
