@@ -250,6 +250,12 @@ Event token effects use a signed amount for Plague, Unrest, or Fortified.
 Positive values add tokens and negative values remove tokens from the selected
 City or the Empire. A token count can never fall below zero.
 
+An Event may group several signed token changes into one City effect. The
+responsible Minister chooses one City, then every Plague, Unrest, and Fortified
+change in that grouped effect is applied to that same City. The changes are not
+separate placement decisions. The Event's Choice Minister makes this decision;
+if none is named or that Ministry is vacant, the Minister of the Empire decides.
+
 An Event may state that **Plague does not reduce Morale until the end of the
 Era**. While this effect is active, Plague tokens remain on Cities and Plague
 checks still occur, but those checks cause no Morale loss. The effect expires

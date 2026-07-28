@@ -462,6 +462,7 @@ def _validate_event_effects(value: Any) -> None:
         "modify_plague",
         "modify_unrest",
         "modify_fortified",
+        "modify_city_tokens",
         "waive_next_structure_tag_requirement",
     }
     for effect in effects:
@@ -501,6 +502,16 @@ def _validate_event_effects(value: Any) -> None:
         if effect.get("effect_type") in {"modify_plague", "modify_unrest", "modify_fortified"}:
             if int((effect.get("payload") or {}).get("amount") or 0) == 0:
                 raise ValueError("Token effects must add or remove at least one token.")
+        if effect.get("effect_type") == "modify_city_tokens":
+            token_changes = (effect.get("payload") or {}).get("tokens")
+            allowed_token_ids = {"plague-token", "unrest-token", "fortified-token"}
+            if (
+                not isinstance(token_changes, dict)
+                or not token_changes
+                or any(token_id not in allowed_token_ids for token_id in token_changes)
+                or not any(int(amount or 0) != 0 for amount in token_changes.values())
+            ):
+                raise ValueError("Grouped City token effects need at least one valid non-zero token change.")
         condition = effect.get("condition")
         if condition and (
             not isinstance(condition, dict)

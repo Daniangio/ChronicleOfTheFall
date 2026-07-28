@@ -182,6 +182,7 @@ def build_goldfishing_state(
         "pending_placement": None,
         "pending_event_resource_effect": None,
         "pending_event_resource_conversion": None,
+        "pending_event_city_tokens": None,
         "structure_tag_requirement_waivers": 0,
         "plague_morale_suppressed": False,
         "stalled_projects": [],
@@ -245,6 +246,7 @@ def perform_action(state: dict[str, Any], action: str, payload: dict[str, Any] |
         "confirm_docket_order": _confirm_docket_order,
         "choose_event_resource": _choose_event_resource,
         "choose_event_conversion_resource": _choose_event_conversion_resource,
+        "choose_event_token_city": _choose_event_token_city,
         "reveal_next": _reveal_next,
         "place_revealed_card": _place_revealed_card,
         "place_queued_project": _place_queued_project,
@@ -899,6 +901,16 @@ def _possible_actions(state: dict[str, Any]) -> list[dict[str, Any]]:
         ]
         return [*actions, {"type": "confirm_docket_order", "player_id": active}]
     if phase == "reveal":
+        pending_city_tokens = state.get("pending_event_city_tokens")
+        if pending_city_tokens:
+            return [
+                {
+                    "type": "choose_event_token_city",
+                    "player_id": pending_city_tokens["decision_player_id"],
+                    "city_id": city["id"],
+                }
+                for city in state.get("cities", [])
+            ]
         pending_conversion = state.get("pending_event_resource_conversion")
         if pending_conversion:
             return [
@@ -940,6 +952,16 @@ def _possible_actions(state: dict[str, Any]) -> list[dict[str, Any]]:
             for project_id in ["", *[project["id"] for project in state["stalled_projects"]]]
         ]
     if phase == "crisis":
+        pending_city_tokens = state.get("pending_event_city_tokens")
+        if pending_city_tokens:
+            return [
+                {
+                    "type": "choose_event_token_city",
+                    "player_id": pending_city_tokens["decision_player_id"],
+                    "city_id": city["id"],
+                }
+                for city in state.get("cities", [])
+            ]
         pending_conversion = state.get("pending_event_resource_conversion")
         if pending_conversion:
             return [
@@ -1300,6 +1322,21 @@ def _apply_event_effects(
                     token_id,
                     amount,
                 )
+        elif effect_type == "modify_city_tokens" and state.get("cities"):
+            if len(state["cities"]) > 1:
+                decision_player = _event_choice_minister_player(state, event)
+                state["pending_event_city_tokens"] = {
+                    "event_id": event["id"],
+                    "token_changes": dict(payload.get("tokens") or {}),
+                    "city_ids": [city["id"] for city in state["cities"]],
+                    "remaining_effects": list(effects[index + 1:]),
+                    "continuation": continuation,
+                    "requirements_met": requirements_met,
+                    "decision_player_id": decision_player,
+                }
+                state["active_player_id"] = decision_player
+                return False
+            _apply_city_token_changes(state["cities"][0], payload.get("tokens") or {})
         elif effect_type == "waive_next_structure_tag_requirement":
             state["structure_tag_requirement_waivers"] = (
                 int(state.get("structure_tag_requirement_waivers", 0)) + 1
@@ -1319,6 +1356,12 @@ def _modify_token_count(tokens: dict[str, int], token_id: str, amount: int) -> N
         tokens[token_id] = next_amount
     else:
         tokens.pop(token_id, None)
+
+
+def _apply_city_token_changes(city: dict[str, Any], token_changes: dict[str, Any]) -> None:
+    city_tokens = city.setdefault("condition_tokens", {})
+    for token_id, amount in token_changes.items():
+        _modify_token_count(city_tokens, str(token_id), int(amount or 0))
 
 
 def _event_resource_choices(state: dict[str, Any], amount: int) -> list[str]:
@@ -1469,6 +1512,37 @@ def _choose_event_resource(state: dict[str, Any], payload: dict[str, Any]) -> No
     continuation = pending["continuation"]
     requirements_met = bool(pending["requirements_met"])
     state["pending_event_resource_effect"] = None
+    completed = _apply_event_effects(
+        state,
+        event,
+        remaining_effects,
+        continuation=continuation,
+        requirements_met=requirements_met,
+    )
+    if completed:
+        _complete_event_resolution(
+            state,
+            event,
+            continuation=continuation,
+            requirements_met=requirements_met,
+        )
+
+
+def _choose_event_token_city(state: dict[str, Any], payload: dict[str, Any]) -> None:
+    pending = state.get("pending_event_city_tokens")
+    if not pending:
+        raise ValueError("No grouped City token choice is pending.")
+    _require_decision_player(state, payload, pending["decision_player_id"])
+    city_id = str(payload.get("city_id") or "")
+    if city_id not in pending["city_ids"]:
+        raise ValueError("That City is not an eligible token target.")
+    city = next(city for city in state["cities"] if city["id"] == city_id)
+    _apply_city_token_changes(city, pending["token_changes"])
+    event = event_by_id(state, pending["event_id"])
+    remaining_effects = pending["remaining_effects"]
+    continuation = pending["continuation"]
+    requirements_met = bool(pending["requirements_met"])
+    state["pending_event_city_tokens"] = None
     completed = _apply_event_effects(
         state,
         event,

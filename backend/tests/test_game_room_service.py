@@ -631,6 +631,67 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
         state = perform_action(state, "reveal_next", {})
         self.assertEqual(state["cities"][0]["condition_tokens"], {})
 
+    def test_grouped_event_token_effect_applies_every_change_to_one_city(self):
+        state = build_state()
+        state["cities"].append(
+            {
+                "id": "frontier",
+                "name": "Frontier",
+                "city_card_id": "capital",
+                "building_slots": 4,
+                "cards": [],
+                "condition_tokens": {},
+            }
+        )
+        event = state["catalog"]["events"][0]
+        event["data"].update(
+            {
+                "requirements": [],
+                "main_effects": [
+                    {
+                        "effect_type": "modify_city_tokens",
+                        "payload": {
+                            "tokens": {
+                                "plague-token": 1,
+                                "unrest-token": 2,
+                                "fortified-token": 1,
+                            }
+                        },
+                    }
+                ],
+            }
+        )
+        state["phase"] = "reveal"
+        state["council_stack"] = [
+            {
+                "id": "fortified-riots",
+                "item_id": event["id"],
+                "kind": "events",
+                "owner_player_id": "",
+                "face_up": False,
+            }
+        ]
+
+        state = perform_action(state, "reveal_next", {})
+        self.assertEqual(state["cities"][0]["condition_tokens"], {})
+        self.assertEqual(
+            {action["city_id"] for action in state["possible_actions"]},
+            {"capital", "frontier"},
+        )
+
+        choice = next(
+            action
+            for action in state["possible_actions"]
+            if action["city_id"] == "frontier"
+        )
+        state = perform_action(state, "choose_event_token_city", choice)
+
+        self.assertEqual(
+            state["cities"][1]["condition_tokens"],
+            {"plague-token": 1, "unrest-token": 2, "fortified-token": 1},
+        )
+        self.assertEqual(state["cities"][0]["condition_tokens"], {})
+
     def test_condition_phase_applies_plague_morale_loss_per_city(self):
         state = build_state()
         state["cities"][0]["condition_tokens"] = {"plague-token": 2}

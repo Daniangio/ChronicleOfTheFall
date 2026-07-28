@@ -253,6 +253,32 @@ const GameRoomPage = () => {
   const boardWidth = Math.max(760, (gameState.cities?.length || 1) * 610);
 
   const renderPhaseControls = () => {
+    const tokenCityChoices = actions.filter((entry) => entry.type === "choose_event_token_city");
+    if (tokenCityChoices.length) {
+      return (
+        <div>
+          <p className="mb-2 text-sm font-semibold text-amber-100">
+            Choose one City for all token changes
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {tokenCityChoices.map((entry) => {
+              const city = gameState.cities.find((candidate) => candidate.id === entry.city_id);
+              return (
+                <button
+                  key={entry.city_id}
+                  className="rounded-md border border-amber-800 bg-stone-950 px-3 py-2 text-sm font-semibold text-amber-100 hover:bg-amber-950/50 disabled:opacity-50"
+                  disabled={busy}
+                  onClick={() => performAction(entry)}
+                  type="button"
+                >
+                  {city?.name || entry.city_id}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      );
+    }
     const conversionChoices = actions.filter((entry) => entry.type === "choose_event_conversion_resource");
     if (conversionChoices.length) {
       const stage = conversionChoices[0].stage;

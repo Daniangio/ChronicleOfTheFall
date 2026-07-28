@@ -58,6 +58,7 @@ const effectFallbackIcon = (effectType) => ({
   modify_plague: HeartPulse,
   modify_unrest: Flame,
   modify_fortified: Shield,
+  modify_city_tokens: CirclePlus,
   suppress_plague_morale: HeartPulse,
   waive_next_structure_tag_requirement: CirclePlus,
   add_building_slots: Grid2X2,
@@ -448,6 +449,39 @@ const EventEffectToken = ({ effect, eventMinistry, ministryLookup, effectIconLoo
         ) : null}
         <EventEffectIcon effectType={effect.effect_type} effectIconLookup={effectIconLookup} imageLookup={imageLookup} fallback={fallback} label={humanizeKey(effect.effect_type)} tone={amount >= 0 ? "emerald" : "rose"} />
         <span className={`text-xs font-bold ${amount >= 0 ? "text-emerald-200" : "text-rose-200"}`}>{amount >= 0 ? `+${amount}` : amount}</span>
+      </span>
+    );
+  }
+  if (effect?.effect_type === "modify_city_tokens") {
+    const tokenEffects = [
+      ["plague-token", "modify_plague", HeartPulse],
+      ["unrest-token", "modify_unrest", Flame],
+      ["fortified-token", "modify_fortified", Shield],
+    ].filter(([tokenId]) => Number(payload.tokens?.[tokenId] || 0) !== 0);
+    return (
+      <span className="inline-flex items-center gap-1">
+        <span className="inline-flex h-6 w-6 items-center justify-center text-amber-200" title="Apply all tokens to the same City">
+          <Building2 className="h-5 w-5" aria-hidden="true" />
+          <span className="sr-only">Same City</span>
+        </span>
+        {tokenEffects.map(([tokenId, effectType, fallback]) => {
+          const tokenAmount = Number(payload.tokens[tokenId]);
+          return (
+            <span key={tokenId} className="inline-flex items-center gap-0.5">
+              <EventEffectIcon
+                effectType={effectType}
+                effectIconLookup={effectIconLookup}
+                imageLookup={imageLookup}
+                fallback={fallback}
+                label={humanizeKey(tokenId)}
+                tone={tokenAmount >= 0 ? "emerald" : "rose"}
+              />
+              <span className={`text-xs font-bold ${tokenAmount >= 0 ? "text-emerald-200" : "text-rose-200"}`}>
+                {tokenAmount >= 0 ? `+${tokenAmount}` : tokenAmount}
+              </span>
+            </span>
+          );
+        })}
       </span>
     );
   }

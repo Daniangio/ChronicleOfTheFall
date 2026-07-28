@@ -147,6 +147,18 @@
       }
     },
     {
+      "id": "modify-city-tokens-effect-icon",
+      "name": "Modify Multiple Tokens on One City",
+      "kind": "effect-icons",
+      "category": "effect-icon",
+      "summary": "",
+      "color": null,
+      "data": {
+        "effect_type": "modify_city_tokens",
+        "icon_image_id": "effect-modify-token"
+      }
+    },
+    {
       "id": "waive-next-structure-tag-requirement-effect-icon",
       "name": "Waive Next Structure Tag Requirement",
       "kind": "effect-icons",

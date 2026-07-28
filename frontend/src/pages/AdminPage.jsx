@@ -1090,6 +1090,7 @@ const effectIconCodeOptions = [
   { value: "modify_plague", label: "Modify Plague" },
   { value: "modify_unrest", label: "Modify Unrest" },
   { value: "modify_fortified", label: "Modify Fortified" },
+  { value: "modify_city_tokens", label: "Modify Multiple Tokens on One City" },
   { value: "suppress_plague_morale", label: "Plague Does Not Reduce Morale This Era" },
   { value: "waive_next_structure_tag_requirement", label: "Waive Next Structure Tag Requirement" },
   { value: "add_building_slots", label: "Add Building Slots" },
@@ -1477,6 +1478,7 @@ const eventEffectOptions = [
   { value: "modify_plague", label: "Add or remove Plague tokens" },
   { value: "modify_unrest", label: "Add or remove Unrest tokens" },
   { value: "modify_fortified", label: "Add or remove Fortified tokens" },
+  { value: "modify_city_tokens", label: "Add or remove multiple tokens on one City" },
   { value: "suppress_plague_morale", label: "Plague does not reduce Morale this Era" },
   { value: "waive_next_structure_tag_requirement", label: "Waive 1 tag on next Structure" },
 ];
@@ -1616,6 +1618,30 @@ const EventEffects = ({ effects, setEffects, tagEntries, pillarEntries }) => {
                   onChange={(scope) => updatePayload(index, { scope })}
                 />
                 <NumberField label="Change" value={effect.payload?.amount ?? 1} onChange={(amount) => updatePayload(index, { amount })} />
+              </>
+            ) : effect.effect_type === "modify_city_tokens" ? (
+              <>
+                <NumberField
+                  label="Plague"
+                  value={effect.payload?.tokens?.["plague-token"] ?? 0}
+                  onChange={(amount) => updatePayload(index, {
+                    tokens: { ...(effect.payload?.tokens || {}), "plague-token": amount },
+                  })}
+                />
+                <NumberField
+                  label="Unrest"
+                  value={effect.payload?.tokens?.["unrest-token"] ?? 0}
+                  onChange={(amount) => updatePayload(index, {
+                    tokens: { ...(effect.payload?.tokens || {}), "unrest-token": amount },
+                  })}
+                />
+                <NumberField
+                  label="Fortified"
+                  value={effect.payload?.tokens?.["fortified-token"] ?? 0}
+                  onChange={(amount) => updatePayload(index, {
+                    tokens: { ...(effect.payload?.tokens || {}), "fortified-token": amount },
+                  })}
+                />
               </>
             ) : effect.effect_type === "suppress_plague_morale" ? (
               <p className="self-end pb-2 text-sm text-slate-400 sm:col-span-2">
