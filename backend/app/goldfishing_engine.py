@@ -24,6 +24,7 @@ PHASES = (
     "reveal",
     "stalled_vote",
     "crisis",
+    "condition",
     "storage",
     "cleanup",
     "game_over",
@@ -182,6 +183,7 @@ def build_goldfishing_state(
         "pending_event_resource_effect": None,
         "pending_event_resource_conversion": None,
         "structure_tag_requirement_waivers": 0,
+        "plague_morale_suppressed": False,
         "stalled_projects": [],
         "queued_projects": [],
         "votes": {},
@@ -340,7 +342,9 @@ def _continue_phase(state: dict[str, Any], _payload: dict[str, Any]) -> None:
     elif phase == "crisis":
         if state.get("current_crisis_id"):
             raise ValueError("The current Crisis must be resolved.")
-        _begin_storage(state)
+        _begin_condition(state)
+    elif phase == "condition":
+        _run_condition_phase(state)
     elif phase == "storage":
         state["stored_resources"] = {}
         state["global_resource_pool"] = {}
@@ -767,6 +771,29 @@ def _begin_crisis(state: dict[str, Any]) -> None:
         state["log"].append("The Crisis Deck is empty.")
 
 
+def _begin_condition(state: dict[str, Any]) -> None:
+    state["phase"] = "condition"
+    state["active_player_id"] = state["minister_of_empire_player_id"]
+    state["log"].append("Condition Phase began.")
+
+
+def _run_condition_phase(state: dict[str, Any]) -> None:
+    if state.get("plague_morale_suppressed"):
+        state["log"].append("Plague did not reduce Morale this Era.")
+        _begin_storage(state)
+        return
+    morale_pillar_id = _pillar_id_by_name(state, "morale")
+    for city in state.get("cities", []):
+        plague = int(city.get("condition_tokens", {}).get("plague-token", 0))
+        sanitary = int(_city_tag_counts(state, city).get("sanitary", 0))
+        if plague > sanitary:
+            _modify_pillar(state, morale_pillar_id, -1)
+            state["log"].append(
+                f"{city.get('name', 'A City')} lost 1 Morale because Plague exceeded Sanitary."
+            )
+    _begin_storage(state)
+
+
 def _begin_storage(state: dict[str, Any]) -> None:
     state["phase"] = "storage"
     state["active_player_id"] = _ministry_holder(state, "cities") or state["minister_of_empire_player_id"]
@@ -798,6 +825,7 @@ def _end_era(state: dict[str, Any]) -> None:
     state["epoch"] = state["era"]
     state["war_power_used"] = False
     state["structure_tag_requirement_waivers"] = 0
+    state["plague_morale_suppressed"] = False
     state["suspicion_placements"] = {}
     state["votes"] = {}
     _begin_ministry_assignment(state, rotate=True)
@@ -941,6 +969,8 @@ def _possible_actions(state: dict[str, Any]) -> list[dict[str, Any]]:
         if _ministry_holder(state, "war") and not state.get("war_power_used"):
             actions.append({"type": "resolve_crisis", "use_war_power": True})
         return actions
+    if phase == "condition":
+        return [{"type": "continue_phase"}]
     if phase == "storage":
         generic, specific = _storage_capacity(state)
         if not state.get("global_resource_pool") or generic + sum(specific.values()) <= 0:
@@ -1256,6 +1286,8 @@ def _apply_event_effects(
                 state["log"].append(
                     f"{_player(state, player_id)['name']} drew a card for {event.get('name', event['id'])}."
                 )
+        elif effect_type == "suppress_plague_morale":
+            state["plague_morale_suppressed"] = True
         elif effect_type == "discard_cards":
             _discard_for_event(state, payload, event)
         elif effect_type in {"modify_plague", "modify_unrest", "modify_fortified"}:
@@ -1471,7 +1503,7 @@ def _complete_event_resolution(
     )
     state["crisis_discard"].append(event_id)
     state["current_crisis_id"] = ""
-    _begin_storage(state)
+    _begin_condition(state)
 
 
 def _effect_condition_met(state: dict[str, Any], condition: dict[str, Any] | None) -> bool:
@@ -1565,6 +1597,21 @@ def _modify_pillar(state: dict[str, Any], pillar_id: str, amount: int) -> None:
     maximum = int((entry.get("data") or {}).get("max", 10)) if entry else 10
     current = int(state["pillars"].get(pillar_id, 0))
     state["pillars"][pillar_id] = max(minimum, min(maximum, current + amount))
+
+
+def _pillar_id_by_name(state: dict[str, Any], name: str) -> str:
+    normalized = name.strip().lower()
+    if normalized in state.get("pillars", {}):
+        return normalized
+    entry = next(
+        (
+            pillar
+            for pillar in state.get("catalog", {}).get("pillars", [])
+            if normalized in f"{pillar.get('id', '')} {pillar.get('name', '')}".lower()
+        ),
+        None,
+    )
+    return str(entry.get("id") or "") if entry else normalized
 
 
 def _storage_capacity(state: dict[str, Any]) -> tuple[int, dict[str, int]]:

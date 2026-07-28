@@ -370,7 +370,7 @@ const GameRoomPage = () => {
     }
     if (phase === "crisis") {
       if (!gameState.current_crisis_id) {
-        return <button className="rounded-md bg-amber-300 px-4 py-2 text-sm font-bold text-stone-950 hover:bg-amber-200 disabled:opacity-50" disabled={busy} onClick={() => perform("continue_phase")} type="button">Continue to Storage</button>;
+        return <button className="rounded-md bg-amber-300 px-4 py-2 text-sm font-bold text-stone-950 hover:bg-amber-200 disabled:opacity-50" disabled={busy} onClick={() => perform("continue_phase")} type="button">Continue to Conditions</button>;
       }
       return (
         <div className="flex flex-wrap gap-2">
@@ -382,6 +382,9 @@ const GameRoomPage = () => {
           ))}
         </div>
       );
+    }
+    if (phase === "condition") {
+      return <button className="rounded-md bg-amber-300 px-4 py-2 text-sm font-bold text-stone-950 hover:bg-amber-200 disabled:opacity-50" disabled={busy} onClick={() => perform("continue_phase")} type="button">Resolve Conditions</button>;
     }
     if (phase === "storage") {
       if (!storageAction) {

@@ -1090,6 +1090,7 @@ const effectIconCodeOptions = [
   { value: "modify_plague", label: "Modify Plague" },
   { value: "modify_unrest", label: "Modify Unrest" },
   { value: "modify_fortified", label: "Modify Fortified" },
+  { value: "suppress_plague_morale", label: "Plague Does Not Reduce Morale This Era" },
   { value: "waive_next_structure_tag_requirement", label: "Waive Next Structure Tag Requirement" },
   { value: "add_building_slots", label: "Add Building Slots" },
   { value: "storage", label: "Storage" },
@@ -1476,6 +1477,7 @@ const eventEffectOptions = [
   { value: "modify_plague", label: "Add or remove Plague tokens" },
   { value: "modify_unrest", label: "Add or remove Unrest tokens" },
   { value: "modify_fortified", label: "Add or remove Fortified tokens" },
+  { value: "suppress_plague_morale", label: "Plague does not reduce Morale this Era" },
   { value: "waive_next_structure_tag_requirement", label: "Waive 1 tag on next Structure" },
 ];
 
@@ -1615,6 +1617,10 @@ const EventEffects = ({ effects, setEffects, tagEntries, pillarEntries }) => {
                 />
                 <NumberField label="Change" value={effect.payload?.amount ?? 1} onChange={(amount) => updatePayload(index, { amount })} />
               </>
+            ) : effect.effect_type === "suppress_plague_morale" ? (
+              <p className="self-end pb-2 text-sm text-slate-400 sm:col-span-2">
+                Until this Era ends, Plague checks do not reduce Morale.
+              </p>
             ) : (
               <p className="self-end pb-2 text-sm text-slate-400 sm:col-span-2">Applies to the shared Empire pool.</p>
             )}
@@ -2997,7 +3003,7 @@ const AdminPage = () => {
                     {category}
                   </h2>
                 ) : null}
-                <div className="grid gap-4 md:grid-cols-5">
+                <div className="grid gap-4 md:grid-cols-5 xl:grid-cols-6">
                   {entries.map((entry) => {
                     const actionButtons = isReadOnlyCatalogSection ? null : (
                       <>
@@ -3034,7 +3040,7 @@ const AdminPage = () => {
                           actions={entry.kind === "events" ? null : actionButtons}
                         />
                         {entry.kind === "events" && actionButtons ? (
-                          <div className="flex flex-wrap gap-2 rounded-lg border border-slate-800 bg-slate-900 p-3">
+                          <div className="flex flex-wrap gap-2 w-[clamp(12rem,16vw,15rem)] rounded-lg border border-slate-800 bg-slate-900 p-3">
                             {actionButtons}
                           </div>
                         ) : null}

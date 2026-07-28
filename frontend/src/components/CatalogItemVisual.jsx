@@ -58,6 +58,7 @@ const effectFallbackIcon = (effectType) => ({
   modify_plague: HeartPulse,
   modify_unrest: Flame,
   modify_fortified: Shield,
+  suppress_plague_morale: HeartPulse,
   waive_next_structure_tag_requirement: CirclePlus,
   add_building_slots: Grid2X2,
   storage: Archive,
@@ -438,6 +439,18 @@ const EventEffectToken = ({ effect, eventMinistry, ministryLookup, effectIconLoo
         <EventEffectIcon effectType={effect.effect_type} effectIconLookup={effectIconLookup} imageLookup={imageLookup} fallback={fallback} label={humanizeKey(effect.effect_type)} tone={amount >= 0 ? "emerald" : "rose"} />
         <span className={`text-xs font-bold ${amount >= 0 ? "text-emerald-200" : "text-rose-200"}`}>{amount >= 0 ? `+${amount}` : amount}</span>
       </span>
+    );
+  }
+  if (effect?.effect_type === "suppress_plague_morale") {
+    return (
+      <EventEffectIcon
+        effectType="suppress_plague_morale"
+        effectIconLookup={effectIconLookup}
+        imageLookup={imageLookup}
+        fallback={HeartPulse}
+        label="Plague does not reduce Morale until the end of this Era"
+        tone="emerald"
+      />
     );
   }
   if (effect?.effect_type === "waive_next_structure_tag_requirement") {

@@ -39,7 +39,7 @@ const AuthenticatedLayout = ({ children, onLogout }) => {
 
   return (
     <main className="imperial-theme min-h-screen bg-slate-950 px-4 py-6 text-slate-100">
-      <div className="mx-auto max-w-6xl">
+      <div className="mx-auto max-w-8xl">
         <header className="mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-amber-900/60 pb-4">
           <NavLink to="/lobby" className="text-lg font-semibold text-amber-50">
             Echoes of Empire

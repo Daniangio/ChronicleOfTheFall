@@ -250,6 +250,11 @@ Event token effects use a signed amount for Plague, Unrest, or Fortified.
 Positive values add tokens and negative values remove tokens from the selected
 City or the Empire. A token count can never fall below zero.
 
+An Event may state that **Plague does not reduce Morale until the end of the
+Era**. While this effect is active, Plague tokens remain on Cities and Plague
+checks still occur, but those checks cause no Morale loss. The effect expires
+when the Era ends.
+
 Example:
 
 **Ratborne Fever**
@@ -902,6 +907,9 @@ If a City has more Plague tokens than Sanitary tags, lose 1 Morale.
 
 Then leave the Plague tokens in place.
 
+If an effect prevents Plague from reducing Morale for the current Era, perform
+the check but do not lose Morale. The Plague tokens remain in place.
+
 Example:
 
 The Capital has:
@@ -964,12 +972,12 @@ The Minister of War chooses one resolution:
 ### Suppress the Revolt
 
 Remove all Unrest from that City.
-Lose 1 Morale.
+Lose 2 Morale.
 
 ### Buy Peace
 
 Remove all Unrest from that City.
-Lose 1 Treasury.
+Lose 2 Treasury.
 
 ### Let It Burn
 

@@ -6,6 +6,7 @@ from backend.app.game_room_service import GameRoomService, ROOM_STATE_FINISHED, 
 from backend.app.goldfishing_engine import (
     _apply_on_build_effects,
     _begin_ministry_assignment,
+    _end_era,
     build_goldfishing_state,
     perform_action,
 )
@@ -629,6 +630,51 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
 
         state = perform_action(state, "reveal_next", {})
         self.assertEqual(state["cities"][0]["condition_tokens"], {})
+
+    def test_condition_phase_applies_plague_morale_loss_per_city(self):
+        state = build_state()
+        state["cities"][0]["condition_tokens"] = {"plague-token": 2}
+        state["phase"] = "condition"
+
+        state = perform_action(state, "continue_phase", {})
+
+        self.assertEqual(state["pillars"]["morale"], 4)
+        self.assertEqual(state["cities"][0]["condition_tokens"], {"plague-token": 2})
+        self.assertEqual(state["phase"], "storage")
+
+    def test_event_can_suppress_plague_morale_loss_until_era_end(self):
+        state = build_state()
+        event = state["catalog"]["events"][0]
+        event["data"].update(
+            {
+                "requirements": [],
+                "main_effects": [{"effect_type": "suppress_plague_morale", "payload": {}}],
+            }
+        )
+        state["phase"] = "reveal"
+        state["council_stack"] = [
+            {
+                "id": "plague-relief",
+                "item_id": event["id"],
+                "kind": "events",
+                "owner_player_id": "",
+                "face_up": False,
+            }
+        ]
+
+        state = perform_action(state, "reveal_next", {})
+        self.assertTrue(state["plague_morale_suppressed"])
+
+        state["cities"][0]["condition_tokens"] = {"plague-token": 2}
+        state["phase"] = "condition"
+        state = perform_action(state, "continue_phase", {})
+
+        self.assertEqual(state["pillars"]["morale"], 5)
+        self.assertEqual(state["cities"][0]["condition_tokens"], {"plague-token": 2})
+        self.assertEqual(state["phase"], "storage")
+
+        _end_era(state)
+        self.assertFalse(state["plague_morale_suppressed"])
 
     def test_specific_and_generic_storage_are_validated(self):
         warehouse = catalog_entry(

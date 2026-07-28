@@ -455,6 +455,7 @@ def _validate_event_effects(value: Any) -> None:
         "modify_resources",
         "convert_resources",
         "draw_card",
+        "suppress_plague_morale",
         "destroy_building",
         "remove_all_resources",
         "discard_cards",

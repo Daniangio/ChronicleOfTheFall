@@ -399,6 +399,17 @@
       }
     },
     {
+      "id": "effect-suppress-plague-morale",
+      "name": "Suppress Plague Morale Loss Effect",
+      "kind": "images",
+      "category": "image",
+      "summary": "",
+      "color": null,
+      "data": {
+        "src": "/game-assets/effects/suppress-plague-morale.svg"
+      }
+    },
+    {
       "id": "effect-add-building-slots",
       "name": "Add Building Slots Effect",
       "kind": "images",

@@ -135,6 +135,18 @@
       }
     },
     {
+      "id": "suppress-plague-morale-effect-icon",
+      "name": "Suppress Plague Morale Loss",
+      "kind": "effect-icons",
+      "category": "effect-icon",
+      "summary": "",
+      "color": null,
+      "data": {
+        "effect_type": "suppress_plague_morale",
+        "icon_image_id": "effect-suppress-plague-morale"
+      }
+    },
+    {
       "id": "waive-next-structure-tag-requirement-effect-icon",
       "name": "Waive Next Structure Tag Requirement",
       "kind": "effect-icons",
