@@ -303,19 +303,27 @@ const MinisterAbilities = ({ entry, tagLookup }) => {
               : "");
   const abilitiesByRole = {
     empire: [
-      "Leads turn order and breaks ties.",
-      "Decides for a missing Minister.",
-      "Chooses the order of simultaneous effects.",
+      "Cannot receive Suspicion.",
+      "Orders cards in the Council Docket.",
+      "Decides whenever the responsible Minister is missing.",
     ],
     cities: [
-      "Places all Buildings and Cities.",
+      "Places all Structures and Cities.",
       "Chooses which leftover resources the Empire stores.",
     ],
-    state: ["Draws four cards during Hand Refill instead of three."],
-    health: ["Cannot be forced to discard cards from hand or Scheme Slots."],
+    state: [
+      "Places Unrest.",
+      "Draws up to four cards during Hand Refill instead of three.",
+    ],
+    health: [
+      "Places Plague.",
+      "Chooses resources gained by general resource effects.",
+      "Chooses resource conversions, including how many to convert up to the limit.",
+    ],
     war: [
-      "Resolves City Revolts and Imperial Unrest Crises.",
-      "May add +1 Crisis defense, or +2 while the Empire has a Military tag, once per Era.",
+      "Resolves Unrest Crises and usually handles military Crises.",
+      "Chooses Structures destroyed in Cities.",
+      "Places Fortified tokens.",
     ],
   };
   const abilities = abilitiesByRole[role] || [];
@@ -680,7 +688,7 @@ const CatalogItemVisual = ({ entry, tags = [], cards = [], groups = [], ministri
   }
 
   return (
-    <article className="overflow-hidden rounded-lg border border-slate-800 bg-slate-900">
+    <article className="rounded-lg border border-slate-800 bg-slate-900">
       <div className="h-1.5" style={{ backgroundColor: color }} />
       <div className="p-4">
         <div className="flex items-start justify-between gap-3">

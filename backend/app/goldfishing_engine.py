@@ -13,21 +13,18 @@ EMPIRE_HAND_SIZE = 1
 NORMAL_REFILL_SIZE = 3
 STATE_REFILL_SIZE = 4
 SCHEME_SLOTS = 2
-STALLED_VOTE_THRESHOLD = 2
 MINISTRY_ROTATION_ORDER = ("cities", "state", "war", "health")
 
 PHASES = (
     "suspicion",
     "production",
-    "queued_projects",
     "plotting",
+    "hand_reset",
     "docket_ordering",
     "reveal",
-    "stalled_vote",
     "condition",
     "storage",
     "crisis_intake",
-    "hand_reset",
     "hand_refill",
     "cleanup",
     "game_over",
@@ -87,6 +84,7 @@ def build_goldfishing_state(
     deck_id: str,
     initial_city_card_id: str = "capital-foundation",
     level_id: str = "",
+    suspicion_start_era: int = 5,
     event_entries: list[dict[str, Any]] | None = None,
     agenda_entries: list[dict[str, Any]] | None = None,
     ministry_entries: list[dict[str, Any]] | None = None,
@@ -178,6 +176,7 @@ def build_goldfishing_state(
         "room_id": room_id,
         "era": 1,
         "epoch": 1,
+        "suspicion_start_era": max(1, int(suspicion_start_era)),
         "phase": "suspicion",
         "active_player_id": "player-1",
         "minister_of_empire_player_id": "player-1",
@@ -197,11 +196,9 @@ def build_goldfishing_state(
         "pending_event_resource_effect": None,
         "pending_event_resource_conversion": None,
         "pending_event_city_tokens": None,
+        "pending_event_destroy_building": None,
         "structure_tag_requirement_waivers": 0,
         "plague_morale_suppressed": False,
-        "stalled_projects": [],
-        "queued_projects": [],
-        "votes": {},
         "war_power_used": False,
         "refill_completed": [],
         "agendas_revealed": False,
@@ -262,10 +259,9 @@ def perform_action(state: dict[str, Any], action: str, payload: dict[str, Any] |
         "choose_event_resource": _choose_event_resource,
         "choose_event_conversion_resource": _choose_event_conversion_resource,
         "choose_event_token_city": _choose_event_token_city,
+        "choose_event_destroy_building": _choose_event_destroy_building,
         "reveal_next": _reveal_next,
         "place_revealed_card": _place_revealed_card,
-        "place_queued_project": _place_queued_project,
-        "vote_stalled_project": _vote_stalled_project,
         "store_resources": _store_resources,
         "refill_hand": _refill_hand,
     }
@@ -318,21 +314,46 @@ def _place_suspicion(state: dict[str, Any], payload: dict[str, Any]) -> None:
         state["log"].append(f"{_player(state, player_id)['name']} placed no Suspicion.")
     _advance_ordered_player(state, completed_ids=set(state["suspicion_placements"]))
     if len(state["suspicion_placements"]) == len(state["players"]):
+        _apply_suspicion_depositions(state)
         state["phase"] = "production"
         state["active_player_id"] = state["minister_of_empire_player_id"]
         state["log"].append("Production Phase began.")
+
+
+def _must_commit_face_up(player: dict[str, Any]) -> bool:
+    return int(player.get("suspicion", 0)) >= 2
+
+
+def _cannot_commit_events(state: dict[str, Any], player: dict[str, Any]) -> bool:
+    threshold = 2 if len(state.get("players", [])) == 3 else 3
+    return int(player.get("suspicion", 0)) >= threshold
+
+
+def _apply_suspicion_depositions(state: dict[str, Any]) -> None:
+    empire_player_id = state["minister_of_empire_player_id"]
+    for player in state["players"]:
+        player["hand_revealed"] = False
+        if player["id"] == empire_player_id or not _cannot_commit_events(state, player):
+            continue
+        lost_ministry_ids = [
+            ministry_id
+            for ministry_id in player.get("ministry_ids", [])
+            if state.get("ministry_assignments", {}).get(ministry_id) == player["id"]
+        ]
+        for ministry_id in lost_ministry_ids:
+            state["ministry_assignments"].pop(ministry_id, None)
+        player["ministry_ids"] = [
+            ministry_id for ministry_id in player.get("ministry_ids", [])
+            if ministry_id not in lost_ministry_ids
+        ]
+        state["log"].append(f"{player['name']} was deposed for this Era.")
 
 
 def _continue_phase(state: dict[str, Any], _payload: dict[str, Any]) -> None:
     phase = state.get("phase")
     if phase == "production":
         _run_production(state)
-        state["phase"] = "queued_projects"
-        state["log"].append("Queued Project Resolution began.")
-    elif phase == "queued_projects":
-        if state.get("pending_placement"):
-            raise ValueError("A queued project still needs placement.")
-        _process_queued_projects(state)
+        _begin_plotting(state)
     elif phase == "reveal":
         if state.get("pending_placement"):
             raise ValueError("The revealed card still needs placement.")
@@ -364,13 +385,13 @@ def _commit_card(state: dict[str, Any], payload: dict[str, Any]) -> None:
         raise ValueError("Committed card is not available.")
     item_id = str(cards[index])
     item = item_by_id(state, item_id)
-    if int(player.get("suspicion", 0)) >= 3 and _is_event(item):
-        raise ValueError("A player with 3 or more Suspicion cannot commit an Event.")
+    if _cannot_commit_events(state, player) and _is_event(item):
+        raise ValueError("A deposed player cannot commit an Event.")
     if source == "hand":
         cards.pop(index)
     else:
         cards[index] = None
-    face_up = int(player.get("suspicion", 0)) >= 2
+    face_up = _must_commit_face_up(player)
     state["commitments"].append(
         {
             "id": f"commitment-{uuid.uuid4().hex[:10]}",
@@ -392,7 +413,17 @@ def _commit_none(state: dict[str, Any], payload: dict[str, Any]) -> None:
     player_id = _require_active_player(state, payload)
     if _legal_commit_options(state, _player(state, player_id)):
         raise ValueError("This player has a legal card to commit.")
-    _player(state, player_id)["committed"] = True
+    player = _player(state, player_id)
+    if _cannot_commit_events(state, player):
+        visible_cards = [
+            item_id
+            for item_id in [*player.get("hand", []), *player.get("scheme_slots", [])]
+            if item_id
+        ]
+        player["hand_revealed"] = bool(visible_cards) and all(
+            _is_event(item_by_id(state, item_id)) for item_id in visible_cards
+        )
+    player["committed"] = True
     state["log"].append(f"{_player(state, player_id)['name']} could not commit a card.")
     _advance_plotting(state)
 
@@ -462,7 +493,7 @@ def _reveal_next(state: dict[str, Any], _payload: dict[str, Any]) -> None:
         raise ValueError("The current card needs placement.")
     stack = state.get("council_stack", [])
     if not stack:
-        _begin_stalled_vote_or_condition(state)
+        _begin_condition(state)
         return
     commitment = stack.pop(0)
     item = item_by_id(state, commitment["item_id"])
@@ -508,52 +539,6 @@ def _place_revealed_card(state: dict[str, Any], payload: dict[str, Any]) -> None
     _build_card(state, item, city_id)
     state["current_reveal"]["status"] = "built"
     state["pending_placement"] = None
-
-
-def _place_queued_project(state: dict[str, Any], payload: dict[str, Any]) -> None:
-    _require_phase(state, "queued_projects")
-    pending = state.get("pending_placement")
-    if not pending or pending.get("source") != "queued":
-        raise ValueError("No queued project is waiting for placement.")
-    _require_decision_player(state, payload, pending["decision_player_id"])
-    city_id = str(payload.get("city_id") or "")
-    if city_id not in pending["legal_city_ids"]:
-        raise ValueError("That placement is not legal.")
-    item = card_by_id(state, pending["card_id"])
-    _pay_cost(state, item)
-    _build_card(state, item, city_id)
-    state["queued_projects"] = [
-        project for project in state["queued_projects"] if project["id"] != pending["reference_id"]
-    ]
-    state["pending_placement"] = None
-    _process_queued_projects(state)
-
-
-def _vote_stalled_project(state: dict[str, Any], payload: dict[str, Any]) -> None:
-    _require_phase(state, "stalled_vote")
-    player_id = _require_active_player(state, payload)
-    project_id = str(payload.get("project_id") or "")
-    valid_ids = {project["id"] for project in state["stalled_projects"]}
-    if project_id and project_id not in valid_ids:
-        raise ValueError("Stalled project not found.")
-    state["votes"][player_id] = project_id or None
-    state["log"].append(
-        f"{_player(state, player_id)['name']} voted for "
-        f"{_project_name(state, project_id) if project_id else 'no project'}."
-    )
-    _advance_ordered_player(state, completed_ids=set(state["votes"]))
-    if len(state["votes"]) < len(state["players"]):
-        return
-    vote_counts = Counter(project_id for project_id in state["votes"].values() if project_id)
-    kept: list[dict[str, Any]] = []
-    for project in state["stalled_projects"]:
-        if vote_counts[project["id"]] >= STALLED_VOTE_THRESHOLD:
-            kept.append(project)
-        else:
-            _discard_item(state, project["card_id"])
-    state["queued_projects"] = kept
-    state["stalled_projects"] = []
-    _begin_condition(state)
 
 
 def _store_resources(state: dict[str, Any], payload: dict[str, Any]) -> None:
@@ -637,6 +622,11 @@ def _assign_ministries(state: dict[str, Any], *, rotate: bool) -> None:
 
 
 def _begin_suspicion(state: dict[str, Any]) -> None:
+    if int(state.get("era", 1)) < int(state.get("suspicion_start_era", 5)):
+        state["phase"] = "production"
+        state["active_player_id"] = state["minister_of_empire_player_id"]
+        state["log"].append("Suspicion is not active yet. Production Phase began.")
+        return
     state["phase"] = "suspicion"
     state["suspicion_placements"] = {}
     state["active_player_id"] = state["minister_of_empire_player_id"]
@@ -660,26 +650,6 @@ def _run_production(state: dict[str, Any]) -> None:
     state["log"].append(f"Production generated {sum(production.values())} resources.")
 
 
-def _process_queued_projects(state: dict[str, Any]) -> None:
-    while state.get("queued_projects") and not state.get("pending_placement"):
-        project = state["queued_projects"][0]
-        card = card_by_id(state, project["card_id"])
-        placements = _legal_placements(state, card)
-        if not _requirements_satisfied(state, card) or not _can_pay_cost(state, card) or not placements:
-            state["queued_projects"].pop(0)
-            state["stalled_projects"].append(project)
-            state["log"].append(f"{card['name']} returned to the Stalled Row.")
-            continue
-        if len(placements) == 1:
-            _pay_cost(state, card)
-            _build_card(state, card, placements[0])
-            state["queued_projects"].pop(0)
-            continue
-        state["pending_placement"] = _placement_payload(state, card, placements, "queued", project["id"])
-    if not state.get("queued_projects") and not state.get("pending_placement"):
-        _begin_plotting(state)
-
-
 def _begin_plotting(state: dict[str, Any]) -> None:
     state["phase"] = "plotting"
     state["commitments"] = []
@@ -696,11 +666,7 @@ def _advance_plotting(state: dict[str, Any]) -> None:
         _advance_ordered_player(state, completed_ids=committed)
         return
     state["council_stack"] = list(state["commitments"])
-    state["phase"] = "docket_ordering"
-    state["active_player_id"] = state["minister_of_empire_player_id"]
-    state["current_reveal"] = None
-    state["revealed_cards"] = []
-    state["log"].append("The committed cards were revealed anonymously into the Council Docket.")
+    _begin_hand_reset(state)
 
 
 def _resolve_buildable_item(
@@ -712,11 +678,10 @@ def _resolve_buildable_item(
 ) -> None:
     placements = _legal_placements(state, card)
     if not _requirements_satisfied(state, card) or not _can_pay_cost(state, card) or not placements:
-        project = {"id": f"stalled-{uuid.uuid4().hex[:10]}", "card_id": card["id"]}
-        state["stalled_projects"].append(project)
+        _discard_item(state, card["id"])
         if state.get("current_reveal"):
-            state["current_reveal"]["status"] = "stalled"
-        state["log"].append(f"{card['name']} stalled.")
+            state["current_reveal"]["status"] = "discarded"
+        state["log"].append(f"{card['name']} could not be built and was discarded.")
         return
     if len(placements) == 1:
         _pay_cost(state, card)
@@ -727,18 +692,8 @@ def _resolve_buildable_item(
     state["pending_placement"] = _placement_payload(state, card, placements, source, reference_id)
 
 
-def _begin_stalled_vote_or_condition(state: dict[str, Any]) -> None:
-    state["current_reveal"] = None
-    if not state.get("stalled_projects"):
-        _begin_condition(state)
-        return
-    state["phase"] = "stalled_vote"
-    state["votes"] = {}
-    state["active_player_id"] = state["minister_of_empire_player_id"]
-    state["log"].append("Stalled Project Vote began.")
-
-
 def _begin_condition(state: dict[str, Any]) -> None:
+    state["current_reveal"] = None
     state["phase"] = "condition"
     state["active_player_id"] = state["minister_of_empire_player_id"]
     state["log"].append("Condition Phase began.")
@@ -780,7 +735,7 @@ def _run_crisis_intake(state: dict[str, Any]) -> None:
             player["hand"].extend(deck.draw(1))
         state["crisis_deck"] = deck.to_list()
         state["log"].append("Each player drew a Crisis where available.")
-    _begin_hand_reset(state)
+    _begin_hand_refill(state)
 
 
 def _begin_hand_reset(state: dict[str, Any]) -> None:
@@ -798,7 +753,11 @@ def _run_hand_reset(state: dict[str, Any]) -> None:
             else:
                 _discard_item(state, item_id)
         player["hand"] = crises
-    _begin_hand_refill(state)
+    state["phase"] = "docket_ordering"
+    state["active_player_id"] = state["minister_of_empire_player_id"]
+    state["current_reveal"] = None
+    state["revealed_cards"] = []
+    state["log"].append("The committed cards were revealed anonymously into the Council Docket.")
 
 
 def _begin_hand_refill(state: dict[str, Any]) -> None:
@@ -818,13 +777,13 @@ def _end_era(state: dict[str, Any]) -> None:
     for player in state["players"]:
         player["suspicion"] = 0
         player["committed"] = False
+        player["hand_revealed"] = False
     state["era"] = int(state.get("era", 1)) + 1
     state["epoch"] = state["era"]
     state["war_power_used"] = False
     state["structure_tag_requirement_waivers"] = 0
     state["plague_morale_suppressed"] = False
     state["suspicion_placements"] = {}
-    state["votes"] = {}
     _assign_ministries(state, rotate=True)
 
 
@@ -848,20 +807,6 @@ def _possible_actions(state: dict[str, Any]) -> list[dict[str, Any]]:
         ]
     if phase == "production":
         return [{"type": "continue_phase"}]
-    if phase == "queued_projects":
-        pending = state.get("pending_placement")
-        if pending:
-            return [
-                {
-                    "type": "place_queued_project",
-                    "player_id": pending["decision_player_id"],
-                    "project_id": pending["reference_id"],
-                    "card_id": pending["card_id"],
-                    "city_id": city_id,
-                }
-                for city_id in pending["legal_city_ids"]
-            ]
-        return [{"type": "continue_phase"}]
     if phase == "plotting":
         player = _player(state, active)
         commit_actions = [
@@ -871,7 +816,7 @@ def _possible_actions(state: dict[str, Any]) -> list[dict[str, Any]]:
                 "item_id": item_id,
                 "source": source,
                 "index": index,
-                "face_up": int(player.get("suspicion", 0)) >= 2,
+                "face_up": _must_commit_face_up(player),
             }
             for source, index, item_id in _legal_commit_options(state, player)
         ]
@@ -930,6 +875,17 @@ def _possible_actions(state: dict[str, Any]) -> list[dict[str, Any]]:
         ]
         return [*actions, {"type": "confirm_docket_order", "player_id": active}]
     if phase == "reveal":
+        pending_destroy = state.get("pending_event_destroy_building")
+        if pending_destroy:
+            return [
+                {
+                    "type": "choose_event_destroy_building",
+                    "player_id": pending_destroy["decision_player_id"],
+                    "city_id": candidate["city_id"],
+                    "card_id": candidate["card_id"],
+                }
+                for candidate in _eligible_buildings(state, pending_destroy["tag_id"])
+            ]
         pending_city_tokens = state.get("pending_event_city_tokens")
         if pending_city_tokens:
             return [
@@ -942,6 +898,24 @@ def _possible_actions(state: dict[str, Any]) -> list[dict[str, Any]]:
             ]
         pending_conversion = state.get("pending_event_resource_conversion")
         if pending_conversion:
+            if pending_conversion["stage"] == "amount":
+                available = int(
+                    state.get("global_resource_pool", {}).get(
+                        pending_conversion["source_resource_id"],
+                        0,
+                    )
+                )
+                return [
+                    {
+                        "type": "choose_event_conversion_resource",
+                        "player_id": pending_conversion["decision_player_id"],
+                        "stage": "amount",
+                        "amount": amount,
+                    }
+                    for amount in range(
+                        min(int(pending_conversion["amount"]), available) + 1
+                    )
+                ]
             return [
                 {
                     "type": "choose_event_conversion_resource",
@@ -975,11 +949,6 @@ def _possible_actions(state: dict[str, Any]) -> list[dict[str, Any]]:
                 for city_id in pending["legal_city_ids"]
             ]
         return [{"type": "reveal_next"}]
-    if phase == "stalled_vote":
-        return [
-            {"type": "vote_stalled_project", "player_id": active, "project_id": project_id}
-            for project_id in ["", *[project["id"] for project in state["stalled_projects"]]]
-        ]
     if phase == "condition":
         return [{"type": "continue_phase"}]
     if phase == "storage":
@@ -1031,7 +1000,7 @@ def _legal_commit_options(state: dict[str, Any], player: dict[str, Any]) -> list
         for index, item_id in enumerate(player.get("scheme_slots", []))
         if item_id
     )
-    if int(player.get("suspicion", 0)) >= 3:
+    if _cannot_commit_events(state, player):
         options = [
             option for option in options
             if not _is_event(item_by_id(state, option[2]))
@@ -1203,7 +1172,27 @@ def _apply_event_effects(
         if effect_type == "modify_pillar":
             _modify_pillar(state, str(payload.get("pillar") or payload.get("pillar_id") or ""), amount)
         elif effect_type == "destroy_building":
-            _destroy_buildings(state, str(payload.get("tag_id") or ""), max(1, amount))
+            tag_id = str(payload.get("tag_id") or "")
+            candidates = _eligible_buildings(state, tag_id)
+            destroy_amount = min(max(1, amount), len(candidates))
+            if not destroy_amount:
+                continue
+            if destroy_amount == len(candidates):
+                for candidate in candidates:
+                    _destroy_building(state, candidate["city_id"], candidate["card_id"])
+                continue
+            decision_player = _event_decision_player(state, event, fallback_role="war")
+            state["pending_event_destroy_building"] = {
+                "event_id": event["id"],
+                "tag_id": tag_id,
+                "remaining": destroy_amount,
+                "remaining_effects": list(effects[index + 1:]),
+                "continuation": continuation,
+                "requirements_met": requirements_met,
+                "decision_player_id": decision_player,
+            }
+            state["active_player_id"] = decision_player
+            return False
         elif effect_type == "remove_all_resources":
             state["global_resource_pool"] = {}
         elif effect_type == "modify_resources":
@@ -1273,7 +1262,19 @@ def _apply_event_effects(
                     requirements_met=requirements_met,
                 )
                 return False
-            _convert_resources(state, source_id, target_id, max(1, amount))
+            _set_pending_event_conversion(
+                state,
+                event,
+                amount=max(1, amount),
+                source_id=source_id,
+                target_id=target_id,
+                stage="amount",
+                resource_ids=[],
+                remaining_effects=list(effects[index + 1:]),
+                continuation=continuation,
+                requirements_met=requirements_met,
+            )
+            return False
         elif effect_type == "draw_card":
             player_id = _event_choice_minister_player(state, event)
             player = _player(state, player_id)
@@ -1287,6 +1288,24 @@ def _apply_event_effects(
             token_id = f"{effect_type.removeprefix('modify_')}-token"
             if payload.get("scope") == "global":
                 _modify_token_count(state.setdefault("condition_tokens", {}), token_id, amount)
+            elif len(state.get("cities", [])) > 1:
+                role = {
+                    "modify_plague": "health",
+                    "modify_unrest": "state",
+                    "modify_fortified": "war",
+                }[effect_type]
+                decision_player = _event_decision_player(state, event, fallback_role=role)
+                state["pending_event_city_tokens"] = {
+                    "event_id": event["id"],
+                    "token_changes": {token_id: amount},
+                    "city_ids": [city["id"] for city in state["cities"]],
+                    "remaining_effects": list(effects[index + 1:]),
+                    "continuation": continuation,
+                    "requirements_met": requirements_met,
+                    "decision_player_id": decision_player,
+                }
+                state["active_player_id"] = decision_player
+                return False
             elif state.get("cities"):
                 _modify_token_count(
                     state["cities"][0].setdefault("condition_tokens", {}),
@@ -1419,13 +1438,22 @@ def _choose_event_conversion_resource(state: dict[str, Any], payload: dict[str, 
     if not pending:
         raise ValueError("No event resource conversion choice is pending.")
     _require_decision_player(state, payload, pending["decision_player_id"])
+    if pending["stage"] == "amount":
+        amount = int(payload.get("amount", -1))
+        available = int(state.get("global_resource_pool", {}).get(pending["source_resource_id"], 0))
+        if amount < 0 or amount > min(int(pending["amount"]), available):
+            raise ValueError("That conversion amount is not available.")
+        pending["selected_amount"] = amount
+        _finish_event_resource_conversion(state, pending)
+        return
     resource_id = str(payload.get("resource_id") or "")
     if resource_id not in pending["resource_ids"]:
         raise ValueError("That resource is not an eligible conversion choice.")
     if pending["stage"] == "source":
         pending["source_resource_id"] = resource_id
         if pending["target_resource_id"]:
-            _finish_event_resource_conversion(state, pending)
+            pending["stage"] = "amount"
+            pending["resource_ids"] = []
             return
         pending["stage"] = "target"
         pending["resource_ids"] = [
@@ -1437,7 +1465,8 @@ def _choose_event_conversion_resource(state: dict[str, Any], payload: dict[str, 
             _resume_after_event_resource_conversion(state, pending)
         return
     pending["target_resource_id"] = resource_id
-    _finish_event_resource_conversion(state, pending)
+    pending["stage"] = "amount"
+    pending["resource_ids"] = []
 
 
 def _finish_event_resource_conversion(state: dict[str, Any], pending: dict[str, Any]) -> None:
@@ -1445,7 +1474,7 @@ def _finish_event_resource_conversion(state: dict[str, Any], pending: dict[str, 
         state,
         pending["source_resource_id"],
         pending["target_resource_id"],
-        int(pending["amount"]),
+        int(pending.get("selected_amount", pending["amount"])),
     )
     _resume_after_event_resource_conversion(state, pending)
 
@@ -1530,6 +1559,44 @@ def _choose_event_token_city(state: dict[str, Any], payload: dict[str, Any]) -> 
         )
 
 
+def _choose_event_destroy_building(state: dict[str, Any], payload: dict[str, Any]) -> None:
+    pending = state.get("pending_event_destroy_building")
+    if not pending:
+        raise ValueError("No Structure destruction choice is pending.")
+    _require_decision_player(state, payload, pending["decision_player_id"])
+    city_id = str(payload.get("city_id") or "")
+    card_id = str(payload.get("card_id") or "")
+    candidates = _eligible_buildings(state, pending["tag_id"])
+    if not any(
+        candidate["city_id"] == city_id and candidate["card_id"] == card_id
+        for candidate in candidates
+    ):
+        raise ValueError("That Structure is not eligible for destruction.")
+    _destroy_building(state, city_id, card_id)
+    pending["remaining"] = int(pending["remaining"]) - 1
+    if pending["remaining"] > 0 and _eligible_buildings(state, pending["tag_id"]):
+        return
+    event = event_by_id(state, pending["event_id"])
+    remaining_effects = pending["remaining_effects"]
+    continuation = pending["continuation"]
+    requirements_met = bool(pending["requirements_met"])
+    state["pending_event_destroy_building"] = None
+    completed = _apply_event_effects(
+        state,
+        event,
+        remaining_effects,
+        continuation=continuation,
+        requirements_met=requirements_met,
+    )
+    if completed:
+        _complete_event_resolution(
+            state,
+            event,
+            continuation=continuation,
+            requirements_met=requirements_met,
+        )
+
+
 def _complete_event_resolution(
     state: dict[str, Any],
     event: dict[str, Any],
@@ -1588,18 +1655,26 @@ def _agenda_satisfied(state: dict[str, Any], agenda_id: str) -> bool:
     return any(results) if mode == "any" else all(results)
 
 
-def _destroy_buildings(state: dict[str, Any], tag_id: str, amount: int) -> None:
-    destroyed = 0
+def _eligible_buildings(state: dict[str, Any], tag_id: str) -> list[dict[str, str]]:
+    candidates: list[dict[str, str]] = []
     for city in state.get("cities", []):
-        for card_id in list(city.get("cards", [])):
+        for card_id in city.get("cards", []):
             card = card_by_id(state, card_id)
             if tag_id and int(_counts((card.get("data") or {}).get("tags")).get(tag_id, 0)) <= 0:
                 continue
-            city["cards"].remove(card_id)
-            _discard_item(state, card_id)
-            destroyed += 1
-            if destroyed >= amount:
-                return
+            candidates.append({"city_id": city["id"], "card_id": card_id})
+    return candidates
+
+
+def _destroy_building(state: dict[str, Any], city_id: str, card_id: str) -> None:
+    city = next(
+        (candidate for candidate in state.get("cities", []) if candidate["id"] == city_id),
+        None,
+    )
+    if not city or card_id not in city.get("cards", []):
+        raise ValueError("Structure not found.")
+    city["cards"].remove(card_id)
+    _discard_item(state, card_id)
 
 
 def _discard_for_event(state: dict[str, Any], payload: dict[str, Any], event: dict[str, Any]) -> None:
@@ -1611,10 +1686,7 @@ def _discard_for_event(state: dict[str, Any], payload: dict[str, Any], event: di
         ministry_id = str((event.get("data") or {}).get("ministry_id") or "") if target == "event_minister" else target
         holder = state.get("ministry_assignments", {}).get(ministry_id)
         targets = [_player(state, holder)] if holder else []
-    health_holder = _ministry_holder(state, "health")
     for player in targets:
-        if player["id"] == health_holder:
-            continue
         remaining = len(player["hand"]) + sum(bool(card_id) for card_id in player.get("scheme_slots", [])) \
             if amount_value is None else max(1, int(amount_value))
         while remaining > 0 and player["hand"]:
@@ -1761,11 +1833,6 @@ def _ministry_holder(state: dict[str, Any], role: str) -> str:
 
 def _player_has_ministry(state: dict[str, Any], player_id: str, role: str) -> bool:
     return _ministry_holder(state, role) == player_id
-
-
-def _project_name(state: dict[str, Any], project_id: str) -> str:
-    project = next((entry for entry in state.get("stalled_projects", []) if entry["id"] == project_id), None)
-    return card_by_id(state, project["card_id"])["name"] if project else project_id
 
 
 def _player(state: dict[str, Any], player_id: str) -> dict[str, Any]:

@@ -207,8 +207,6 @@ There are two Event types:
 1. **Edict**
 2. **Crisis**
 
-Events do not enter the Stalled Row.
-
 When an Event finishes resolving, place an Edict in the Empire discard pile or
 a Crisis in the Crisis discard pile unless the card says otherwise.
 
@@ -250,16 +248,16 @@ They remain private in hand or Scheme Slots until committed.
 Crisis cards cannot be discarded during Hand Reset. They may be moved, swapped,
 and committed from Scheme Slots under the normal Plotting rules.
 
-When a Crisis finishes resolving, place it face down in the Crisis discard pile.
+When a Crisis finishes resolving, place it face up in the Crisis discard pile.
 It does not enter the Empire discard pile.
 
 ---
 
 ## 4.3 Event Costs and Requirements
 
-If an Event has a cost and the cost cannot be paid when the Event resolves, the Event has no effect and is discarded face down unless the card says otherwise.
+If an Event has a cost and the cost cannot be paid when the Event resolves, the Event has no effect and is discarded face up unless the card says otherwise.
 
-If an Event has a condition and that condition is not met, follow the card text. If no alternative effect is listed, discard the Event face down with no effect.
+If an Event has a condition and that condition is not met, follow the card text. If no alternative effect is listed, discard the Event face up with no effect.
 
 ---
 
@@ -365,26 +363,23 @@ The effect expires during the End-of-Era Cleanup Phase.
 
 # 5. Discard Timing and Visibility
 
-The Empire uses one face-down Empire discard pile and one face-down Crisis
+The Empire uses one face-up Empire discard pile and one face-up Crisis
 discard pile.
 
-Whenever a card is discarded, place it face down in the Empire discard pile immediately.
-
-The discard pile cannot be inspected, browsed, counted, or searched unless a card explicitly allows it.
-
-Players may remember cards they have seen, but they do not have a public discard display to consult.
+Whenever a card is discarded, place it face up in its appropriate discard pile
+immediately. Discard piles are public information and may be inspected, browsed,
+and counted at any time.
 
 Discard timing:
 
 * Resolved Events are discarded immediately after they finish resolving.
-* Development cards that fail to build enter the Stalled Row instead of being discarded.
-* Stalled Projects that are not queued are discarded immediately after the Stalled Project Vote.
+* Development cards that fail to build are discarded immediately.
 * Destroyed Structures are discarded immediately when destroyed.
 * Non-Crisis cards remaining in players' hands are discarded during the Hand Reset Phase.
 * Crisis cards remain in hand during the Hand Reset Phase.
 * Cards in Scheme Slots are not discarded during the Hand Reset Phase.
 
-When the Empire Deck is empty, shuffle the face-down Empire discard pile to form
+When the Empire Deck is empty, shuffle the face-up Empire discard pile to form
 a new Empire Deck. Crisis cards never enter this reshuffle.
 
 ---
@@ -395,8 +390,8 @@ Each game uses:
 
 * 1 Empire Deck
 * 1 Crisis Deck
-* 1 face-down Empire discard pile
-* 1 face-down Crisis discard pile
+* 1 face-up Empire discard pile
+* 1 face-up Crisis discard pile
 * City cards
 * Structure cards
 * Event cards
@@ -470,7 +465,8 @@ Choose a random player to become the first **Minister of the Empire**.
 
 Assign the four Ministries according to player count, following Section 8.
 
-During the first Era, do not rotate offices. Begin with the Suspicion Phase.
+During the first Era, do not rotate offices. Begin with the Suspicion Phase if
+the Level activates it in Era 1; otherwise begin with Production.
 
 ---
 
@@ -520,7 +516,7 @@ The Minister of State has a hand size of 4 cards for the current Era.
 Cards in Scheme Slots do not count toward hand size.
 
 Hands are temporary. Non-Crisis cards remaining in hand during the Hand Reset
-Phase are discarded face down, then each player draws a new hand during the Hand
+Phase are discarded face up. Each player draws a new hand during the later Hand
 Refill Phase. Crisis cards remain in hand.
 
 ---
@@ -600,8 +596,6 @@ When a Development card is successfully built, the Minister of Cities chooses it
 
 The Minister of Cities also chooses which leftover resources are stored if the Empire has more resources than storage capacity.
 
-If an effect destroys, moves, or targets a Structure and no other Minister is named, the Minister of Cities chooses the target.
-
 ---
 
 ## 9.2 Minister of State
@@ -622,13 +616,13 @@ The Minister of Health & Harvest governs disease placement and food-health admin
 
 When an effect places Plague and does not specify a City, the Minister of Health & Harvest chooses the City.
 
-The Minister of Health & Harvest cannot be forced to discard cards from hand or Scheme Slots by card effects.
+When an effect gains a general resource without specifying its type, the Minister
+of Health & Harvest chooses the resource gained.
 
-If an effect forces all players to discard, the Minister of Health & Harvest ignores that discard.
-
-If an effect specifically targets the Minister of Health & Harvest with forced discard, the discard is ignored.
-
-This protection applies only to discard caused by card effects. It does not apply to the normal Hand Reset Phase.
+When an effect converts up to a stated number of resources, the Minister of
+Health & Harvest chooses the source and destination when either is general and
+chooses any conversion amount from 0 up to the stated limit, subject to available
+resources.
 
 ---
 
@@ -640,9 +634,13 @@ When Global Unrest reaches its threshold, the Minister of War chooses how the Im
 
 When a City reaches 2 Unrest, the Minister of War chooses how that revolt is resolved.
 
-If a revolt destroys Structures, the Minister of War chooses which Structures are destroyed.
+Whenever an effect destroys Structures in Cities, the Minister of War chooses
+the eligible Structures that are destroyed.
 
 When an effect places Fortified and does not specify a City, the Minister of War chooses the City.
+
+The Minister of War usually makes choices for military Crises unless the card
+names another Choice Minister.
 
 ---
 
@@ -651,20 +649,19 @@ When an effect places Fortified and does not specify a City, the Minister of War
 Each Era follows this sequence:
 
 1. **Office Rotation Phase**
-2. **Suspicion Phase**
+2. **Suspicion Phase**, once activated by the Level
 3. **Production Phase**
-4. **Queued Project Phase**
-5. **Plotting Phase**
+4. **Plotting Phase**
+5. **Hand Reset Phase**
 6. **Council Docket Phase**
-7. **Stalled Project Vote Phase**
-8. **Condition Phase**
-9. **Storage Phase**
-10. **Crisis Intake Phase**
-11. **Hand Reset Phase**
-12. **Hand Refill Phase**
-13. **End-of-Era Cleanup Phase**
+7. **Condition Phase**
+8. **Storage Phase**
+9. **Crisis Intake Phase**
+10. **Hand Refill Phase**
+11. **End-of-Era Cleanup Phase**
 
-During the first Era, skip the Office Rotation Phase. Begin with the Suspicion Phase.
+During the first Era, skip the Office Rotation Phase. Skip Suspicion as well
+unless the Level activates it in Era 1.
 
 ---
 
@@ -677,7 +674,7 @@ At the beginning of each Era after the first:
 3. Confirm that no player holds both Minister of State and Minister of War.
 4. Resolve any office-related effects that occur at the beginning of the Era.
 
-Then proceed to the Suspicion Phase.
+Then proceed to the Suspicion Phase if it is active, or Production otherwise.
 
 ---
 
@@ -685,7 +682,11 @@ Then proceed to the Suspicion Phase.
 
 Suspicion represents public blame, court rumors, and political distrust.
 
-At the beginning of each Era, after offices are set, each player places one Suspicion token.
+Each Level defines the first Era in which Suspicion is active. The default is
+Era 5. Before that Era, skip this phase.
+
+Once Suspicion is active, each player places one Suspicion token at the beginning
+of every Era after offices are set.
 
 Starting with the Minister of the Empire and proceeding clockwise, each player places their Suspicion token on:
 
@@ -708,16 +709,25 @@ After all Suspicion tokens are placed, count how many each player received.
 
 No effect.
 
-### 2+ Suspicion
+### 2 Suspicion
 
-The player suffers both effects for this Era:
+The player must commit their card face up during the Plotting Phase.
 
-1. They lose their Ministry for this Era, if they have one.
-2. They must commit their card face up during the Plotting Phase.
+In a three-player game, 2 Suspicion also causes every effect listed under
+**3+ Suspicion**.
 
-A lost Ministry becomes vacant until the end of the Era. If that Ministry must make a decision, the Minister of the Empire decides instead.
+### 3+ Suspicion
 
-The player still participates normally in all other parts of the Era.
+The player must commit face up and suffers these additional effects for this Era:
+
+1. They lose every Ministry they hold for this Era.
+2. They cannot commit an Event card.
+
+A lost Ministry becomes vacant until the end of the Era. If that Ministry must
+make a decision, the Minister of the Empire decides instead.
+
+If the player has only Event cards across their hand and Scheme Slots, they reveal
+all those cards and commit nothing.
 
 ---
 
@@ -753,22 +763,7 @@ The Global Resource Pool becomes:
 
 ---
 
-# 14. Queued Project Phase
-
-Some Stalled Projects may have been voted to continue from the previous Era. These are called Queued Projects.
-
-After Production and before players commit new cards, resolve Queued Projects from left to right.
-
-For each Queued Project:
-
-* if all requirements are satisfied, all required resources are available, and a legal placement exists, build it and spend the resources;
-* if even one requirement is missing, one legal placement is missing, or one required resource is unavailable, move it to the Stalled Row for the current Era.
-
-Queued Projects that fail do not automatically remain queued. They must survive the Stalled Project Vote again.
-
----
-
-# 15. Plotting Phase
+# 14. Plotting Phase
 
 Each player must commit 1 card if able.
 
@@ -781,7 +776,7 @@ Starting with the Minister of the Empire and proceeding clockwise, each player t
 
 ---
 
-## 15.1 Scheming During Plotting
+## 14.1 Scheming During Plotting
 
 Before committing, the active player may rearrange cards between their hand and Scheme Slots.
 
@@ -801,7 +796,7 @@ A committed Scheme card leaves its Scheme Slot.
 
 ---
 
-## 15.2 No Voluntary Discard During Plotting
+## 14.2 No Voluntary Discard During Plotting
 
 Players may not voluntarily discard cards during Plotting.
 
@@ -813,7 +808,7 @@ Cards are discarded only when:
 
 ---
 
-## 15.3 Anonymous Commitments
+## 14.3 Anonymous Commitments
 
 Cards are normally committed face down.
 
@@ -823,7 +818,7 @@ Players should not know which player submitted which face-down card.
 
 ---
 
-## 15.4 Face-Up Committed Cards
+## 14.4 Face-Up Committed Cards
 
 A player with 2+ Suspicion must commit face up.
 
@@ -836,6 +831,20 @@ For physical play:
 * when commitments enter the Council Docket, replace that placeholder with the associated face-up card.
 
 For digital play, the Docket shows that the card belongs to the suspected player.
+
+---
+
+# 15. Hand Reset Phase
+
+After every player has committed or declared that they cannot commit, each player
+discards all non-Crisis cards remaining in hand face up into the Empire discard
+pile.
+
+Crisis cards remain in hand.
+
+Cards in Scheme Slots are not discarded.
+
+After Hand Reset, reveal the committed cards into the Council Docket.
 
 ---
 
@@ -873,7 +882,8 @@ A Development card can be built only if:
 
 If all conditions are satisfied, the card is built.
 
-If even one condition is not satisfied, the card is not built and enters the Stalled Row.
+If even one condition is not satisfied, the card is not built and is discarded
+face up immediately.
 
 ---
 
@@ -883,7 +893,8 @@ Resource payment is all-or-nothing.
 
 If the full cost is available, spend the full cost and build the card.
 
-If even one required resource is missing, spend nothing and place the card in the Stalled Row.
+If even one required resource is missing, spend nothing and discard the card
+face up immediately.
 
 ---
 
@@ -897,7 +908,7 @@ The chosen City must:
 * have an open slot;
 * obey all card-specific placement rules.
 
-If no legal City exists, the Structure enters the Stalled Row.
+If no legal City exists, discard the Structure face up immediately.
 
 ---
 
@@ -913,48 +924,15 @@ If the card does not specify restrictions, the City enters play as a new City zo
 
 Event cards resolve immediately when revealed in the Council Docket.
 
-Events do not enter the Stalled Row.
+If an Event has a cost and the cost cannot be paid, the Event has no effect and is discarded face up unless the card says otherwise.
 
-If an Event has a cost and the cost cannot be paid, the Event has no effect and is discarded face down unless the card says otherwise.
+If an Event has a condition and the condition is not met, follow the card text. If no alternative effect is listed, discard it face up with no effect.
 
-If an Event has a condition and the condition is not met, follow the card text. If no alternative effect is listed, discard it face down with no effect.
-
-When an Event finishes resolving, discard it face down unless a card says otherwise.
+When an Event finishes resolving, discard it face up unless a card says otherwise.
 
 ---
 
-# 19. Stalled Projects
-
-Any Development card that cannot be built enters the Stalled Row.
-
-Cards enter the Stalled Row face up in the order they failed.
-
-Events never enter the Stalled Row.
-
----
-
-# 20. Stalled Project Vote Phase
-
-After all cards in the Council Docket have been resolved, players vote on which Stalled Projects should remain possible.
-
-Each player has 1 vote.
-
-A player may vote for:
-
-* one Stalled Project;
-* or none.
-
-Votes are public.
-
-Any Stalled Project with at least 2 votes becomes a Queued Project for the next Era.
-
-All other Stalled Projects are discarded face down immediately after the vote.
-
-Queued Projects keep their relative order from the Stalled Row.
-
----
-
-# 21. Condition Tokens
+# 19. Condition Tokens
 
 Condition Tokens represent persistent local or global states affecting the Empire.
 
@@ -970,7 +948,7 @@ Fortified is a positive token.
 
 ---
 
-# 22. Plague
+# 20. Plague
 
 Plague represents disease, contamination, famine spillover, or public health collapse.
 
@@ -980,7 +958,7 @@ When an effect places Plague and does not specify a City, the Minister of Health
 
 ---
 
-## 22.1 Plague Check
+## 20.1 Plague Check
 
 During the Condition Phase, check each City separately.
 
@@ -1008,7 +986,7 @@ there is no Morale loss from Plague in that City.
 
 ---
 
-## 22.2 Removing Plague
+## 20.2 Removing Plague
 
 Cards may remove Plague.
 
@@ -1026,7 +1004,7 @@ Effect: Remove up to 2 Plague from one City. Then place 1 Unrest on that City.
 
 ---
 
-# 23. Unrest
+# 21. Unrest
 
 Unrest represents revolt, political disorder, social anger, and collapse of legitimacy.
 
@@ -1041,7 +1019,7 @@ If City Unrest is chosen and the effect does not specify a City, the Minister of
 
 ---
 
-## 23.1 City Unrest
+## 21.1 City Unrest
 
 City Unrest is placed on Cities.
 
@@ -1064,7 +1042,7 @@ Lose 2 Treasury.
 Remove all Unrest from that City.
 Destroy 2 Structures in that City, chosen by the Minister of War.
 
-Destroyed Structures are discarded face down immediately.
+Destroyed Structures are discarded face up immediately.
 
 If fewer than 2 Structures are present, destroy as many as possible.
 
@@ -1072,7 +1050,7 @@ Cities themselves are not destroyed by Revolt unless a card says otherwise.
 
 ---
 
-## 23.2 Global Unrest
+## 21.2 Global Unrest
 
 Global Unrest is placed on the Empire.
 
@@ -1100,7 +1078,7 @@ Gain 1 Treasury.
 
 ---
 
-## 23.3 Timing of Unrest
+## 21.3 Timing of Unrest
 
 Unrest thresholds resolve immediately.
 
@@ -1110,7 +1088,7 @@ If an Event places the third Global Unrest token, resolve the Imperial Unrest Cr
 
 ---
 
-# 24. Fortified
+# 22. Fortified
 
 Fortified represents walls, guard networks, military readiness, or protected infrastructure.
 
@@ -1132,11 +1110,11 @@ The Minister of War chooses two Structures to destroy.
 
 Fortified is removed to prevent one of those destructions.
 
-The other chosen Structure is destroyed and discarded face down immediately.
+The other chosen Structure is destroyed and discarded face up immediately.
 
 ---
 
-# 25. Condition Phase
+# 23. Condition Phase
 
 During the Condition Phase:
 
@@ -1149,7 +1127,7 @@ Fortified has no Condition Phase effect.
 
 ---
 
-# 26. Storage Phase
+# 24. Storage Phase
 
 After the Condition Phase, unused resources in the Global Resource Pool are discarded unless stored.
 
@@ -1186,9 +1164,9 @@ The remaining Labor and Wealth are discarded.
 
 ---
 
-# 27. Crisis Intake Phase
+# 25. Crisis Intake Phase
 
-After Storage and before Hand Reset, check the completed Era number.
+After Storage and before Hand Refill, check the completed Era number.
 
 If it is divisible by 5, each player draws 1 card from the Crisis Deck and adds
 it to their hand. This occurs at the end of Eras 5, 10, 15, 20, and so on.
@@ -1197,20 +1175,7 @@ If the Crisis Deck is empty, skip any draw it cannot supply.
 
 ---
 
-# 28. Hand Reset Phase
-
-Each player discards all non-Crisis cards remaining in hand face down into the
-Empire discard pile.
-
-Crisis cards remain in hand.
-
-Cards in Scheme Slots are not discarded.
-
-This is a normal phase of the game, not a forced discard effect. The Minister of Health & Harvest does not ignore the Hand Reset Phase.
-
----
-
-# 29. Hand Refill Phase
+# 26. Hand Refill Phase
 
 Each player draws a new hand.
 
@@ -1229,28 +1194,28 @@ Scheming happens during the Plotting Phase.
 
 ---
 
-# 30. End-of-Era Cleanup Phase
+# 27. End-of-Era Cleanup Phase
 
 During the End-of-Era Cleanup Phase:
 
 1. Remove all Suspicion tokens.
 2. End all effects that last "until the end of the Era".
 3. Clear any temporary waivers or unresolved temporary modifiers.
-4. If the Empire Deck is empty, shuffle the face-down discard pile to form a new Empire Deck.
+4. If the Empire Deck is empty, shuffle the face-up discard pile to form a new Empire Deck.
 
-Do not move resolved Events, destroyed Structures, or discarded Stalled Projects during this phase. Those cards are discarded immediately when they resolve, are destroyed, or fail to remain queued.
+Do not move resolved Events, destroyed Structures, or failed Developments during
+this phase. Those cards are discarded immediately when they resolve, are
+destroyed, or fail to build.
 
 Then the Era ends.
 
 ---
 
-# 31. Design Notes for Testing
+# 28. Design Notes for Testing
 
 During playtesting, track:
 
 * how many Development cards are built per Era;
-* how many cards enter the Stalled Row;
-* how often Stalled Projects survive voting;
 * how often Suspicion correctly constrains powerful players;
 * whether players can infer motives without certainty;
 * whether Ministries feel small but decisive;

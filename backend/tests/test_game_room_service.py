@@ -125,6 +125,7 @@ def build_state(**overrides) -> dict:
         "setup_pool_ids": setup_pool_ids,
         "deck_id": "empire-deck",
         "initial_city_card_id": "capital",
+        "suspicion_start_era": 1,
         "event_entries": EVENTS,
         "ministry_entries": MINISTRIES,
         "pillar_entries": PILLARS,
@@ -194,6 +195,12 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
         self.assertTrue(all(len(player["scheme_slots"]) == 2 for player in state["players"]))
         self.assertEqual(state["pillars"], {"treasury": 5, "stability": 5, "morale": 5})
 
+    def test_suspicion_is_skipped_until_the_level_start_era(self):
+        state = build_state(suspicion_start_era=5)
+
+        self.assertEqual(state["phase"], "production")
+        self.assertEqual(state["suspicion_start_era"], 5)
+
     def test_ministries_auto_assign_in_order_and_state_rotates_to_war(self):
         state = build_state()
         state_holder = next(
@@ -234,6 +241,31 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
         self.assertNotEqual(state_holder, war_holder)
         self.assertEqual(len(set(non_empire_assignments.values())), 3)
 
+    def test_two_suspicion_deposes_and_blocks_events_with_three_players(self):
+        state = build_state()
+        state["players"] = state["players"][:3]
+        state["minister_of_empire_player_id"] = "player-1"
+        _assign_ministries(state, rotate=False)
+
+        for target in ("player-2", "", "player-2"):
+            action = next(
+                entry for entry in state["possible_actions"]
+                if entry["target_player_id"] == target
+            )
+            state = perform_action(state, "place_suspicion", action)
+
+        player_two = next(player for player in state["players"] if player["id"] == "player-2")
+        self.assertEqual(player_two["suspicion"], 2)
+        self.assertFalse(player_two["hand_revealed"])
+        self.assertFalse(player_two["ministry_ids"])
+        player_two["hand"] = ["tax-riots"]
+        state["phase"] = "plotting"
+        state["active_player_id"] = "player-2"
+        state = perform_action(state, "commit_none", {"player_id": "player-2"})
+        player_two = next(player for player in state["players"] if player["id"] == "player-2")
+        self.assertTrue(player_two["committed"])
+        self.assertTrue(player_two["hand_revealed"])
+
     def test_suspicion_controls_commit_visibility_and_event_eligibility(self):
         state = finish_ministry_draft(build_state())
         placements = ["player-2", "", "player-2", "player-2"]
@@ -242,7 +274,8 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
             state = perform_action(state, "place_suspicion", action)
 
         self.assertEqual(state["players"][1]["suspicion"], 3)
-        state = perform_action(state, "continue_phase", {})
+        self.assertFalse(state["players"][1]["hand_revealed"])
+        self.assertFalse(state["players"][1]["ministry_ids"])
         state = perform_action(state, "continue_phase", {})
         self.assertEqual(state["phase"], "plotting")
         player_two = state["players"][1]
@@ -388,6 +421,8 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
             {"player_id": "player-4", "source": "hand", "index": 0},
         )
 
+        self.assertEqual(state["phase"], "hand_reset")
+        state = perform_action(state, "continue_phase", {})
         self.assertEqual(state["phase"], "docket_ordering")
         self.assertEqual(state["active_player_id"], state["minister_of_empire_player_id"])
         self.assertEqual(
@@ -404,11 +439,9 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
 
         state = perform_action(state, "continue_phase", {})
 
-        self.assertEqual(state["phase"], "queued_projects")
+        self.assertEqual(state["phase"], "plotting")
         self.assertEqual(state["global_resource_pool"], {"wealth": 3, "labor": 3})
         self.assertEqual(state["stored_resources"], {})
-        state = perform_action(state, "continue_phase", {})
-        self.assertEqual(state["phase"], "plotting")
 
     def test_reveal_builds_card_atomically_and_applies_pillar_change(self):
         state = build_state()
@@ -425,7 +458,6 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
                         "face_up": False,
                     }
                 ],
-                "stalled_projects": [],
                 "pending_placement": None,
             }
         )
@@ -609,6 +641,14 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
             action for action in state["possible_actions"] if action["resource_id"] == "wealth"
         )
         state = perform_action(state, "choose_event_conversion_resource", wealth_action)
+        self.assertEqual(
+            [action["amount"] for action in state["possible_actions"]],
+            [0, 1, 2],
+        )
+        amount_action = next(
+            action for action in state["possible_actions"] if action["amount"] == 2
+        )
+        state = perform_action(state, "choose_event_conversion_resource", amount_action)
 
         self.assertEqual(state["global_resource_pool"], {"labor": 1, "wealth": 2})
         self.assertEqual(state["pillars"]["morale"], 6)
@@ -786,6 +826,76 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
         )
         self.assertEqual(state["cities"][0]["condition_tokens"], {})
 
+    def test_minister_of_war_chooses_destroyed_structure(self):
+        state = build_state()
+        war_player_id = next(
+            holder for ministry_id, holder in state["ministry_assignments"].items()
+            if "war" in ministry_id
+        )
+        state["cities"][0]["cards"] = ["farm", "garrison"]
+        event = state["catalog"]["events"][0]
+        event["data"].update(
+            {
+                "requirements": [],
+                "main_effects": [
+                    {"effect_type": "destroy_building", "payload": {"amount": 1}}
+                ],
+            }
+        )
+        state["phase"] = "reveal"
+        state["council_stack"] = [
+            {
+                "id": "destroy-event",
+                "item_id": event["id"],
+                "kind": "events",
+                "owner_player_id": "",
+                "face_up": False,
+            }
+        ]
+
+        state = perform_action(state, "reveal_next", {})
+
+        self.assertEqual(state["active_player_id"], war_player_id)
+        choice = next(
+            action for action in state["possible_actions"]
+            if action["card_id"] == "garrison"
+        )
+        state = perform_action(state, "choose_event_destroy_building", choice)
+        self.assertEqual(state["cities"][0]["cards"], ["farm"])
+        self.assertIn("garrison", state["empire_discard"])
+
+    def test_health_minister_is_not_immune_to_forced_discard(self):
+        state = build_state()
+        event = state["catalog"]["events"][0]
+        event["data"].update(
+            {
+                "requirements": [],
+                "main_effects": [
+                    {
+                        "effect_type": "discard_cards",
+                        "payload": {"target": "all_players", "amount": 1},
+                    }
+                ],
+            }
+        )
+        for player in state["players"]:
+            player["hand"] = ["farm"]
+            player["scheme_slots"] = [None, None]
+        state["phase"] = "reveal"
+        state["council_stack"] = [
+            {
+                "id": "discard-event",
+                "item_id": event["id"],
+                "kind": "events",
+                "owner_player_id": "",
+                "face_up": False,
+            }
+        ]
+
+        state = perform_action(state, "reveal_next", {})
+
+        self.assertTrue(all(not player["hand"] for player in state["players"]))
+
     def test_condition_phase_applies_plague_morale_loss_per_city(self):
         state = build_state()
         state["cities"][0]["condition_tokens"] = {"plague-token": 2}
@@ -922,26 +1032,13 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
 
         state = perform_action(state, "continue_phase", {})
 
-        self.assertEqual(state["phase"], "hand_reset")
+        self.assertEqual(state["phase"], "hand_refill")
         self.assertTrue(
             all(
                 player["hand"].count("border-raid") == crisis_counts[player["id"]] + 1
                 for player in state["players"]
             )
         )
-        state["players"][0]["hand"].extend(["farm", "tax-riots"])
-        empire_discard_before = len(state["empire_discard"])
-        non_crisis_in_hands = sum(
-            item_id != "border-raid"
-            for player in state["players"]
-            for item_id in player["hand"]
-        )
-
-        state = perform_action(state, "continue_phase", {})
-
-        self.assertEqual(state["phase"], "hand_refill")
-        self.assertTrue(all(all(item_id == "border-raid" for item_id in player["hand"]) for player in state["players"]))
-        self.assertEqual(len(state["empire_discard"]), empire_discard_before + non_crisis_in_hands)
 
     def test_event_tag_requirement_uses_permanent_empire_tags(self):
         state = build_state()
@@ -1057,7 +1154,7 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
 
         state = perform_action(state, "reveal_next", {})
         self.assertEqual(state["cities"][0]["cards"], ["temple"])
-        self.assertEqual([project["card_id"] for project in state["stalled_projects"]], ["temple"])
+        self.assertIn("temple", state["empire_discard"])
 
     def test_collapse_reveals_agendas_and_calculates_winners(self):
         state = build_state()

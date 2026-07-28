@@ -387,6 +387,9 @@ def _validate_catalog_data(
             raise ValueError("A level requires an initial city card.")
         if not deck_id:
             raise ValueError("A level requires a deck.")
+        suspicion_start_era = int(data.get("suspicion_start_era") or 5)
+        if suspicion_start_era < 1:
+            raise ValueError("Suspicion start Era must be at least 1.")
         city = db.get(GameCatalogEntryRecord, city_id)
         if city is None or city.kind != "cards" or city.category != "city":
             raise ValueError("The initial City must reference a City card.")

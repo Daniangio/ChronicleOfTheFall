@@ -1958,6 +1958,11 @@ const LevelGuidedFields = ({ data, setField, cardEntries, deckEntries }) => {
         options={[{ value: "", label: "Select deck" }, ...deckEntries.map((deck) => ({ value: deck.id, label: deck.name }))]}
         onChange={(value) => setField("deck_id", value)}
       />
+      <NumberField
+        label="Suspicion Starts in Era"
+        value={data.suspicion_start_era ?? 5}
+        onChange={(value) => setField("suspicion_start_era", Math.max(1, value))}
+      />
     </>
   );
 };
@@ -2386,7 +2391,7 @@ const AdminPage = () => {
             : activeCatalogKind === "decks"
               ? stringifyData({ item_ids: [], initial_setup: { "3": [], "4": [], "5": [] } })
             : activeCatalogKind === "levels"
-              ? stringifyData({ initial_city_card_id: "", deck_id: "" })
+              ? stringifyData({ initial_city_card_id: "", deck_id: "", suspicion_start_era: 5 })
             : activeCatalogKind === "ministries"
               ? stringifyData({
                   infrastructure_resources: [],
@@ -2491,6 +2496,7 @@ const AdminPage = () => {
                 ...normalizedData,
                 initial_city_card_id: normalizedData.initial_city_card_id || "",
                 deck_id: normalizedData.deck_id || "",
+                suspicion_start_era: Math.max(1, Number(normalizedData.suspicion_start_era) || 5),
               }
           : activeCatalogKind === "tags"
               ? { ...normalizedData, resource_type: tagResourceType }

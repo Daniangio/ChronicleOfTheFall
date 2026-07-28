@@ -3,49 +3,21 @@
   "kind": "ministries",
   "entries": [
     {
-      "id": "minister-of-health-and-harvest",
-      "name": "Minister of Health and Harvest",
+      "id": "minister-of-cities",
+      "name": "Minister of Cities",
       "kind": "ministries",
       "category": "ministry",
-      "summary": "The provider. Controls provisioning and public health events.",
+      "summary": "Places Cities and Structures and decides which leftover resources the Empire stores.",
       "color": null,
       "data": {
-        "rotation_order": 4,
-        "domain_id": "provision",
-        "domain_symbol": "HLT",
-        "abilities": [
-          "provision_event_edicts"
-        ],
-        "domain_icon_image_id": "minister-health-harvest",
-        "symbol": "H&H",
-        "icon_image_id": "minister-health-harvest"
-      }
-    },
-    {
-      "id": "minister-of-infrastructure",
-      "name": "Minister of Infrastructure",
-      "kind": "ministries",
-      "category": "ministry",
-      "summary": "The builder. Finalizes projects and decides which building is destroyed by infrastructure damage.",
-      "color": null,
-      "data": {
+        "role": "cities",
         "rotation_order": 1,
-        "domain_id": "infrastructure",
-        "domain_symbol": "INF",
-        "can_finalize_projects": true,
-        "infrastructure_resources": {
-          "labor": 1,
-          "material": 1,
-          "wealth": 1
-        },
         "abilities": [
-          "finalize_projects",
-          "once_per_year_generate_configured_resource",
-          "decide_destroyed_building"
+          "place_developments",
+          "manage_resource_leftovers"
         ],
-        "domain_icon_image_id": "minister-infrastructure",
         "icon_image_id": "minister-infrastructure",
-        "symbol": "INF"
+        "symbol": "CIT"
       }
     },
     {
@@ -53,20 +25,16 @@
       "name": "Minister of State",
       "kind": "ministries",
       "category": "ministry",
-      "summary": "The diplomat. Controls diplomacy events and may propose Politics or Economy cards.",
+      "summary": "Places Unrest and refills to four cards instead of three.",
       "color": null,
       "data": {
+        "role": "state",
         "rotation_order": 2,
         "exclusive_holder_group": "state-war",
-        "domain_id": "diplomacy",
-        "domain_symbol": "DIP",
-        "can_propose_politics_economy": true,
         "abilities": [
-          "diplomacy_event_edicts",
-          "propose_politics_and_economy",
+          "place_unrest",
           "draw_four_during_refill"
         ],
-        "domain_icon_image_id": "minister-state",
         "icon_image_id": "minister-state",
         "symbol": "STA"
       }
@@ -76,22 +44,39 @@
       "name": "Minister of War",
       "kind": "ministries",
       "category": "ministry",
-      "summary": "The defender. Resolves City Revolts and Imperial Unrest Crises, controls military event edicts, and performs reconnaissance.",
+      "summary": "Resolves Unrest Crises, chooses destroyed Structures and Fortified placement, and usually handles military Crises.",
       "color": null,
       "data": {
+        "role": "war",
         "rotation_order": 3,
         "exclusive_holder_group": "state-war",
-        "domain_id": "military",
-        "domain_symbol": "WAR",
         "abilities": [
-          "military_event_edicts",
           "resolve_unrest_crises",
-          "peek_event_queue"
+          "choose_destroyed_structures",
+          "place_fortified",
+          "resolve_military_crises"
         ],
-        "domain_icon_image_id": "minister-war",
         "icon_image_id": "minister-war",
-        "symbol": "WAR",
-        "can_peek_event_queue": true
+        "symbol": "WAR"
+      }
+    },
+    {
+      "id": "minister-of-health-and-harvest",
+      "name": "Minister of Health and Harvest",
+      "kind": "ministries",
+      "category": "ministry",
+      "summary": "Places Plague and chooses general resource gains and optional resource conversions.",
+      "color": null,
+      "data": {
+        "role": "health",
+        "rotation_order": 4,
+        "abilities": [
+          "place_plague",
+          "choose_general_resources",
+          "choose_resource_conversions"
+        ],
+        "icon_image_id": "minister-health-harvest",
+        "symbol": "H&H"
       }
     },
     {
@@ -99,29 +84,19 @@
       "name": "Minister of the Empire",
       "kind": "ministries",
       "category": "ministry",
-      "summary": "The sovereign. Cannot receive Suspicion or be blocked, orders the Council Docket, acts first, and decides when a Ministry is vacant.",
+      "summary": "Cannot receive Suspicion, orders the Council Docket, and decides whenever the responsible Ministry is vacant.",
       "color": null,
       "data": {
-        "domain_id": "sovereign",
-        "domain_symbol": "EMP",
+        "role": "empire",
         "is_minister_of_empire": true,
-        "can_finalize_projects": true,
         "abilities": [
-          "select_blocked_player",
-          "order_council_docket",
           "immune_to_suspicion",
-          "immune_to_block",
-          "administration_first_turn",
-          "finalize_projects",
-          "fallback_event_decider"
+          "order_council_docket",
+          "fallback_decider"
         ],
-        "domain_icon_image_id": "minister-empire",
         "icon_image_id": "minister-empire",
-        "first_administration_turn": true,
-        "can_block_player_council": true,
         "orders_council_docket": true,
         "immune_to_suspicion": true,
-        "immune_to_block": true,
         "fallback_event_decider": true,
         "symbol": "EMP"
       }

@@ -225,6 +225,7 @@ def test_new_database_catalog_starts_with_repository_ingredients(tmp_path):
                     data={
                         "initial_city_card_id": "capital-foundation",
                         "deck_id": created_deck.id,
+                        "suspicion_start_era": 5,
                     },
                 ),
                 _admin=admin,
@@ -536,6 +537,7 @@ def test_export_all_includes_every_catalog_admin_kind(tmp_path):
                 data={
                     "initial_city_card_id": "test-card",
                     "deck_id": "test-deck",
+                    "suspicion_start_era": 5,
                 },
             ),
             "decks": AdminCatalogEntryCreate(

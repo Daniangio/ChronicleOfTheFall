@@ -65,6 +65,7 @@ async def create_game_room(
             deck_id=str(getattr(deck, "id", "") or ""),
             initial_city_card_id=initial_city_card_id,
             level_id=str(getattr(level, "id", "") or ""),
+            suspicion_start_era=max(1, int(level_data.get("suspicion_start_era") or 5)),
             event_entries=events,
             agenda_entries=agendas,
             ministry_entries=ministries,

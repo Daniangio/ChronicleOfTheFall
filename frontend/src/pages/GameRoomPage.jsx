@@ -10,7 +10,6 @@ import {
   Plus,
   Shield,
   Users,
-  Vote,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
@@ -252,6 +251,31 @@ const GameRoomPage = () => {
   const boardWidth = Math.max(760, (gameState.cities?.length || 1) * 610);
 
   const renderPhaseControls = () => {
+    const destructionChoices = actions.filter((entry) => entry.type === "choose_event_destroy_building");
+    if (destructionChoices.length) {
+      return (
+        <div>
+          <p className="mb-2 text-sm font-semibold text-amber-100">Minister of War: choose a Structure to destroy</p>
+          <div className="flex flex-wrap gap-2">
+            {destructionChoices.map((entry) => {
+              const city = gameState.cities.find((candidate) => candidate.id === entry.city_id);
+              const card = itemLookup[normalize(entry.card_id)];
+              return (
+                <button
+                  key={`${entry.city_id}-${entry.card_id}`}
+                  className="rounded-md border border-rose-900 bg-stone-950 px-3 py-2 text-sm font-semibold text-rose-100 hover:bg-rose-950/50 disabled:opacity-50"
+                  disabled={busy}
+                  onClick={() => performAction(entry)}
+                  type="button"
+                >
+                  {card?.name || entry.card_id} · {city?.name || entry.city_id}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      );
+    }
     const tokenCityChoices = actions.filter((entry) => entry.type === "choose_event_token_city");
     if (tokenCityChoices.length) {
       return (
@@ -284,19 +308,23 @@ const GameRoomPage = () => {
       return (
         <div>
           <p className="mb-2 text-sm font-semibold text-amber-100">
-            Choose the {stage === "source" ? "resource to convert" : "destination resource"}
+            {stage === "amount"
+              ? "Minister of Health & Harvest: choose how many resources to convert"
+              : `Choose the ${stage === "source" ? "resource to convert" : "destination resource"}`}
           </p>
           <div className="flex flex-wrap gap-2">
             {conversionChoices.map((entry) => (
               <button
-                key={entry.resource_id}
+                key={stage === "amount" ? entry.amount : entry.resource_id}
                 className="rounded-md border border-amber-800 bg-stone-950 p-2 hover:bg-amber-950/50 disabled:opacity-50"
                 disabled={busy}
                 onClick={() => performAction(entry)}
-                title={tagLookup[normalize(entry.resource_id)]?.name || entry.resource_id}
+                title={stage === "amount" ? `Convert ${entry.amount}` : tagLookup[normalize(entry.resource_id)]?.name || entry.resource_id}
                 type="button"
               >
-                <TagIcon tag={tagLookup[normalize(entry.resource_id)]} label={entry.resource_id} size="sm" />
+                {stage === "amount"
+                  ? <span className="px-2 text-sm font-bold text-amber-100">{entry.amount}</span>
+                  : <TagIcon tag={tagLookup[normalize(entry.resource_id)]} label={entry.resource_id} size="sm" />}
               </button>
             ))}
           </div>
@@ -342,7 +370,7 @@ const GameRoomPage = () => {
         </div>
       );
     }
-    if (["production", "queued_projects"].includes(phase) && actions.some((entry) => entry.type === "continue_phase")) {
+    if (phase === "production" && actions.some((entry) => entry.type === "continue_phase")) {
       return <button className="rounded-md bg-amber-300 px-4 py-2 text-sm font-bold text-stone-950 hover:bg-amber-200 disabled:opacity-50" disabled={busy} onClick={() => perform("continue_phase")} type="button">Resolve phase</button>;
     }
     if (phase === "docket_ordering") {
@@ -362,22 +390,12 @@ const GameRoomPage = () => {
     if (phase === "reveal" && actions.some((entry) => entry.type === "reveal_next")) {
       return <button className="rounded-md bg-amber-300 px-4 py-2 text-sm font-bold text-stone-950 hover:bg-amber-200 disabled:opacity-50" disabled={busy} onClick={() => perform("reveal_next")} type="button">{gameState.council_stack?.length ? "Reveal next card" : "Finish reveal"}</button>;
     }
-    if (["queued_projects", "reveal"].includes(phase) && actions.some((entry) => entry.city_id)) {
+    if (phase === "reveal" && actions.some((entry) => entry.city_id)) {
       return (
         <div className="flex flex-wrap gap-2">
           {actions.map((entry) => {
             const city = gameState.cities.find((item) => item.id === entry.city_id);
             return <button key={entry.city_id} className="rounded-md bg-teal-400 px-3 py-2 text-sm font-bold text-slate-950 hover:bg-teal-300 disabled:opacity-50" disabled={busy} onClick={() => performAction(entry)} type="button">{entry.city_id === "__new_city__" ? "Found new city" : `Build in ${city?.name || entry.city_id}`}</button>;
-          })}
-        </div>
-      );
-    }
-    if (phase === "stalled_vote") {
-      return (
-        <div className="flex flex-wrap gap-2">
-          {actions.map((entry) => {
-            const project = gameState.stalled_projects.find((item) => item.id === entry.project_id);
-            return <button key={entry.project_id || "none"} className="inline-flex items-center gap-2 rounded-md border border-teal-800 px-3 py-2 text-sm text-teal-100 hover:bg-teal-950/50 disabled:opacity-50" disabled={busy} onClick={() => performAction(entry)} type="button"><Vote className="h-4 w-4" aria-hidden="true" />{project ? itemLookup[normalize(project.card_id)]?.name || project.card_id : "Abstain"}</button>;
           })}
         </div>
       );
@@ -591,15 +609,26 @@ const GameRoomPage = () => {
                 </section>
               ) : null}
               <section className="border border-slate-800 bg-slate-900 p-3">
-                <h2 className="text-sm font-bold text-white">Projects</h2>
-                <div className="mt-3 space-y-3">
-                  {[...(gameState.queued_projects || []).map((project) => ({ ...project, row: "Queued" })), ...(gameState.stalled_projects || []).map((project) => ({ ...project, row: "Stalled" }))].map((project) => (
-                    <div key={project.id}>
-                      <p className="mb-1 text-[0.65rem] font-bold uppercase text-slate-500">{project.row}</p>
-                      <ItemVisual item={itemLookup[normalize(project.card_id)]} catalogs={catalogs} tagLookup={tagLookup} storageIconSrc={storageIconSrc} />
+                <h2 className="text-sm font-bold text-white">Face-up Discards</h2>
+                <div className="mt-3 space-y-4">
+                  <div>
+                    <p className="mb-2 text-[0.65rem] font-bold uppercase text-slate-500">Empire</p>
+                    <div className="flex flex-wrap gap-2">
+                      {(gameState.empire_discard || []).map((itemId, index) => (
+                        <ItemVisual key={`${itemId}-${index}`} item={itemLookup[normalize(itemId)]} catalogs={catalogs} tagLookup={tagLookup} storageIconSrc={storageIconSrc} />
+                      ))}
+                      {!gameState.empire_discard?.length ? <p className="text-xs text-slate-600">Empty.</p> : null}
                     </div>
-                  ))}
-                  {!gameState.queued_projects?.length && !gameState.stalled_projects?.length ? <p className="text-xs text-slate-600">No projects.</p> : null}
+                  </div>
+                  <div>
+                    <p className="mb-2 text-[0.65rem] font-bold uppercase text-slate-500">Crisis</p>
+                    <div className="flex flex-wrap gap-2">
+                      {(gameState.crisis_discard || []).map((itemId, index) => (
+                        <ItemVisual key={`${itemId}-${index}`} item={itemLookup[normalize(itemId)]} catalogs={catalogs} tagLookup={tagLookup} storageIconSrc={storageIconSrc} />
+                      ))}
+                      {!gameState.crisis_discard?.length ? <p className="text-xs text-slate-600">Empty.</p> : null}
+                    </div>
+                  </div>
                 </div>
               </section>
             </aside>
@@ -610,6 +639,9 @@ const GameRoomPage = () => {
               <div>
                 <h2 className="text-lg font-bold text-white">{focusedPlayer?.name || "Player"}</h2>
                 <p className="text-xs text-slate-500">{ministryNamesFor(focusedPlayer?.id).join(" · ") || "No ministry"} · Suspicion {focusedPlayer?.suspicion || 0}</p>
+                {focusedPlayer?.hand_revealed ? (
+                  <p className="mt-1 text-xs font-semibold text-rose-300">Hand and Schemes revealed by Suspicion</p>
+                ) : null}
                 {focusedPlayer?.hidden_agenda_id ? (
                   <p className="mt-1 text-xs text-amber-700">
                     Hidden Agenda: {agendaLookup[normalize(focusedPlayer.hidden_agenda_id)]?.name || focusedPlayer.hidden_agenda_id}
