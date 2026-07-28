@@ -196,6 +196,7 @@ def build_goldfishing_state(
         "pending_event_resource_effect": None,
         "pending_event_resource_conversion": None,
         "pending_event_city_tokens": None,
+        "pending_event_unrest_scope": None,
         "pending_event_destroy_building": None,
         "structure_tag_requirement_waivers": 0,
         "plague_morale_suppressed": False,
@@ -260,6 +261,7 @@ def perform_action(state: dict[str, Any], action: str, payload: dict[str, Any] |
         "choose_event_resource": _choose_event_resource,
         "choose_event_conversion_resource": _choose_event_conversion_resource,
         "choose_event_token_city": _choose_event_token_city,
+        "choose_event_unrest_scope": _choose_event_unrest_scope,
         "choose_event_destroy_building": _choose_event_destroy_building,
         "reveal_next": _reveal_next,
         "place_revealed_card": _place_revealed_card,
@@ -476,12 +478,16 @@ def _move_docket_card(state: dict[str, Any], payload: dict[str, Any]) -> None:
         raise ValueError("Docket card not found.")
     if destination < 0 or destination >= len(docket):
         raise ValueError("Docket card is already at that edge.")
+    if _commitment_is_crisis(state, docket[index]) != _commitment_is_crisis(state, docket[destination]):
+        raise ValueError("Crisis cards must remain before all other cards.")
     docket[index], docket[destination] = docket[destination], docket[index]
 
 
 def _confirm_docket_order(state: dict[str, Any], payload: dict[str, Any]) -> None:
     _require_phase(state, "docket_ordering")
     _require_active_player(state, payload)
+    if not _crises_are_first(state, state.get("council_stack", [])):
+        raise ValueError("Every Crisis must resolve before non-Crisis cards.")
     state["phase"] = "reveal"
     state["current_reveal"] = None
     state["revealed_cards"] = []
@@ -759,6 +765,10 @@ def _run_hand_reset(state: dict[str, Any]) -> None:
             else:
                 _discard_item(state, item_id)
         player["hand"] = crises
+    state["council_stack"] = sorted(
+        state.get("council_stack", []),
+        key=lambda commitment: 0 if _commitment_is_crisis(state, commitment) else 1,
+    )
     state["phase"] = "docket_ordering"
     state["active_player_id"] = state["minister_of_empire_player_id"]
     state["current_reveal"] = None
@@ -879,9 +889,21 @@ def _possible_actions(state: dict[str, Any]) -> list[dict[str, Any]]:
             for index, commitment in enumerate(docket)
             for direction in (-1, 1)
             if 0 <= index + direction < len(docket)
+            and _commitment_is_crisis(state, commitment)
+            == _commitment_is_crisis(state, docket[index + direction])
         ]
         return [*actions, {"type": "confirm_docket_order", "player_id": active}]
     if phase == "reveal":
+        pending_unrest_scope = state.get("pending_event_unrest_scope")
+        if pending_unrest_scope:
+            return [
+                {
+                    "type": "choose_event_unrest_scope",
+                    "player_id": pending_unrest_scope["decision_player_id"],
+                    "scope": scope,
+                }
+                for scope in ("global", "city")
+            ]
         pending_destroy = state.get("pending_event_destroy_building")
         if pending_destroy:
             return [
@@ -1301,7 +1323,20 @@ def _apply_event_effects(
             _discard_for_event(state, payload, event)
         elif effect_type in {"modify_plague", "modify_unrest", "modify_fortified"}:
             token_id = f"{effect_type.removeprefix('modify_')}-token"
-            if payload.get("scope") == "global":
+            scope = str(payload.get("scope") or ("unspecified" if effect_type == "modify_unrest" else "city"))
+            if effect_type == "modify_unrest" and scope == "unspecified":
+                decision_player = _event_decision_player(state, event, fallback_role="state")
+                state["pending_event_unrest_scope"] = {
+                    "event_id": event["id"],
+                    "amount": amount,
+                    "remaining_effects": list(effects[index + 1:]),
+                    "continuation": continuation,
+                    "requirements_met": requirements_met,
+                    "decision_player_id": decision_player,
+                }
+                state["active_player_id"] = decision_player
+                return False
+            if scope == "global":
                 _modify_token_count(state.setdefault("condition_tokens", {}), token_id, amount)
             elif len(state.get("cities", [])) > 1:
                 role = {
@@ -1574,6 +1609,56 @@ def _choose_event_token_city(state: dict[str, Any], payload: dict[str, Any]) -> 
         )
 
 
+def _choose_event_unrest_scope(state: dict[str, Any], payload: dict[str, Any]) -> None:
+    pending = state.get("pending_event_unrest_scope")
+    if not pending:
+        raise ValueError("No Unrest scope choice is pending.")
+    _require_decision_player(state, payload, pending["decision_player_id"])
+    scope = str(payload.get("scope") or "")
+    if scope not in {"global", "city"}:
+        raise ValueError("Unrest must be placed globally or on a City.")
+    event = event_by_id(state, pending["event_id"])
+    amount = int(pending["amount"])
+    state["pending_event_unrest_scope"] = None
+    if scope == "global":
+        _modify_token_count(
+            state.setdefault("condition_tokens", {}),
+            "unrest-token",
+            amount,
+        )
+    elif len(state.get("cities", [])) > 1:
+        state["pending_event_city_tokens"] = {
+            "event_id": event["id"],
+            "token_changes": {"unrest-token": amount},
+            "city_ids": [city["id"] for city in state["cities"]],
+            "remaining_effects": pending["remaining_effects"],
+            "continuation": pending["continuation"],
+            "requirements_met": pending["requirements_met"],
+            "decision_player_id": pending["decision_player_id"],
+        }
+        return
+    elif state.get("cities"):
+        _modify_token_count(
+            state["cities"][0].setdefault("condition_tokens", {}),
+            "unrest-token",
+            amount,
+        )
+    completed = _apply_event_effects(
+        state,
+        event,
+        pending["remaining_effects"],
+        continuation=pending["continuation"],
+        requirements_met=bool(pending["requirements_met"]),
+    )
+    if completed:
+        _complete_event_resolution(
+            state,
+            event,
+            continuation=pending["continuation"],
+            requirements_met=bool(pending["requirements_met"]),
+        )
+
+
 def _choose_event_destroy_building(state: dict[str, Any], payload: dict[str, Any]) -> None:
     pending = state.get("pending_event_destroy_building")
     if not pending:
@@ -1818,6 +1903,21 @@ def _is_event(item: dict[str, Any]) -> bool:
 
 def _is_crisis(item: dict[str, Any]) -> bool:
     return _is_event(item) and str((item.get("data") or {}).get("subtype") or "").lower() == "crisis"
+
+
+def _commitment_is_crisis(state: dict[str, Any], commitment: dict[str, Any]) -> bool:
+    return _is_crisis(item_by_id(state, str(commitment.get("item_id") or "")))
+
+
+def _crises_are_first(state: dict[str, Any], docket: list[dict[str, Any]]) -> bool:
+    non_crisis_seen = False
+    for commitment in docket:
+        if _commitment_is_crisis(state, commitment):
+            if non_crisis_seen:
+                return False
+        else:
+            non_crisis_seen = True
+    return True
 
 
 def _is_city_card(card: dict[str, Any]) -> bool:

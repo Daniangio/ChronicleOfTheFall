@@ -251,6 +251,27 @@ const GameRoomPage = () => {
   const boardWidth = Math.max(760, (gameState.cities?.length || 1) * 610);
 
   const renderPhaseControls = () => {
+    const unrestScopeChoices = actions.filter((entry) => entry.type === "choose_event_unrest_scope");
+    if (unrestScopeChoices.length) {
+      return (
+        <div>
+          <p className="mb-2 text-sm font-semibold text-amber-100">Minister of State: choose where to place Unrest</p>
+          <div className="flex flex-wrap gap-2">
+            {unrestScopeChoices.map((entry) => (
+              <button
+                key={entry.scope}
+                className="rounded-md border border-amber-800 bg-stone-950 px-3 py-2 text-sm font-semibold text-amber-100 hover:bg-amber-950/50 disabled:opacity-50"
+                disabled={busy}
+                onClick={() => performAction(entry)}
+                type="button"
+              >
+                {entry.scope === "global" ? "Global Unrest" : "City Unrest"}
+              </button>
+            ))}
+          </div>
+        </div>
+      );
+    }
     const destructionChoices = actions.filter((entry) => entry.type === "choose_event_destroy_building");
     if (destructionChoices.length) {
       return (

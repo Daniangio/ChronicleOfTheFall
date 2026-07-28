@@ -538,7 +538,9 @@ Refill Phase. Crisis cards remain in hand.
 
 The Minister of the Empire is the first player of the Era and the default decision-maker when another Ministry is vacant.
 
-During the Council Docket Phase, the Minister of the Empire determines the order in which all committed cards resolve.
+During the Council Docket Phase, the Minister of the Empire determines the order
+in which committed cards resolve, subject to every Crisis resolving before every
+non-Crisis card.
 
 The Minister of the Empire cannot receive Suspicion and cannot be blocked or otherwise prevented from holding this office.
 
@@ -866,11 +868,16 @@ After every player has committed or declared that they cannot commit:
 1. Reveal all committed cards into the **Council Docket**.
 2. Keep each normal contributor anonymous.
 3. Keep any face-up Suspicion commitments associated with their contributor.
-4. The Minister of the Empire orders every card in the Docket.
-5. Lock the chosen order.
-6. Resolve the first card, then continue through the Docket from left to right.
+4. Move every Crisis to the front of the Docket.
+5. The Minister of the Empire orders the Crisis cards among themselves, then
+   orders all remaining cards among themselves.
+6. Lock the chosen order.
+7. Resolve the first card, then continue through the Docket from left to right.
 
 The Docket is not shuffled and its resolution order is not random.
+
+Every Crisis must finish resolving before any non-Crisis card can resolve. A
+Crisis may never be ordered behind an Edict or Development card.
 
 Resolve each card fully before resolving the next card.
 
@@ -1072,19 +1079,19 @@ The Minister of War chooses one resolution:
 ### Repression
 
 Remove all Global Unrest.
-Lose 2 Morale.
+Lose 3 Morale.
 Gain 1 Stability.
 
 ### Concessions
 
 Remove all Global Unrest.
-Lose 2 Treasury.
+Lose 3 Treasury.
 Gain 1 Morale.
 
 ### Fragmentation
 
 Remove all Global Unrest.
-Lose 2 Stability.
+Lose 3 Stability.
 Gain 1 Treasury.
 
 ---

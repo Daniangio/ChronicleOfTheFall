@@ -402,6 +402,79 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
         self.assertEqual(state["phase"], "reveal")
         self.assertEqual(state["possible_actions"], [{"type": "reveal_next"}])
 
+    def test_crises_are_ordered_before_all_other_docket_cards(self):
+        state = build_state()
+        state.update(
+            {
+                "phase": "hand_reset",
+                "active_player_id": state["minister_of_empire_player_id"],
+                "council_stack": [
+                    {"id": "development", "item_id": "farm", "kind": "cards", "owner_player_id": "", "face_up": False},
+                    {"id": "crisis-one", "item_id": "border-raid", "kind": "events", "owner_player_id": "", "face_up": False},
+                    {"id": "edict", "item_id": "tax-riots", "kind": "events", "owner_player_id": "", "face_up": False},
+                    {"id": "crisis-two", "item_id": "border-raid", "kind": "events", "owner_player_id": "", "face_up": False},
+                ],
+            }
+        )
+
+        state = perform_action(state, "continue_phase", {})
+
+        self.assertEqual(
+            [entry["id"] for entry in state["council_stack"]],
+            ["crisis-one", "crisis-two", "development", "edict"],
+        )
+        self.assertFalse(
+            any(
+                action["type"] == "move_docket_card"
+                and action["commitment_id"] == "crisis-two"
+                and action["direction"] == 1
+                for action in state["possible_actions"]
+            )
+        )
+        state = perform_action(
+            state,
+            "move_docket_card",
+            {
+                "player_id": state["minister_of_empire_player_id"],
+                "commitment_id": "crisis-two",
+                "direction": -1,
+            },
+        )
+        self.assertEqual(
+            [entry["id"] for entry in state["council_stack"][:2]],
+            ["crisis-two", "crisis-one"],
+        )
+        with self.assertRaisesRegex(ValueError, "must remain before"):
+            perform_action(
+                state,
+                "move_docket_card",
+                {
+                    "player_id": state["minister_of_empire_player_id"],
+                    "commitment_id": "crisis-one",
+                    "direction": 1,
+                },
+            )
+
+    def test_invalid_docket_cannot_confirm_crisis_after_another_card(self):
+        state = build_state()
+        state.update(
+            {
+                "phase": "docket_ordering",
+                "active_player_id": state["minister_of_empire_player_id"],
+                "council_stack": [
+                    {"id": "development", "item_id": "farm", "kind": "cards", "owner_player_id": "", "face_up": False},
+                    {"id": "crisis", "item_id": "border-raid", "kind": "events", "owner_player_id": "", "face_up": False},
+                ],
+            }
+        )
+
+        with self.assertRaisesRegex(ValueError, "before non-Crisis"):
+            perform_action(
+                state,
+                "confirm_docket_order",
+                {"player_id": state["minister_of_empire_player_id"]},
+            )
+
     def test_plotting_reveals_commitments_into_unshuffled_docket(self):
         state = build_state()
         state["phase"] = "plotting"
@@ -825,6 +898,61 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
             {"plague-token": 1, "unrest-token": 2, "fortified-token": 1},
         )
         self.assertEqual(state["cities"][0]["condition_tokens"], {})
+
+    def test_unspecified_unrest_uses_state_minister_scope_and_city_choices(self):
+        state = build_state()
+        state["cities"].append(
+            {
+                "id": "frontier",
+                "name": "Frontier",
+                "city_card_id": "capital",
+                "building_slots": 4,
+                "cards": [],
+                "condition_tokens": {},
+            }
+        )
+        state_player_id = next(
+            holder for ministry_id, holder in state["ministry_assignments"].items()
+            if "state" in ministry_id
+        )
+        event = state["catalog"]["events"][0]
+        event["data"].update(
+            {
+                "requirements": [],
+                "main_effects": [
+                    {
+                        "effect_type": "modify_unrest",
+                        "payload": {"scope": "unspecified", "amount": 2},
+                    }
+                ],
+            }
+        )
+        state["phase"] = "reveal"
+        state["council_stack"] = [
+            {
+                "id": "unrest-event",
+                "item_id": event["id"],
+                "kind": "events",
+                "owner_player_id": "",
+                "face_up": False,
+            }
+        ]
+
+        state = perform_action(state, "reveal_next", {})
+
+        self.assertEqual(state["active_player_id"], state_player_id)
+        self.assertEqual(
+            {action["scope"] for action in state["possible_actions"]},
+            {"global", "city"},
+        )
+        city_scope = next(action for action in state["possible_actions"] if action["scope"] == "city")
+        state = perform_action(state, "choose_event_unrest_scope", city_scope)
+        frontier = next(action for action in state["possible_actions"] if action["city_id"] == "frontier")
+        state = perform_action(state, "choose_event_token_city", frontier)
+
+        self.assertEqual(state["cities"][0]["condition_tokens"], {})
+        self.assertEqual(state["cities"][1]["condition_tokens"], {"unrest-token": 2})
+        self.assertIn(event["id"], state["empire_discard"])
 
     def test_minister_of_war_chooses_destroyed_structure(self):
         state = build_state()
