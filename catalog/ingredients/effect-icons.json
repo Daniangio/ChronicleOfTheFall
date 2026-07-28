@@ -52,7 +52,7 @@
     },
     {
       "id": "draw-card-effect-icon",
-      "name": "Draw 3, Keep 1",
+      "name": "Pending Draw",
       "kind": "effect-icons",
       "category": "effect-icon",
       "summary": "",

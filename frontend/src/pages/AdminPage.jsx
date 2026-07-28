@@ -19,7 +19,8 @@ const sections = [
   { key: "tokens", label: "Tokens", to: "/admin/tokens" },
   { key: "effect-icons", label: "Effect Icons", to: "/admin/effect-icons" },
   { key: "agendas", label: "Agendas", to: "/admin/agendas" },
-  { key: "events", label: "Events", to: "/admin/events" },
+  { key: "edicts", label: "Edicts", to: "/admin/edicts" },
+  { key: "crises", label: "Crises", to: "/admin/crises" },
   { key: "groups", label: "Groups", to: "/admin/groups" },
   { key: "decks", label: "Empire Decks", to: "/admin/decks" },
   { key: "levels", label: "Levels", to: "/admin/levels" },
@@ -1471,7 +1472,7 @@ const eventEffectOptions = [
   { value: "modify_pillar", label: "Modify pillar" },
   { value: "modify_resources", label: "Add or remove resources" },
   { value: "convert_resources", label: "Convert resources" },
-  { value: "draw_card", label: "Choice Minister draws 3 and keeps 1" },
+  { value: "draw_card", label: "Choice Minister gains a pending draw" },
   { value: "destroy_building", label: "Destroy building" },
   { value: "remove_all_resources", label: "Remove all remaining resources" },
   { value: "discard_cards", label: "Discard cards from hand" },
@@ -1590,7 +1591,7 @@ const EventEffects = ({ effects, setEffects, tagEntries, pillarEntries }) => {
               </>
             ) : effect.effect_type === "draw_card" ? (
               <p className="self-end pb-2 text-sm text-slate-400 sm:col-span-2">
-                The Choice Minister draws 3 cards, keeps 1, and discards the others. The Minister of the Empire chooses if missing.
+                The Choice Minister draws one additional card during this Era's Hand Refill. The Minister of the Empire receives it if missing.
               </p>
             ) : effect.effect_type === "discard_cards" ? (
               <>
@@ -1782,12 +1783,6 @@ const EventGuidedFields = ({ data, setField, tagEntries, ministryEntries, pillar
         ]}
         onChange={(ministryId) => setField("ministry_id", ministryId)}
       />
-      <SelectField
-        label="Event Subtype"
-        value={data.subtype || "edict"}
-        options={[{ value: "edict", label: "Edict" }, { value: "crisis", label: "Crisis" }]}
-        onChange={(subtype) => setField("subtype", subtype)}
-      />
       <div className="space-y-3">
         <div className="flex items-center justify-between gap-3">
           <h4 className="text-sm font-semibold text-slate-300">Resolution Requirements</h4>
@@ -1885,7 +1880,7 @@ const UnifiedDeckGuidedFields = ({ data, setField, items }) => {
     : { "3": [], "4": [], "5": [] };
   const deckCounts = repeatedListToCounts(itemIds);
   const tierCounts = Object.fromEntries(["3", "4", "5"].map((tier) => [tier, repeatedListToCounts(setup[tier] || [])]));
-  const tierTargets = { "3": 12, "4": 3, "5": 3 };
+  const tierTargets = { "3": 6, "4": 2, "5": 2 };
 
   const setDeckCopies = (itemId, copies) => {
     const normalized = Math.max(0, Math.min(99, Number(copies) || 0));
@@ -2007,7 +2002,7 @@ const GuidedMetadataEditor = ({
   const hasDeckGuidance = activeSection === "decks";
   const hasLevelGuidance = activeSection === "levels";
   const hasMinistryGuidance = activeSection === "ministries";
-  const hasEventGuidance = activeSection === "events";
+  const hasEventGuidance = activeSection === "edicts" || activeSection === "crises";
   const hasAgendaGuidance = activeSection === "agendas";
   const hasPillarGuidance = activeSection === "pillars";
   const hasEffectIconGuidance = activeSection === "effect-icons";
@@ -2183,7 +2178,8 @@ const AdminPage = () => {
   const [busy, setBusy] = useState(false);
 
   const activeSection = sections.some((entry) => entry.key === section) ? section : null;
-  const activeCatalogKind = activeSection;
+  const activeEventSubtype = activeSection === "crises" ? "crisis" : activeSection === "edicts" ? "edict" : "";
+  const activeCatalogKind = activeEventSubtype ? "events" : activeSection;
   const isCatalogSection = catalogSections.has(activeCatalogKind);
   const isReadOnlyCatalogSection = readOnlyCatalogSections.has(activeCatalogKind);
 
@@ -2339,9 +2335,12 @@ const AdminPage = () => {
         activeCatalogKind !== "tags" ||
         tagCategoryFilter === "all" ||
         entry.category === tagCategoryFilter;
-      return matchesQuery && matchesCategory;
+      const matchesEventSubtype =
+        !activeEventSubtype ||
+        String(entry.data?.subtype || "edict") === activeEventSubtype;
+      return matchesQuery && matchesCategory && matchesEventSubtype;
     });
-  }, [activeCatalogKind, catalogEntries, query, tagCategoryFilter]);
+  }, [activeCatalogKind, activeEventSubtype, catalogEntries, query, tagCategoryFilter]);
 
   const tagCategories = useMemo(
     () => Array.from(new Set(catalogEntries.map((entry) => entry.category || "uncategorized"))).sort(),
@@ -2393,7 +2392,7 @@ const AdminPage = () => {
                   infrastructure_resources: [],
                 })
               : activeCatalogKind === "events"
-                ? stringifyData({ subtype: "edict", requirements: [], main_effects: [], alternative_effects: [] })
+                ? stringifyData({ subtype: activeEventSubtype, requirements: [], main_effects: [], alternative_effects: [] })
               : activeCatalogKind === "pillars"
                 ? stringifyData({ min: 0, max: 10, start: 5, range_effects: [] })
               : activeCatalogKind === "tags"
@@ -2435,8 +2434,11 @@ const AdminPage = () => {
     setError("");
     try {
       const parsedData = parseCatalogData();
-      const tagResourceType = parsedData.resource_type === "volatile" ? "volatile" : "permanent";
-      const effectIconIdentity = effectIconCatalogIdentity(parsedData.effect_type || catalogForm.name || "effect");
+      const normalizedData = activeCatalogKind === "events"
+        ? { ...parsedData, subtype: activeEventSubtype }
+        : parsedData;
+      const tagResourceType = normalizedData.resource_type === "volatile" ? "volatile" : "permanent";
+      const effectIconIdentity = effectIconCatalogIdentity(normalizedData.effect_type || catalogForm.name || "effect");
       const effectIconName = activeCatalogKind === "effect-icons"
         ? (catalogForm.name || effectIconIdentity.name)
         : catalogForm.name;
@@ -2477,22 +2479,22 @@ const AdminPage = () => {
         summary: catalogForm.summary,
         color: activeCatalogKind === "tags" ? catalogForm.color : null,
         data: activeCatalogKind === "groups"
-          ? { ...parsedData, type: "mutually_exclusive" }
+          ? { ...normalizedData, type: "mutually_exclusive" }
           : activeCatalogKind === "decks"
             ? {
-                ...parsedData,
-                item_ids: Array.isArray(parsedData.item_ids) ? parsedData.item_ids : [],
-                initial_setup: parsedData.initial_setup || { "3": [], "4": [], "5": [] },
+                ...normalizedData,
+                item_ids: Array.isArray(normalizedData.item_ids) ? normalizedData.item_ids : [],
+                initial_setup: normalizedData.initial_setup || { "3": [], "4": [], "5": [] },
               }
           : activeCatalogKind === "levels"
             ? {
-                ...parsedData,
-                initial_city_card_id: parsedData.initial_city_card_id || "",
-                deck_id: parsedData.deck_id || "",
+                ...normalizedData,
+                initial_city_card_id: normalizedData.initial_city_card_id || "",
+                deck_id: normalizedData.deck_id || "",
               }
           : activeCatalogKind === "tags"
-              ? { ...parsedData, resource_type: tagResourceType }
-            : parsedData,
+              ? { ...normalizedData, resource_type: tagResourceType }
+            : normalizedData,
       };
       const path = editingEntry
         ? `/api/admin/${activeCatalogKind}/${editingEntry.id}`
@@ -2694,8 +2696,16 @@ const AdminPage = () => {
     try {
       const suffix = kind ? `?kind=${encodeURIComponent(kind)}` : "";
       const payload = await request(`/api/admin/catalog/export${suffix}`);
-      const exportedKind = kind || "all";
-      downloadJson(payload, `chronicle-catalog-${exportedKind}.json`);
+      const scopedPayload = kind === "events" && activeEventSubtype
+        ? {
+            ...payload,
+            entries: (payload.entries || []).filter(
+              (entry) => String(entry.data?.subtype || "edict") === activeEventSubtype
+            ),
+          }
+        : payload;
+      const exportedKind = activeEventSubtype || kind || "all";
+      downloadJson(scopedPayload, `chronicle-catalog-${exportedKind}.json`);
     } catch (exportError) {
       setError(exportError.message || "Failed to export catalog.");
     } finally {
@@ -2714,7 +2724,13 @@ const AdminPage = () => {
       const normalizedPayload = {
         version: Number(payload.version || 1),
         kind: importAll ? "all" : activeCatalogKind,
-        entries: entries.map((entry) => ({ ...entry, kind: entry.kind || activeCatalogKind })),
+        entries: entries.map((entry) => ({
+          ...entry,
+          kind: entry.kind || activeCatalogKind,
+          data: !importAll && activeEventSubtype && (entry.kind || activeCatalogKind) === "events"
+            ? { ...(entry.data || {}), subtype: activeEventSubtype }
+            : entry.data,
+        })),
       };
       const result = await request("/api/admin/catalog/import", {
         method: "POST",
@@ -3015,7 +3031,7 @@ const AdminPage = () => {
                     type="button"
                   >
                     <Plus className="h-4 w-4" aria-hidden="true" />
-                    New {activeSection.slice(0, -1)}
+                    New {activeEventSubtype === "crisis" ? "Crisis" : activeEventSubtype === "edict" ? "Edict" : activeSection.slice(0, -1)}
                   </button>
                 </>
               )}

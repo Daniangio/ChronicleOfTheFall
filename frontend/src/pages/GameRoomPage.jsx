@@ -246,36 +246,12 @@ const GameRoomPage = () => {
       .filter(([, holder]) => holder === playerId)
       .map(([ministryId]) => ministryLookup[normalize(ministryId)]?.name || ministryId);
   const currentReveal = gameState.current_reveal;
-  const currentCrisis = eventLookup[normalize(gameState.current_crisis_id)];
   const storageAction = actions.find((entry) => entry.type === "store_resources");
   const resourcePool = gameState.global_resource_pool || {};
   const selectedStorageTotal = Object.values(storageSelection).reduce((total, amount) => total + Number(amount || 0), 0);
   const boardWidth = Math.max(760, (gameState.cities?.length || 1) * 610);
 
   const renderPhaseControls = () => {
-    const drawChoices = actions.filter((entry) => entry.type === "choose_event_draw");
-    if (drawChoices.length) {
-      return (
-        <div>
-          <p className="mb-2 text-sm font-semibold text-amber-100">
-            Choose 1 card to keep. The others enter the Empire discard.
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {drawChoices.map((entry) => (
-              <button
-                key={`${entry.draw_index}-${entry.item_id}`}
-                className="rounded-md border border-amber-800 bg-stone-950 px-3 py-2 text-sm font-semibold text-amber-100 hover:bg-amber-950/50 disabled:opacity-50"
-                disabled={busy}
-                onClick={() => performAction(entry)}
-                type="button"
-              >
-                {itemLookup[normalize(entry.item_id)]?.name || entry.item_id}
-              </button>
-            ))}
-          </div>
-        </div>
-      );
-    }
     const tokenCityChoices = actions.filter((entry) => entry.type === "choose_event_token_city");
     if (tokenCityChoices.length) {
       return (
@@ -406,21 +382,6 @@ const GameRoomPage = () => {
         </div>
       );
     }
-    if (phase === "crisis") {
-      if (!gameState.current_crisis_id) {
-        return <button className="rounded-md bg-amber-300 px-4 py-2 text-sm font-bold text-stone-950 hover:bg-amber-200 disabled:opacity-50" disabled={busy} onClick={() => perform("continue_phase")} type="button">Continue to Conditions</button>;
-      }
-      return (
-        <div className="flex flex-wrap gap-2">
-          {actions.map((entry) => (
-            <button key={String(entry.use_war_power)} className="inline-flex items-center gap-2 rounded-md border border-rose-800 bg-rose-950/30 px-3 py-2 text-sm font-semibold text-rose-100 hover:bg-rose-950/60 disabled:opacity-50" disabled={busy} onClick={() => performAction(entry)} type="button">
-              <Shield className="h-4 w-4" aria-hidden="true" />
-              {entry.use_war_power ? "Resolve with War Minister" : "Resolve without War power"}
-            </button>
-          ))}
-        </div>
-      );
-    }
     if (phase === "condition") {
       return <button className="rounded-md bg-amber-300 px-4 py-2 text-sm font-bold text-stone-950 hover:bg-amber-200 disabled:opacity-50" disabled={busy} onClick={() => perform("continue_phase")} type="button">Resolve Conditions</button>;
     }
@@ -450,13 +411,16 @@ const GameRoomPage = () => {
         </div>
       );
     }
-    if (phase === "cleanup") {
-      const drawAction = actions.find((entry) => entry.type === "cleanup_draw");
+    if (phase === "hand_refill") {
+      const drawAction = actions.find((entry) => entry.type === "refill_hand");
       return drawAction ? (
         <button className="rounded-md border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800 disabled:opacity-50" disabled={busy} onClick={() => performAction(drawAction)} type="button">
-          Draw to {drawAction.hand_target}
+          Draw {drawAction.draw_amount}
         </button>
       ) : null;
+    }
+    if (["crisis_intake", "hand_reset", "cleanup"].includes(phase)) {
+      return <button className="rounded-md border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800 disabled:opacity-50" disabled={busy} onClick={() => perform("continue_phase")} type="button">Resolve phase</button>;
     }
     return null;
   };
@@ -539,12 +503,6 @@ const GameRoomPage = () => {
                 </div>
               </section>
 
-              {currentCrisis ? (
-                <section className="border border-rose-900/70 bg-rose-950/15 p-4">
-                  <h2 className="mb-3 text-sm font-bold uppercase text-rose-200">Current Crisis</h2>
-                  <CatalogItemVisual entry={currentCrisis} tags={catalogs.tags} ministries={catalogs.ministries} images={catalogs.images} pillars={catalogs.pillars} effectIcons={catalogs.effect_icons} />
-                </section>
-              ) : null}
 
               <section className="border border-slate-800 bg-slate-900">
                 <div className="flex items-center justify-between gap-3 border-b border-slate-800 p-4">
@@ -569,22 +527,6 @@ const GameRoomPage = () => {
             </div>
 
             <aside className="space-y-4">
-              <section className="border border-slate-800 bg-slate-900 p-3">
-                <div className="flex items-center justify-between gap-2">
-                  <h2 className="text-sm font-bold text-white">Empire Discard</h2>
-                  <span className="text-xs text-slate-500">{gameState.empire_discard?.length || 0} cards</span>
-                </div>
-                <div className="mt-3">
-                  {gameState.empire_discard?.length ? (
-                    <ItemVisual
-                      item={itemLookup[normalize(gameState.empire_discard[gameState.empire_discard.length - 1])]}
-                      catalogs={catalogs}
-                      tagLookup={tagLookup}
-                      storageIconSrc={storageIconSrc}
-                    />
-                  ) : <p className="text-xs text-slate-600">The common discard is empty.</p>}
-                </div>
-              </section>
               <section className="border border-slate-800 bg-slate-900 p-3">
                 <h2 className="text-sm font-bold text-white">Council Docket</h2>
                 <p className="mt-1 text-xs text-slate-500">
@@ -675,7 +617,7 @@ const GameRoomPage = () => {
                   </p>
                 ) : null}
               </div>
-              <p className="text-xs text-slate-500">Hand target 4 · State target 5 · Scheme slots 1</p>
+              <p className="text-xs text-slate-500">Refill 3 · State refill 4 · Scheme slots 2</p>
             </div>
             <div className="mt-4 grid gap-5 xl:grid-cols-[minmax(0,1fr)_20rem]">
               <div>
@@ -683,8 +625,7 @@ const GameRoomPage = () => {
                 <div className="flex flex-wrap gap-3">
                   {(focusedPlayer?.hand || []).map((itemId, index) => {
                     const plottingAction = actions.find((entry) => entry.type === "commit_card" && entry.source === "hand" && entry.index === index && entry.player_id === focusedPlayer.id);
-                    const discardAction = actions.find((entry) => entry.type === "plotting_discard" && entry.source === "hand" && entry.index === index && entry.player_id === focusedPlayer.id);
-                    const schemeAction = actions.find((entry) => entry.type === "plotting_scheme" && entry.hand_index === index && entry.player_id === focusedPlayer.id);
+                    const schemeActions = actions.filter((entry) => entry.type === "plotting_scheme" && entry.hand_index === index && entry.player_id === focusedPlayer.id);
                     return (
                       <div key={`${itemId}-${index}`} className="space-y-2">
                         <ItemVisual
@@ -696,10 +637,13 @@ const GameRoomPage = () => {
                           onAction={() => performAction(plottingAction)}
                           disabled={busy || !plottingAction}
                         />
-                        {schemeAction || discardAction ? (
+                        {schemeActions.length ? (
                           <div className="grid grid-cols-2 gap-1">
-                            {schemeAction ? <button className="border border-slate-700 px-2 py-1 text-[0.65rem] text-slate-300 hover:bg-slate-800 disabled:opacity-50" disabled={busy} onClick={() => performAction(schemeAction)} type="button">{schemeAction.mode === "swap" ? "Swap Scheme" : "Scheme"}</button> : null}
-                            {discardAction ? <button className="border border-rose-900 px-2 py-1 text-[0.65rem] text-rose-200 hover:bg-rose-950/50 disabled:opacity-50" disabled={busy} onClick={() => performAction(discardAction)} type="button">Discard</button> : null}
+                            {schemeActions.map((entry) => (
+                              <button key={`${entry.mode}-${entry.slot_index}`} className="border border-slate-700 px-2 py-1 text-[0.65rem] text-slate-300 hover:bg-slate-800 disabled:opacity-50" disabled={busy} onClick={() => performAction(entry)} type="button">
+                                {entry.mode === "swap" ? "Swap with" : "Scheme in"} slot {entry.slot_index + 1}
+                              </button>
+                            ))}
                           </div>
                         ) : null}
                       </div>
@@ -710,14 +654,14 @@ const GameRoomPage = () => {
               </div>
               <div>
                 <h3 className="mb-2 text-xs font-bold uppercase text-slate-500">Scheme Slots</h3>
-                <div className="grid grid-cols-1 gap-2">
-                  {(focusedPlayer?.scheme_slots || [null]).map((itemId, index) => {
+                <div className="grid grid-cols-2 gap-2">
+                  {(focusedPlayer?.scheme_slots || [null, null]).map((itemId, index) => {
                     const plottingAction = actions.find((entry) => entry.type === "commit_card" && entry.source === "scheme" && entry.index === index && entry.player_id === focusedPlayer.id);
-                    const discardAction = actions.find((entry) => entry.type === "plotting_discard" && entry.source === "scheme" && entry.index === index && entry.player_id === focusedPlayer.id);
+                    const returnAction = actions.find((entry) => entry.type === "plotting_scheme" && entry.mode === "to_hand" && entry.slot_index === index && entry.player_id === focusedPlayer.id);
                     return itemId ? (
                       <div key={`${itemId}-${index}`} className="space-y-2">
                         <ItemVisual item={itemLookup[normalize(itemId)]} catalogs={catalogs} tagLookup={tagLookup} storageIconSrc={storageIconSrc} actionLabel={plottingAction ? plottingAction.face_up ? "Commit face up" : "Commit anonymously" : ""} onAction={() => performAction(plottingAction)} disabled={busy || !plottingAction} />
-                        {discardAction ? <button className="w-full border border-rose-900 px-2 py-1 text-[0.65rem] text-rose-200 hover:bg-rose-950/50 disabled:opacity-50" disabled={busy} onClick={() => performAction(discardAction)} type="button">Discard</button> : null}
+                        {returnAction ? <button className="w-full border border-slate-700 px-2 py-1 text-[0.65rem] text-slate-300 hover:bg-slate-800 disabled:opacity-50" disabled={busy} onClick={() => performAction(returnAction)} type="button">Return to hand</button> : null}
                       </div>
                     ) : <div key={index} className="flex aspect-[5/7] items-center justify-center border border-dashed border-slate-700 text-xs text-slate-600">Empty slot {index + 1}</div>;
                   })}

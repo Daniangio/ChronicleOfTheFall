@@ -358,7 +358,7 @@ def _validate_catalog_data(
         initial_setup = data.get("initial_setup")
         if not isinstance(initial_setup, dict):
             raise ValueError("Deck initial_setup must contain 3, 4, and 5 player tiers.")
-        expected_tier_sizes = {"3": 12, "4": 3, "5": 3}
+        expected_tier_sizes = {"3": 6, "4": 2, "5": 2}
         setup_ids: list[str] = []
         for player_count, expected_size in expected_tier_sizes.items():
             tier = initial_setup.get(player_count)

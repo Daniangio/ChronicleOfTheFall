@@ -207,8 +207,8 @@ def test_new_database_catalog_starts_with_repository_ingredients(tmp_path):
                     name="Starter Deck",
                     category="deck",
                     data={
-                        "item_ids": ["farm"] * 18,
-                        "initial_setup": {"3": ["farm"] * 12, "4": ["farm"] * 3, "5": ["farm"] * 3},
+                        "item_ids": ["farm"] * 10,
+                        "initial_setup": {"3": ["farm"] * 6, "4": ["farm"] * 2, "5": ["farm"] * 2},
                     },
                 ),
                 _admin=admin,
@@ -543,11 +543,11 @@ def test_export_all_includes_every_catalog_admin_kind(tmp_path):
                 name="Test Deck",
                 category="deck",
                 data={
-                    "item_ids": ["test-card"] * 18,
+                    "item_ids": ["test-card"] * 10,
                     "initial_setup": {
-                        "3": ["test-card"] * 12,
-                        "4": ["test-card"] * 3,
-                        "5": ["test-card"] * 3,
+                        "3": ["test-card"] * 6,
+                        "4": ["test-card"] * 2,
+                        "5": ["test-card"] * 2,
                     },
                 },
             ),

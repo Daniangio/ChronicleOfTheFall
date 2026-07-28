@@ -8,11 +8,11 @@ from typing import Any
 
 
 PLAYER_COUNT = 4
-BASE_HAND_SIZE = 3
+BASE_HAND_SIZE = 2
 EMPIRE_HAND_SIZE = 1
-HAND_TARGET = 4
-STATE_HAND_TARGET = 5
-SCHEME_SLOTS = 1
+NORMAL_REFILL_SIZE = 3
+STATE_REFILL_SIZE = 4
+SCHEME_SLOTS = 2
 STALLED_VOTE_THRESHOLD = 2
 MINISTRY_ROTATION_ORDER = ("cities", "state", "war", "health")
 
@@ -24,9 +24,11 @@ PHASES = (
     "docket_ordering",
     "reveal",
     "stalled_vote",
-    "crisis",
     "condition",
     "storage",
+    "crisis_intake",
+    "hand_reset",
+    "hand_refill",
     "cleanup",
     "game_over",
 )
@@ -109,13 +111,22 @@ def build_goldfishing_state(
         initial_city_card_id = city["id"] if city else ""
     initial_city = card_lookup.get(initial_city_card_id, {})
 
+    crisis_item_ids = {
+        entry["id"]
+        for entry in events
+        if str((entry.get("data") or {}).get("subtype") or "").lower() == "crisis"
+    }
     valid_deck_ids = [item_id for item_id in deck_ids if item_id in item_ids and item_id != initial_city_card_id]
+    crisis_ids = [item_id for item_id in valid_deck_ids if item_id in crisis_item_ids]
+    empire_valid_ids = [item_id for item_id in valid_deck_ids if item_id not in crisis_item_ids]
     setup_counts = Counter(
-        item_id for item_id in setup_pool_ids if item_id in item_ids and item_id != initial_city_card_id
+        item_id
+        for item_id in setup_pool_ids
+        if item_id in item_ids and item_id != initial_city_card_id and item_id not in crisis_item_ids
     )
     remaining_setup = Counter(setup_counts)
     empire_ids: list[str] = []
-    for item_id in valid_deck_ids:
+    for item_id in empire_valid_ids:
         if remaining_setup[item_id] > 0:
             remaining_setup[item_id] -= 1
         else:
@@ -124,8 +135,10 @@ def build_goldfishing_state(
         raise ValueError("Initial setup contains copies that are not present in the selected deck.")
     empire_deck = Deck(empire_ids)
     base_deck = Deck(list(setup_counts.elements()))
+    crisis_deck = Deck(crisis_ids)
     empire_deck.shuffle(f"{room_id}:empire")
     base_deck.shuffle(f"{room_id}:base")
+    crisis_deck.shuffle(f"{room_id}:crisis")
 
     players: list[dict[str, Any]] = []
     agenda_deck = Deck([entry["id"] for entry in agendas])
@@ -137,17 +150,17 @@ def build_goldfishing_state(
             empire_cards.extend(
                 empire_deck.draw(BASE_HAND_SIZE - len(base_cards), seed=f"{room_id}:base-fallback:{index}")
             )
+        starting_crisis = crisis_deck.draw(1)
         players.append(
             {
                 "id": f"player-{index + 1}",
                 "name": f"Player {index + 1}",
-                "hand": [*base_cards, *empire_cards],
+                "hand": [*base_cards, *empire_cards, *starting_crisis],
                 "scheme_slots": [None] * SCHEME_SLOTS,
                 "ministry_ids": [],
                 "suspicion": 0,
                 "committed": False,
-                "plotting_scheme_used": False,
-                "plotting_discards": 0,
+                "pending_draws": 0,
                 "hidden_agenda_id": (agenda_deck.draw(1) or [""])[0],
             }
         )
@@ -184,15 +197,13 @@ def build_goldfishing_state(
         "pending_event_resource_effect": None,
         "pending_event_resource_conversion": None,
         "pending_event_city_tokens": None,
-        "pending_event_draw_choice": None,
         "structure_tag_requirement_waivers": 0,
         "plague_morale_suppressed": False,
         "stalled_projects": [],
         "queued_projects": [],
         "votes": {},
-        "current_crisis_id": "",
         "war_power_used": False,
-        "cleanup_completed": [],
+        "refill_completed": [],
         "agendas_revealed": False,
         "winner_player_ids": [],
         "cities": [
@@ -208,7 +219,7 @@ def build_goldfishing_state(
         "empire_deck": empire_deck.to_list(),
         "empire_discard": [],
         "base_deck": base_deck.to_list(),
-        "crisis_deck": [],
+        "crisis_deck": crisis_deck.to_list(),
         "crisis_discard": [],
         "catalog": {
             "cards": card_entries,
@@ -231,6 +242,9 @@ def build_goldfishing_state(
         ],
     }
     _assign_ministries(state, rotate=False)
+    state_holder = _ministry_holder(state, "state")
+    if state_holder:
+        _player(state, state_holder)["hand"].extend(_draw_empire(state, 1))
     return _prepare_state(state)
 
 
@@ -243,20 +257,17 @@ def perform_action(state: dict[str, Any], action: str, payload: dict[str, Any] |
         "commit_card": _commit_card,
         "commit_none": _commit_none,
         "plotting_scheme": _plotting_scheme,
-        "plotting_discard": _plotting_discard,
         "move_docket_card": _move_docket_card,
         "confirm_docket_order": _confirm_docket_order,
         "choose_event_resource": _choose_event_resource,
         "choose_event_conversion_resource": _choose_event_conversion_resource,
         "choose_event_token_city": _choose_event_token_city,
-        "choose_event_draw": _choose_event_draw,
         "reveal_next": _reveal_next,
         "place_revealed_card": _place_revealed_card,
         "place_queued_project": _place_queued_project,
         "vote_stalled_project": _vote_stalled_project,
-        "resolve_crisis": _resolve_crisis,
         "store_resources": _store_resources,
-        "cleanup_draw": _cleanup_draw,
+        "refill_hand": _refill_hand,
     }
     handler = handlers.get(action)
     if not handler:
@@ -326,18 +337,18 @@ def _continue_phase(state: dict[str, Any], _payload: dict[str, Any]) -> None:
         if state.get("pending_placement"):
             raise ValueError("The revealed card still needs placement.")
         _reveal_next(state, {})
-    elif phase == "crisis":
-        if state.get("current_crisis_id"):
-            raise ValueError("The current Crisis must be resolved.")
-        _begin_condition(state)
     elif phase == "condition":
         _run_condition_phase(state)
     elif phase == "storage":
         state["stored_resources"] = {}
         state["global_resource_pool"] = {}
-        _begin_cleanup(state)
+        _begin_crisis_intake(state)
+    elif phase == "crisis_intake":
+        _run_crisis_intake(state)
+    elif phase == "hand_reset":
+        _run_hand_reset(state)
     elif phase == "cleanup":
-        raise ValueError("Cleanup decisions are still required.")
+        _end_era(state)
     else:
         raise ValueError("The current phase cannot be advanced.")
 
@@ -390,44 +401,33 @@ def _plotting_scheme(state: dict[str, Any], payload: dict[str, Any]) -> None:
     _require_phase(state, "plotting")
     player_id = _require_active_player(state, payload)
     player = _player(state, player_id)
-    if player.get("plotting_scheme_used"):
-        raise ValueError("This player already managed their Scheme Slot this turn.")
+    mode = str(payload.get("mode") or "")
     hand_index = int(payload.get("hand_index", -1))
-    if hand_index < 0 or hand_index >= len(player["hand"]):
-        raise ValueError("Hand card not found.")
-    hand_card = player["hand"].pop(hand_index)
-    slot_card = player["scheme_slots"][0]
-    player["scheme_slots"][0] = hand_card
-    if slot_card:
+    slot_index = int(payload.get("slot_index", -1))
+    if slot_index < 0 or slot_index >= SCHEME_SLOTS:
+        raise ValueError("Scheme Slot not found.")
+    slot_card = player["scheme_slots"][slot_index]
+    if mode == "to_hand":
+        if not slot_card:
+            raise ValueError("Scheme Slot is empty.")
+        player["scheme_slots"][slot_index] = None
         player["hand"].append(slot_card)
-    player["plotting_scheme_used"] = True
-    state["log"].append(
-        f"{player['name']} {'swapped a card with' if slot_card else 'placed a card in'} their Scheme Slot."
-    )
-
-
-def _plotting_discard(state: dict[str, Any], payload: dict[str, Any]) -> None:
-    _require_phase(state, "plotting")
-    player_id = _require_active_player(state, payload)
-    player = _player(state, player_id)
-    discard_limit = 2 if _player_has_ministry(state, player_id, "war") else 1
-    if int(player.get("plotting_discards", 0)) >= discard_limit:
-        raise ValueError("This player cannot discard another card this turn.")
-    source = str(payload.get("source") or "hand")
-    index = int(payload.get("index", -1))
-    cards = player["hand"] if source == "hand" else player["scheme_slots"] if source == "scheme" else None
-    if cards is None or index < 0 or index >= len(cards) or not cards[index]:
-        raise ValueError("Discarded card is not available.")
-    item_id = str(cards[index])
-    if _is_crisis(item_by_id(state, item_id)):
-        raise ValueError("Crisis cards cannot be discarded during Plotting.")
-    if source == "hand":
-        cards.pop(index)
+    elif mode in {"to_scheme", "swap"}:
+        if hand_index < 0 or hand_index >= len(player["hand"]):
+            raise ValueError("Hand card not found.")
+        if mode == "to_scheme" and slot_card:
+            raise ValueError("Scheme Slot is occupied.")
+        if mode == "swap" and not slot_card:
+            raise ValueError("Scheme Slot is empty.")
+        hand_card = player["hand"][hand_index]
+        player["scheme_slots"][slot_index] = hand_card
+        if slot_card:
+            player["hand"][hand_index] = slot_card
+        else:
+            player["hand"].pop(hand_index)
     else:
-        cards[index] = None
-    _discard_empire_item(state, item_id)
-    player["plotting_discards"] = int(player.get("plotting_discards", 0)) + 1
-    state["log"].append(f"{player['name']} discarded a card during Plotting.")
+        raise ValueError("Unknown Scheme action.")
+    state["log"].append(f"{player['name']} rearranged their Scheme Slots.")
 
 
 def _move_docket_card(state: dict[str, Any], payload: dict[str, Any]) -> None:
@@ -462,7 +462,7 @@ def _reveal_next(state: dict[str, Any], _payload: dict[str, Any]) -> None:
         raise ValueError("The current card needs placement.")
     stack = state.get("council_stack", [])
     if not stack:
-        _begin_stalled_vote_or_crisis(state)
+        _begin_stalled_vote_or_condition(state)
         return
     commitment = stack.pop(0)
     item = item_by_id(state, commitment["item_id"])
@@ -550,31 +550,10 @@ def _vote_stalled_project(state: dict[str, Any], payload: dict[str, Any]) -> Non
         if vote_counts[project["id"]] >= STALLED_VOTE_THRESHOLD:
             kept.append(project)
         else:
-            _discard_empire_item(state, project["card_id"])
+            _discard_item(state, project["card_id"])
     state["queued_projects"] = kept
     state["stalled_projects"] = []
-    _begin_crisis(state)
-
-
-def _resolve_crisis(state: dict[str, Any], payload: dict[str, Any]) -> None:
-    _require_phase(state, "crisis")
-    crisis_id = str(state.get("current_crisis_id") or "")
-    if not crisis_id:
-        raise ValueError("There is no Crisis to resolve.")
-    event = event_by_id(state, crisis_id)
-    data = event.get("data") or {}
-    resolved = _event_requirements_met(state, data.get("requirements") or [])
-    if resolved:
-        _pay_event_resource_cost(state, data.get("requirements") or [])
-    completed = _apply_event_effects(
-        state,
-        event,
-        data.get("main_effects", []) if resolved else data.get("alternative_effects", []),
-        continuation="crisis",
-        requirements_met=resolved,
-    )
-    if completed:
-        _complete_event_resolution(state, event, continuation="crisis", requirements_met=resolved)
+    _begin_condition(state)
 
 
 def _store_resources(state: dict[str, Any], payload: dict[str, Any]) -> None:
@@ -595,18 +574,23 @@ def _store_resources(state: dict[str, Any], payload: dict[str, Any]) -> None:
     state["stored_resources"] = requested
     state["global_resource_pool"] = {}
     state["log"].append(f"{_player(state, decision_player)['name']} stored {sum(requested.values())} resources.")
-    _begin_cleanup(state)
+    _begin_crisis_intake(state)
 
 
-def _cleanup_draw(state: dict[str, Any], payload: dict[str, Any]) -> None:
-    _require_phase(state, "cleanup")
+def _refill_hand(state: dict[str, Any], payload: dict[str, Any]) -> None:
+    _require_phase(state, "hand_refill")
     player_id = _require_active_player(state, payload)
     player = _player(state, player_id)
-    hand_target = STATE_HAND_TARGET if _player_has_ministry(state, player_id, "state") else HAND_TARGET
-    draw_amount = max(0, hand_target - len(player["hand"]))
+    draw_amount = STATE_REFILL_SIZE if _player_has_ministry(state, player_id, "state") else NORMAL_REFILL_SIZE
+    draw_amount += max(0, int(player.get("pending_draws", 0)))
     player["hand"].extend(_draw_empire(state, draw_amount))
-    state["log"].append(f"{player['name']} drew to {hand_target} cards.")
-    _complete_cleanup_player(state, player_id)
+    player["pending_draws"] = 0
+    state["log"].append(f"{player['name']} refilled with {draw_amount} cards.")
+    state["refill_completed"].append(player_id)
+    if len(state["refill_completed"]) == len(state["players"]):
+        _begin_cleanup(state)
+        return
+    _advance_ordered_player(state, completed_ids=set(state["refill_completed"]))
 
 
 def _assign_ministries(state: dict[str, Any], *, rotate: bool) -> None:
@@ -702,8 +686,6 @@ def _begin_plotting(state: dict[str, Any]) -> None:
     state["council_stack"] = []
     for player in state["players"]:
         player["committed"] = False
-        player["plotting_scheme_used"] = False
-        player["plotting_discards"] = 0
     state["active_player_id"] = state["minister_of_empire_player_id"]
     state["log"].append("Plotting Phase began.")
 
@@ -745,33 +727,15 @@ def _resolve_buildable_item(
     state["pending_placement"] = _placement_payload(state, card, placements, source, reference_id)
 
 
-def _begin_stalled_vote_or_crisis(state: dict[str, Any]) -> None:
+def _begin_stalled_vote_or_condition(state: dict[str, Any]) -> None:
     state["current_reveal"] = None
     if not state.get("stalled_projects"):
-        _begin_crisis(state)
+        _begin_condition(state)
         return
     state["phase"] = "stalled_vote"
     state["votes"] = {}
     state["active_player_id"] = state["minister_of_empire_player_id"]
     state["log"].append("Stalled Project Vote began.")
-
-
-def _begin_crisis(state: dict[str, Any]) -> None:
-    state["phase"] = "crisis"
-    state["active_player_id"] = state["minister_of_empire_player_id"]
-    state["current_crisis_id"] = ""
-    if int(state.get("era", 1)) <= 1:
-        state["log"].append("Era 1 has no Crisis.")
-        return
-    deck = Deck(state.get("crisis_deck", []), discard_ids=state.get("crisis_discard", []))
-    drawn = deck.draw(1, seed=f"{state['room_id']}:{state['era']}:crisis")
-    state["crisis_deck"] = deck.to_list()
-    state["crisis_discard"] = deck.discard_list()
-    if drawn:
-        state["current_crisis_id"] = drawn[0]
-        state["log"].append(f"Crisis revealed: {event_by_id(state, drawn[0])['name']}.")
-    else:
-        state["log"].append("The Crisis Deck is empty.")
 
 
 def _begin_condition(state: dict[str, Any]) -> None:
@@ -803,19 +767,51 @@ def _begin_storage(state: dict[str, Any]) -> None:
     state["log"].append("Storage Phase began.")
 
 
+def _begin_crisis_intake(state: dict[str, Any]) -> None:
+    state["phase"] = "crisis_intake"
+    state["active_player_id"] = state["minister_of_empire_player_id"]
+    state["log"].append("Crisis Intake Phase began.")
+
+
+def _run_crisis_intake(state: dict[str, Any]) -> None:
+    if int(state.get("era", 1)) % 5 == 0:
+        deck = Deck(state.get("crisis_deck", []))
+        for player in state["players"]:
+            player["hand"].extend(deck.draw(1))
+        state["crisis_deck"] = deck.to_list()
+        state["log"].append("Each player drew a Crisis where available.")
+    _begin_hand_reset(state)
+
+
+def _begin_hand_reset(state: dict[str, Any]) -> None:
+    state["phase"] = "hand_reset"
+    state["active_player_id"] = state["minister_of_empire_player_id"]
+    state["log"].append("Hand Reset Phase began.")
+
+
+def _run_hand_reset(state: dict[str, Any]) -> None:
+    for player in state["players"]:
+        crises = []
+        for item_id in player["hand"]:
+            if _is_crisis(item_by_id(state, item_id)):
+                crises.append(item_id)
+            else:
+                _discard_item(state, item_id)
+        player["hand"] = crises
+    _begin_hand_refill(state)
+
+
+def _begin_hand_refill(state: dict[str, Any]) -> None:
+    state["phase"] = "hand_refill"
+    state["refill_completed"] = []
+    state["active_player_id"] = state["minister_of_empire_player_id"]
+    state["log"].append("Hand Refill Phase began.")
+
+
 def _begin_cleanup(state: dict[str, Any]) -> None:
     state["phase"] = "cleanup"
-    state["cleanup_completed"] = []
     state["active_player_id"] = state["minister_of_empire_player_id"]
     state["log"].append("Cleanup began.")
-
-
-def _complete_cleanup_player(state: dict[str, Any], player_id: str) -> None:
-    state["cleanup_completed"].append(player_id)
-    if len(state["cleanup_completed"]) == len(state["players"]):
-        _end_era(state)
-        return
-    _advance_ordered_player(state, completed_ids=set(state["cleanup_completed"]))
 
 
 def _end_era(state: dict[str, Any]) -> None:
@@ -879,35 +875,46 @@ def _possible_actions(state: dict[str, Any]) -> list[dict[str, Any]]:
             }
             for source, index, item_id in _legal_commit_options(state, player)
         ]
-        scheme_actions = []
-        if not player.get("plotting_scheme_used"):
-            scheme_actions = [
+        scheme_actions = [
+            *[
                 {
                     "type": "plotting_scheme",
                     "player_id": active,
                     "hand_index": index,
-                    "mode": "swap" if player["scheme_slots"][0] else "place",
+                    "slot_index": slot_index,
+                    "mode": "to_scheme",
                 }
                 for index, item_id in enumerate(player["hand"])
                 if item_id
-            ]
-        discard_limit = 2 if _player_has_ministry(state, active, "war") else 1
-        discard_actions = []
-        if int(player.get("plotting_discards", 0)) < discard_limit:
-            discard_actions = [
+                for slot_index, slot_item in enumerate(player["scheme_slots"])
+                if not slot_item
+            ],
+            *[
                 {
-                    "type": "plotting_discard",
+                    "type": "plotting_scheme",
                     "player_id": active,
-                    "source": source,
-                    "index": index,
-                    "item_id": item_id,
+                    "slot_index": slot_index,
+                    "mode": "to_hand",
                 }
-                for source, cards in (("hand", player["hand"]), ("scheme", player["scheme_slots"]))
-                for index, item_id in enumerate(cards)
-                if item_id and not _is_crisis(item_by_id(state, item_id))
-            ]
+                for slot_index, slot_item in enumerate(player["scheme_slots"])
+                if slot_item
+            ],
+            *[
+                {
+                    "type": "plotting_scheme",
+                    "player_id": active,
+                    "hand_index": index,
+                    "slot_index": slot_index,
+                    "mode": "swap",
+                }
+                for index, item_id in enumerate(player["hand"])
+                if item_id
+                for slot_index, slot_item in enumerate(player["scheme_slots"])
+                if slot_item
+            ],
+        ]
         mandatory_action = commit_actions or [{"type": "commit_none", "player_id": active}]
-        return [*mandatory_action, *scheme_actions, *discard_actions]
+        return [*mandatory_action, *scheme_actions]
     if phase == "docket_ordering":
         docket = state.get("council_stack", [])
         actions = [
@@ -923,17 +930,6 @@ def _possible_actions(state: dict[str, Any]) -> list[dict[str, Any]]:
         ]
         return [*actions, {"type": "confirm_docket_order", "player_id": active}]
     if phase == "reveal":
-        pending_draw = state.get("pending_event_draw_choice")
-        if pending_draw:
-            return [
-                {
-                    "type": "choose_event_draw",
-                    "player_id": pending_draw["decision_player_id"],
-                    "draw_index": index,
-                    "item_id": item_id,
-                }
-                for index, item_id in enumerate(pending_draw["drawn_ids"])
-            ]
         pending_city_tokens = state.get("pending_event_city_tokens")
         if pending_city_tokens:
             return [
@@ -984,57 +980,6 @@ def _possible_actions(state: dict[str, Any]) -> list[dict[str, Any]]:
             {"type": "vote_stalled_project", "player_id": active, "project_id": project_id}
             for project_id in ["", *[project["id"] for project in state["stalled_projects"]]]
         ]
-    if phase == "crisis":
-        pending_draw = state.get("pending_event_draw_choice")
-        if pending_draw:
-            return [
-                {
-                    "type": "choose_event_draw",
-                    "player_id": pending_draw["decision_player_id"],
-                    "draw_index": index,
-                    "item_id": item_id,
-                }
-                for index, item_id in enumerate(pending_draw["drawn_ids"])
-            ]
-        pending_city_tokens = state.get("pending_event_city_tokens")
-        if pending_city_tokens:
-            return [
-                {
-                    "type": "choose_event_token_city",
-                    "player_id": pending_city_tokens["decision_player_id"],
-                    "city_id": city["id"],
-                }
-                for city in state.get("cities", [])
-            ]
-        pending_conversion = state.get("pending_event_resource_conversion")
-        if pending_conversion:
-            return [
-                {
-                    "type": "choose_event_conversion_resource",
-                    "player_id": pending_conversion["decision_player_id"],
-                    "resource_id": resource_id,
-                    "stage": pending_conversion["stage"],
-                    "amount": pending_conversion["amount"],
-                }
-                for resource_id in pending_conversion["resource_ids"]
-            ]
-        pending_resource = state.get("pending_event_resource_effect")
-        if pending_resource:
-            return [
-                {
-                    "type": "choose_event_resource",
-                    "player_id": pending_resource["decision_player_id"],
-                    "resource_id": resource_id,
-                    "amount": pending_resource["amount"],
-                }
-                for resource_id in pending_resource["resource_ids"]
-            ]
-        if not state.get("current_crisis_id"):
-            return [{"type": "continue_phase"}]
-        actions = [{"type": "resolve_crisis", "use_war_power": False}]
-        if _ministry_holder(state, "war") and not state.get("war_power_used"):
-            actions.append({"type": "resolve_crisis", "use_war_power": True})
-        return actions
     if phase == "condition":
         return [{"type": "continue_phase"}]
     if phase == "storage":
@@ -1049,9 +994,12 @@ def _possible_actions(state: dict[str, Any]) -> list[dict[str, Any]]:
                 "specific_capacity": specific,
             }
         ]
-    if phase == "cleanup":
-        target = STATE_HAND_TARGET if _player_has_ministry(state, active, "state") else HAND_TARGET
-        return [{"type": "cleanup_draw", "player_id": active, "hand_target": target}]
+    if phase in {"crisis_intake", "hand_reset", "cleanup"}:
+        return [{"type": "continue_phase"}]
+    if phase == "hand_refill":
+        draw_amount = STATE_REFILL_SIZE if _player_has_ministry(state, active, "state") else NORMAL_REFILL_SIZE
+        draw_amount += max(0, int(_player(state, active).get("pending_draws", 0)))
+        return [{"type": "refill_hand", "player_id": active, "draw_amount": draw_amount}]
     return []
 
 
@@ -1328,18 +1276,9 @@ def _apply_event_effects(
             _convert_resources(state, source_id, target_id, max(1, amount))
         elif effect_type == "draw_card":
             player_id = _event_choice_minister_player(state, event)
-            drawn = _draw_empire(state, 3)
-            if drawn:
-                state["pending_event_draw_choice"] = {
-                    "event_id": event["id"],
-                    "drawn_ids": drawn,
-                    "remaining_effects": list(effects[index + 1:]),
-                    "continuation": continuation,
-                    "requirements_met": requirements_met,
-                    "decision_player_id": player_id,
-                }
-                state["active_player_id"] = player_id
-                return False
+            player = _player(state, player_id)
+            player["pending_draws"] = int(player.get("pending_draws", 0)) + max(1, amount)
+            state["log"].append(f"{player['name']} gained a pending draw.")
         elif effect_type == "suppress_plague_morale":
             state["plague_morale_suppressed"] = True
         elif effect_type == "discard_cards":
@@ -1591,43 +1530,6 @@ def _choose_event_token_city(state: dict[str, Any], payload: dict[str, Any]) -> 
         )
 
 
-def _choose_event_draw(state: dict[str, Any], payload: dict[str, Any]) -> None:
-    pending = state.get("pending_event_draw_choice")
-    if not pending:
-        raise ValueError("No event draw choice is pending.")
-    _require_decision_player(state, payload, pending["decision_player_id"])
-    draw_index = int(payload.get("draw_index", -1))
-    if draw_index < 0 or draw_index >= len(pending["drawn_ids"]):
-        raise ValueError("That card is not an eligible draw choice.")
-    drawn_ids = list(pending["drawn_ids"])
-    kept_id = drawn_ids.pop(draw_index)
-    _player(state, pending["decision_player_id"])["hand"].append(kept_id)
-    for discarded_id in drawn_ids:
-        _discard_empire_item(state, discarded_id)
-    event = event_by_id(state, pending["event_id"])
-    remaining_effects = pending["remaining_effects"]
-    continuation = pending["continuation"]
-    requirements_met = bool(pending["requirements_met"])
-    state["pending_event_draw_choice"] = None
-    state["log"].append(
-        f"{_player(state, pending['decision_player_id'])['name']} kept one of three drawn cards."
-    )
-    completed = _apply_event_effects(
-        state,
-        event,
-        remaining_effects,
-        continuation=continuation,
-        requirements_met=requirements_met,
-    )
-    if completed:
-        _complete_event_resolution(
-            state,
-            event,
-            continuation=continuation,
-            requirements_met=requirements_met,
-        )
-
-
 def _complete_event_resolution(
     state: dict[str, Any],
     event: dict[str, Any],
@@ -1639,14 +1541,9 @@ def _complete_event_resolution(
     if continuation == "reveal":
         if state.get("current_reveal"):
             state["current_reveal"]["status"] = "resolved"
-        _discard_empire_item(state, event_id)
+        _discard_item(state, event_id)
         return
-    state["log"].append(
-        f"{event.get('name', event_id)} {'resolved' if requirements_met else 'was unresolved'}."
-    )
-    state["crisis_discard"].append(event_id)
-    state["current_crisis_id"] = ""
-    _begin_condition(state)
+    raise ValueError("Unknown event resolution continuation.")
 
 
 def _effect_condition_met(state: dict[str, Any], condition: dict[str, Any] | None) -> bool:
@@ -1699,7 +1596,7 @@ def _destroy_buildings(state: dict[str, Any], tag_id: str, amount: int) -> None:
             if tag_id and int(_counts((card.get("data") or {}).get("tags")).get(tag_id, 0)) <= 0:
                 continue
             city["cards"].remove(card_id)
-            _discard_empire_item(state, card_id)
+            _discard_item(state, card_id)
             destroyed += 1
             if destroyed >= amount:
                 return
@@ -1721,13 +1618,13 @@ def _discard_for_event(state: dict[str, Any], payload: dict[str, Any], event: di
         remaining = len(player["hand"]) + sum(bool(card_id) for card_id in player.get("scheme_slots", [])) \
             if amount_value is None else max(1, int(amount_value))
         while remaining > 0 and player["hand"]:
-            _discard_empire_item(state, player["hand"].pop(0))
+            _discard_item(state, player["hand"].pop(0))
             remaining -= 1
         for index, card_id in enumerate(player.get("scheme_slots", [])):
             if remaining <= 0:
                 break
             if card_id:
-                _discard_empire_item(state, card_id)
+                _discard_item(state, card_id)
                 player["scheme_slots"][index] = None
                 remaining -= 1
 
@@ -1819,8 +1716,12 @@ def _draw_empire(state: dict[str, Any], amount: int) -> list[str]:
     return cards
 
 
-def _discard_empire_item(state: dict[str, Any], item_id: str) -> None:
-    if item_id:
+def _discard_item(state: dict[str, Any], item_id: str) -> None:
+    if not item_id:
+        return
+    if _is_crisis(item_by_id(state, item_id)):
+        state.setdefault("crisis_discard", []).append(item_id)
+    else:
         state.setdefault("empire_discard", []).append(item_id)
 
 

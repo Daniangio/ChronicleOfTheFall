@@ -64,7 +64,7 @@
         "abilities": [
           "diplomacy_event_edicts",
           "propose_politics_and_economy",
-          "draw_to_five"
+          "draw_four_during_refill"
         ],
         "domain_icon_image_id": "minister-state",
         "icon_image_id": "minister-state",
@@ -86,7 +86,6 @@
         "abilities": [
           "military_event_edicts",
           "resolve_unrest_crises",
-          "discard_two_during_plotting",
           "peek_event_queue"
         ],
         "domain_icon_image_id": "minister-war",

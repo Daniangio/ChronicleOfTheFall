@@ -311,11 +311,10 @@ const MinisterAbilities = ({ entry, tagLookup }) => {
       "Places all Buildings and Cities.",
       "Chooses which leftover resources the Empire stores.",
     ],
-    state: ["Draws until their hand contains five cards at the end of the Era."],
+    state: ["Draws four cards during Hand Refill instead of three."],
     health: ["Cannot be forced to discard cards from hand or Scheme Slots."],
     war: [
       "Resolves City Revolts and Imperial Unrest Crises.",
-      "May discard up to two eligible cards during Plotting.",
       "May add +1 Crisis defense, or +2 while the Empire has a Military tag, once per Era.",
     ],
   };
@@ -404,8 +403,8 @@ const EventEffectToken = ({ effect, eventMinistry, ministryLookup, effectIconLoo
     return (
       <span className="inline-flex items-center gap-1">
         <SmallIcon src={ministryIcon(drawingMinistry, imageLookup)} label={drawingMinistry?.name || "Minister of the Empire"} tone="amber" size="sm" />
-        <EventEffectIcon effectType="draw_card" effectIconLookup={effectIconLookup} imageLookup={imageLookup} fallback={ScrollText} label="Draw 3 cards, keep 1, discard the others" tone="emerald" />
-        <span className="text-xs font-bold text-emerald-200">3→1</span>
+        <EventEffectIcon effectType="draw_card" effectIconLookup={effectIconLookup} imageLookup={imageLookup} fallback={ScrollText} label="Draw one additional card during Hand Refill" tone="emerald" />
+        <span className="text-xs font-bold text-emerald-200">+1</span>
       </span>
     );
   }
