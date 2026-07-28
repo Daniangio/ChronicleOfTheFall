@@ -9,13 +9,14 @@ from typing import Any
 
 PLAYER_COUNT = 4
 BASE_HAND_SIZE = 3
-EMPIRE_HAND_SIZE = 2
-HAND_LIMIT = 5
-SCHEME_SLOTS = 2
+EMPIRE_HAND_SIZE = 1
+HAND_TARGET = 4
+STATE_HAND_TARGET = 5
+SCHEME_SLOTS = 1
 STALLED_VOTE_THRESHOLD = 2
+MINISTRY_ROTATION_ORDER = ("cities", "state", "war", "health")
 
 PHASES = (
-    "ministry_assignment",
     "suspicion",
     "production",
     "queued_projects",
@@ -145,6 +146,8 @@ def build_goldfishing_state(
                 "ministry_ids": [],
                 "suspicion": 0,
                 "committed": False,
+                "plotting_scheme_used": False,
+                "plotting_discards": 0,
                 "hidden_agenda_id": (agenda_deck.draw(1) or [""])[0],
             }
         )
@@ -158,11 +161,11 @@ def build_goldfishing_state(
 
     state: dict[str, Any] = {
         "mode": "goldfishing",
-        "rules_version": "anonymous-council-v0.3",
+        "rules_version": "anonymous-council",
         "room_id": room_id,
         "era": 1,
         "epoch": 1,
-        "phase": "ministry_assignment",
+        "phase": "suspicion",
         "active_player_id": "player-1",
         "minister_of_empire_player_id": "player-1",
         "players": players,
@@ -172,8 +175,6 @@ def build_goldfishing_state(
         "frozen_resources": [],
         "blocked_players": [],
         "ministry_assignments": {},
-        "ministry_draft_ids": [],
-        "ministry_draft_index": 0,
         "suspicion_placements": {},
         "commitments": [],
         "council_stack": [],
@@ -183,6 +184,7 @@ def build_goldfishing_state(
         "pending_event_resource_effect": None,
         "pending_event_resource_conversion": None,
         "pending_event_city_tokens": None,
+        "pending_event_draw_choice": None,
         "structure_tag_requirement_waivers": 0,
         "plague_morale_suppressed": False,
         "stalled_projects": [],
@@ -190,7 +192,6 @@ def build_goldfishing_state(
         "votes": {},
         "current_crisis_id": "",
         "war_power_used": False,
-        "cleanup_stage": "scheme",
         "cleanup_completed": [],
         "agendas_revealed": False,
         "winner_player_ids": [],
@@ -229,7 +230,7 @@ def build_goldfishing_state(
             f"{EMPIRE_HAND_SIZE} Empire cards."
         ],
     }
-    _begin_ministry_assignment(state, rotate=False)
+    _assign_ministries(state, rotate=False)
     return _prepare_state(state)
 
 
@@ -237,24 +238,25 @@ def perform_action(state: dict[str, Any], action: str, payload: dict[str, Any] |
     next_state = deepcopy(state)
     data = payload or {}
     handlers = {
-        "choose_ministry": _choose_ministry,
         "place_suspicion": _place_suspicion,
         "continue_phase": _continue_phase,
         "commit_card": _commit_card,
         "commit_none": _commit_none,
+        "plotting_scheme": _plotting_scheme,
+        "plotting_discard": _plotting_discard,
         "move_docket_card": _move_docket_card,
         "confirm_docket_order": _confirm_docket_order,
         "choose_event_resource": _choose_event_resource,
         "choose_event_conversion_resource": _choose_event_conversion_resource,
         "choose_event_token_city": _choose_event_token_city,
+        "choose_event_draw": _choose_event_draw,
         "reveal_next": _reveal_next,
         "place_revealed_card": _place_revealed_card,
         "place_queued_project": _place_queued_project,
         "vote_stalled_project": _vote_stalled_project,
         "resolve_crisis": _resolve_crisis,
         "store_resources": _store_resources,
-        "cleanup_scheme": _cleanup_scheme,
-        "cleanup_discard": _cleanup_discard,
+        "cleanup_draw": _cleanup_draw,
     }
     handler = handlers.get(action)
     if not handler:
@@ -282,23 +284,6 @@ def item_by_id(state: dict[str, Any], item_id: str) -> dict[str, Any]:
         return card_by_id(state, item_id)
     except ValueError:
         return event_by_id(state, item_id)
-
-
-def _choose_ministry(state: dict[str, Any], payload: dict[str, Any]) -> None:
-    _require_phase(state, "ministry_assignment")
-    player_id = _require_active_player(state, payload)
-    ministry_id = str(payload.get("ministry_id") or "")
-    available = _available_ministry_ids(state)
-    if ministry_id not in available:
-        raise ValueError("This ministry is not available.")
-    state["ministry_assignments"][ministry_id] = player_id
-    _player(state, player_id)["ministry_ids"].append(ministry_id)
-    state["log"].append(f"{_player(state, player_id)['name']} took {_ministry_name(state, ministry_id)}.")
-    state["ministry_draft_index"] = int(state.get("ministry_draft_index", 0)) + 1
-    if not _available_ministry_ids(state):
-        _begin_suspicion(state)
-        return
-    state["active_player_id"] = _draft_player_id(state)
 
 
 def _place_suspicion(state: dict[str, Any], payload: dict[str, Any]) -> None:
@@ -399,6 +384,50 @@ def _commit_none(state: dict[str, Any], payload: dict[str, Any]) -> None:
     _player(state, player_id)["committed"] = True
     state["log"].append(f"{_player(state, player_id)['name']} could not commit a card.")
     _advance_plotting(state)
+
+
+def _plotting_scheme(state: dict[str, Any], payload: dict[str, Any]) -> None:
+    _require_phase(state, "plotting")
+    player_id = _require_active_player(state, payload)
+    player = _player(state, player_id)
+    if player.get("plotting_scheme_used"):
+        raise ValueError("This player already managed their Scheme Slot this turn.")
+    hand_index = int(payload.get("hand_index", -1))
+    if hand_index < 0 or hand_index >= len(player["hand"]):
+        raise ValueError("Hand card not found.")
+    hand_card = player["hand"].pop(hand_index)
+    slot_card = player["scheme_slots"][0]
+    player["scheme_slots"][0] = hand_card
+    if slot_card:
+        player["hand"].append(slot_card)
+    player["plotting_scheme_used"] = True
+    state["log"].append(
+        f"{player['name']} {'swapped a card with' if slot_card else 'placed a card in'} their Scheme Slot."
+    )
+
+
+def _plotting_discard(state: dict[str, Any], payload: dict[str, Any]) -> None:
+    _require_phase(state, "plotting")
+    player_id = _require_active_player(state, payload)
+    player = _player(state, player_id)
+    discard_limit = 2 if _player_has_ministry(state, player_id, "war") else 1
+    if int(player.get("plotting_discards", 0)) >= discard_limit:
+        raise ValueError("This player cannot discard another card this turn.")
+    source = str(payload.get("source") or "hand")
+    index = int(payload.get("index", -1))
+    cards = player["hand"] if source == "hand" else player["scheme_slots"] if source == "scheme" else None
+    if cards is None or index < 0 or index >= len(cards) or not cards[index]:
+        raise ValueError("Discarded card is not available.")
+    item_id = str(cards[index])
+    if _is_crisis(item_by_id(state, item_id)):
+        raise ValueError("Crisis cards cannot be discarded during Plotting.")
+    if source == "hand":
+        cards.pop(index)
+    else:
+        cards[index] = None
+    _discard_empire_item(state, item_id)
+    player["plotting_discards"] = int(player.get("plotting_discards", 0)) + 1
+    state["log"].append(f"{player['name']} discarded a card during Plotting.")
 
 
 def _move_docket_card(state: dict[str, Any], payload: dict[str, Any]) -> None:
@@ -569,54 +598,18 @@ def _store_resources(state: dict[str, Any], payload: dict[str, Any]) -> None:
     _begin_cleanup(state)
 
 
-def _cleanup_scheme(state: dict[str, Any], payload: dict[str, Any]) -> None:
+def _cleanup_draw(state: dict[str, Any], payload: dict[str, Any]) -> None:
     _require_phase(state, "cleanup")
-    if state.get("cleanup_stage") != "scheme":
-        raise ValueError("This player must discard down to the hand limit.")
     player_id = _require_active_player(state, payload)
     player = _player(state, player_id)
-    mode = str(payload.get("mode") or "none")
-    if mode in {"place", "swap"}:
-        hand_index = int(payload.get("hand_index", -1))
-        slot_index = int(payload.get("slot_index", -1))
-        if hand_index < 0 or hand_index >= len(player["hand"]):
-            raise ValueError("Hand card not found.")
-        if slot_index < 0 or slot_index >= SCHEME_SLOTS:
-            raise ValueError("Scheme slot not found.")
-        slot_card = player["scheme_slots"][slot_index]
-        if mode == "place" and slot_card:
-            raise ValueError("That Scheme Slot is occupied.")
-        hand_card = player["hand"].pop(hand_index)
-        player["scheme_slots"][slot_index] = hand_card
-        if slot_card:
-            player["hand"].append(slot_card)
-    elif mode != "none":
-        raise ValueError("Unknown Scheme action.")
-    draw_amount = 2 if _player_has_ministry(state, player_id, "state") else 1
-    if draw_amount == 2:
-        draw_amount = min(draw_amount, max(0, HAND_LIMIT - len(player["hand"])))
+    hand_target = STATE_HAND_TARGET if _player_has_ministry(state, player_id, "state") else HAND_TARGET
+    draw_amount = max(0, hand_target - len(player["hand"]))
     player["hand"].extend(_draw_empire(state, draw_amount))
-    if len(player["hand"]) > HAND_LIMIT:
-        state["cleanup_stage"] = "discard"
-        return
+    state["log"].append(f"{player['name']} drew to {hand_target} cards.")
     _complete_cleanup_player(state, player_id)
 
 
-def _cleanup_discard(state: dict[str, Any], payload: dict[str, Any]) -> None:
-    _require_phase(state, "cleanup")
-    if state.get("cleanup_stage") != "discard":
-        raise ValueError("No cleanup discard is required.")
-    player_id = _require_active_player(state, payload)
-    player = _player(state, player_id)
-    hand_index = int(payload.get("hand_index", -1))
-    if hand_index < 0 or hand_index >= len(player["hand"]):
-        raise ValueError("Hand card not found.")
-    _discard_empire_item(state, player["hand"].pop(hand_index))
-    if len(player["hand"]) <= HAND_LIMIT:
-        _complete_cleanup_player(state, player_id)
-
-
-def _begin_ministry_assignment(state: dict[str, Any], *, rotate: bool) -> None:
+def _assign_ministries(state: dict[str, Any], *, rotate: bool) -> None:
     players = state["players"]
     current_index = _player_index(state, state.get("minister_of_empire_player_id"))
     if rotate:
@@ -627,11 +620,8 @@ def _begin_ministry_assignment(state: dict[str, Any], *, rotate: bool) -> None:
     state["blocked_players"] = [
         player_id for player_id in state["blocked_players"] if player_id != empire_player_id
     ]
-    state["phase"] = "ministry_assignment"
     state["minister_of_empire_player_id"] = empire_player_id
-    state["active_player_id"] = empire_player_id
     state["ministry_assignments"] = {}
-    state["ministry_draft_index"] = 0
     for player in players:
         player["ministry_ids"] = []
     empire_ministry = next(
@@ -641,16 +631,25 @@ def _begin_ministry_assignment(state: dict[str, Any], *, rotate: bool) -> None:
     if empire_ministry:
         state["ministry_assignments"][empire_ministry["id"]] = empire_player_id
         _player(state, empire_player_id)["ministry_ids"].append(empire_ministry["id"])
-    state["ministry_draft_ids"] = [
-        entry["id"] for entry in state["catalog"]["ministries"] if entry is not empire_ministry
+
+    ministries = [
+        ministry
+        for role in MINISTRY_ROTATION_ORDER
+        for ministry in state["catalog"]["ministries"]
+        if ministry is not empire_ministry and _is_ministry(ministry, role)
     ]
-    if not state["ministry_draft_ids"]:
-        _begin_suspicion(state)
-        return
-    state["active_player_id"] = _draft_player_id(state)
+    era_offset = int(state.get("era", 1)) - 1
+    for ministry_index, ministry in enumerate(ministries):
+        holder = players[(ministry_index - era_offset) % len(players)]["id"]
+        if holder in state["blocked_players"]:
+            continue
+        state["ministry_assignments"][ministry["id"]] = holder
+        _player(state, holder)["ministry_ids"].append(ministry["id"])
+
     state["log"].append(
         f"Era {state['era']}: {_player(state, empire_player_id)['name']} is Minister of the Empire."
     )
+    _begin_suspicion(state)
 
 
 def _begin_suspicion(state: dict[str, Any]) -> None:
@@ -703,6 +702,8 @@ def _begin_plotting(state: dict[str, Any]) -> None:
     state["council_stack"] = []
     for player in state["players"]:
         player["committed"] = False
+        player["plotting_scheme_used"] = False
+        player["plotting_discards"] = 0
     state["active_player_id"] = state["minister_of_empire_player_id"]
     state["log"].append("Plotting Phase began.")
 
@@ -804,7 +805,6 @@ def _begin_storage(state: dict[str, Any]) -> None:
 
 def _begin_cleanup(state: dict[str, Any]) -> None:
     state["phase"] = "cleanup"
-    state["cleanup_stage"] = "scheme"
     state["cleanup_completed"] = []
     state["active_player_id"] = state["minister_of_empire_player_id"]
     state["log"].append("Cleanup began.")
@@ -812,7 +812,6 @@ def _begin_cleanup(state: dict[str, Any]) -> None:
 
 def _complete_cleanup_player(state: dict[str, Any], player_id: str) -> None:
     state["cleanup_completed"].append(player_id)
-    state["cleanup_stage"] = "scheme"
     if len(state["cleanup_completed"]) == len(state["players"]):
         _end_era(state)
         return
@@ -830,7 +829,7 @@ def _end_era(state: dict[str, Any]) -> None:
     state["plague_morale_suppressed"] = False
     state["suspicion_placements"] = {}
     state["votes"] = {}
-    _begin_ministry_assignment(state, rotate=True)
+    _assign_ministries(state, rotate=True)
 
 
 def _possible_actions(state: dict[str, Any]) -> list[dict[str, Any]]:
@@ -838,11 +837,6 @@ def _possible_actions(state: dict[str, Any]) -> list[dict[str, Any]]:
     active = state.get("active_player_id")
     if phase == "game_over":
         return []
-    if phase == "ministry_assignment":
-        return [
-            {"type": "choose_ministry", "player_id": active, "ministry_id": ministry_id}
-            for ministry_id in _available_ministry_ids(state)
-        ]
     if phase == "suspicion":
         protected_player_id = state.get("minister_of_empire_player_id")
         return [
@@ -874,7 +868,7 @@ def _possible_actions(state: dict[str, Any]) -> list[dict[str, Any]]:
         return [{"type": "continue_phase"}]
     if phase == "plotting":
         player = _player(state, active)
-        actions = [
+        commit_actions = [
             {
                 "type": "commit_card",
                 "player_id": active,
@@ -885,7 +879,35 @@ def _possible_actions(state: dict[str, Any]) -> list[dict[str, Any]]:
             }
             for source, index, item_id in _legal_commit_options(state, player)
         ]
-        return actions or [{"type": "commit_none", "player_id": active}]
+        scheme_actions = []
+        if not player.get("plotting_scheme_used"):
+            scheme_actions = [
+                {
+                    "type": "plotting_scheme",
+                    "player_id": active,
+                    "hand_index": index,
+                    "mode": "swap" if player["scheme_slots"][0] else "place",
+                }
+                for index, item_id in enumerate(player["hand"])
+                if item_id
+            ]
+        discard_limit = 2 if _player_has_ministry(state, active, "war") else 1
+        discard_actions = []
+        if int(player.get("plotting_discards", 0)) < discard_limit:
+            discard_actions = [
+                {
+                    "type": "plotting_discard",
+                    "player_id": active,
+                    "source": source,
+                    "index": index,
+                    "item_id": item_id,
+                }
+                for source, cards in (("hand", player["hand"]), ("scheme", player["scheme_slots"]))
+                for index, item_id in enumerate(cards)
+                if item_id and not _is_crisis(item_by_id(state, item_id))
+            ]
+        mandatory_action = commit_actions or [{"type": "commit_none", "player_id": active}]
+        return [*mandatory_action, *scheme_actions, *discard_actions]
     if phase == "docket_ordering":
         docket = state.get("council_stack", [])
         actions = [
@@ -901,6 +923,17 @@ def _possible_actions(state: dict[str, Any]) -> list[dict[str, Any]]:
         ]
         return [*actions, {"type": "confirm_docket_order", "player_id": active}]
     if phase == "reveal":
+        pending_draw = state.get("pending_event_draw_choice")
+        if pending_draw:
+            return [
+                {
+                    "type": "choose_event_draw",
+                    "player_id": pending_draw["decision_player_id"],
+                    "draw_index": index,
+                    "item_id": item_id,
+                }
+                for index, item_id in enumerate(pending_draw["drawn_ids"])
+            ]
         pending_city_tokens = state.get("pending_event_city_tokens")
         if pending_city_tokens:
             return [
@@ -952,6 +985,17 @@ def _possible_actions(state: dict[str, Any]) -> list[dict[str, Any]]:
             for project_id in ["", *[project["id"] for project in state["stalled_projects"]]]
         ]
     if phase == "crisis":
+        pending_draw = state.get("pending_event_draw_choice")
+        if pending_draw:
+            return [
+                {
+                    "type": "choose_event_draw",
+                    "player_id": pending_draw["decision_player_id"],
+                    "draw_index": index,
+                    "item_id": item_id,
+                }
+                for index, item_id in enumerate(pending_draw["drawn_ids"])
+            ]
         pending_city_tokens = state.get("pending_event_city_tokens")
         if pending_city_tokens:
             return [
@@ -1006,26 +1050,8 @@ def _possible_actions(state: dict[str, Any]) -> list[dict[str, Any]]:
             }
         ]
     if phase == "cleanup":
-        player = _player(state, active)
-        if state.get("cleanup_stage") == "discard":
-            return [
-                {"type": "cleanup_discard", "player_id": active, "hand_index": index, "item_id": item_id}
-                for index, item_id in enumerate(player["hand"])
-            ]
-        actions = [{"type": "cleanup_scheme", "player_id": active, "mode": "none"}]
-        for hand_index, item_id in enumerate(player["hand"]):
-            for slot_index, slot_item in enumerate(player["scheme_slots"]):
-                actions.append(
-                    {
-                        "type": "cleanup_scheme",
-                        "player_id": active,
-                        "mode": "swap" if slot_item else "place",
-                        "hand_index": hand_index,
-                        "slot_index": slot_index,
-                        "item_id": item_id,
-                    }
-                )
-        return actions
+        target = STATE_HAND_TARGET if _player_has_ministry(state, active, "state") else HAND_TARGET
+        return [{"type": "cleanup_draw", "player_id": active, "hand_target": target}]
     return []
 
 
@@ -1302,12 +1328,18 @@ def _apply_event_effects(
             _convert_resources(state, source_id, target_id, max(1, amount))
         elif effect_type == "draw_card":
             player_id = _event_choice_minister_player(state, event)
-            drawn = _draw_empire(state, 1)
-            _player(state, player_id)["hand"].extend(drawn)
+            drawn = _draw_empire(state, 3)
             if drawn:
-                state["log"].append(
-                    f"{_player(state, player_id)['name']} drew a card for {event.get('name', event['id'])}."
-                )
+                state["pending_event_draw_choice"] = {
+                    "event_id": event["id"],
+                    "drawn_ids": drawn,
+                    "remaining_effects": list(effects[index + 1:]),
+                    "continuation": continuation,
+                    "requirements_met": requirements_met,
+                    "decision_player_id": player_id,
+                }
+                state["active_player_id"] = player_id
+                return False
         elif effect_type == "suppress_plague_morale":
             state["plague_morale_suppressed"] = True
         elif effect_type == "discard_cards":
@@ -1559,6 +1591,43 @@ def _choose_event_token_city(state: dict[str, Any], payload: dict[str, Any]) -> 
         )
 
 
+def _choose_event_draw(state: dict[str, Any], payload: dict[str, Any]) -> None:
+    pending = state.get("pending_event_draw_choice")
+    if not pending:
+        raise ValueError("No event draw choice is pending.")
+    _require_decision_player(state, payload, pending["decision_player_id"])
+    draw_index = int(payload.get("draw_index", -1))
+    if draw_index < 0 or draw_index >= len(pending["drawn_ids"]):
+        raise ValueError("That card is not an eligible draw choice.")
+    drawn_ids = list(pending["drawn_ids"])
+    kept_id = drawn_ids.pop(draw_index)
+    _player(state, pending["decision_player_id"])["hand"].append(kept_id)
+    for discarded_id in drawn_ids:
+        _discard_empire_item(state, discarded_id)
+    event = event_by_id(state, pending["event_id"])
+    remaining_effects = pending["remaining_effects"]
+    continuation = pending["continuation"]
+    requirements_met = bool(pending["requirements_met"])
+    state["pending_event_draw_choice"] = None
+    state["log"].append(
+        f"{_player(state, pending['decision_player_id'])['name']} kept one of three drawn cards."
+    )
+    completed = _apply_event_effects(
+        state,
+        event,
+        remaining_effects,
+        continuation=continuation,
+        requirements_met=requirements_met,
+    )
+    if completed:
+        _complete_event_resolution(
+            state,
+            event,
+            continuation=continuation,
+            requirements_met=requirements_met,
+        )
+
+
 def _complete_event_resolution(
     state: dict[str, Any],
     event: dict[str, Any],
@@ -1759,6 +1828,10 @@ def _is_event(item: dict[str, Any]) -> bool:
     return item.get("kind") == "events"
 
 
+def _is_crisis(item: dict[str, Any]) -> bool:
+    return _is_event(item) and str((item.get("data") or {}).get("subtype") or "").lower() == "crisis"
+
+
 def _is_city_card(card: dict[str, Any]) -> bool:
     return str(card.get("category") or "").lower() == "city"
 
@@ -1787,28 +1860,6 @@ def _ministry_holder(state: dict[str, Any], role: str) -> str:
 
 def _player_has_ministry(state: dict[str, Any], player_id: str, role: str) -> bool:
     return _ministry_holder(state, role) == player_id
-
-
-def _available_ministry_ids(state: dict[str, Any]) -> list[str]:
-    assigned = set(state.get("ministry_assignments", {}))
-    return [ministry_id for ministry_id in state.get("ministry_draft_ids", []) if ministry_id not in assigned]
-
-
-def _draft_player_id(state: dict[str, Any]) -> str:
-    empire_index = _player_index(state, state["minister_of_empire_player_id"])
-    draft_index = int(state.get("ministry_draft_index", 0))
-    players = state["players"]
-    blocked = set(state.get("blocked_players", []))
-    for offset in range(len(players)):
-        player_id = players[(empire_index + 1 + draft_index + offset) % len(players)]["id"]
-        if player_id not in blocked:
-            return player_id
-    return state["minister_of_empire_player_id"]
-
-
-def _ministry_name(state: dict[str, Any], ministry_id: str) -> str:
-    ministry = next((entry for entry in state["catalog"].get("ministries", []) if entry["id"] == ministry_id), None)
-    return ministry.get("name", ministry_id) if ministry else ministry_id
 
 
 def _project_name(state: dict[str, Any], project_id: str) -> str:

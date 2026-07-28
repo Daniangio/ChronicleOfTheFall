@@ -242,9 +242,11 @@ currently available. The source, destination, or both may be general. General
 resource types are chosen by the Event's Choice Minister, or by the Minister of
 Health & Harvest under the normal rules. Source and destination must differ.
 
-An Event may make its Choice Minister draw one card from the Empire Deck. If the
-Event has no Choice Minister, or the named Ministry is vacant, the Minister of
-the Empire draws instead.
+An Event may make its Choice Minister draw 3 cards from the Empire Deck, keep 1,
+and discard the other 2 into the common Empire discard pile. If fewer than 3
+cards can be drawn, choose 1 from those drawn and discard the rest. If the Event
+has no Choice Minister, or the named Ministry is vacant, the Minister of the
+Empire makes this choice instead.
 
 Event token effects use a signed amount for Plague, Unrest, or Fortified.
 Positive values add tokens and negative values remove tokens from the selected
@@ -378,9 +380,9 @@ Create a Base Card Pool appropriate for the player count.
 Each player receives:
 
 * 3 random Base cards
-* 2 random cards from the Empire Deck
+* 1 random card from the Empire Deck
 
-Each player therefore starts with 5 cards.
+Each player therefore starts with 4 cards.
 
 Suggested Base cards include:
 
@@ -425,26 +427,26 @@ Built Effect: Remove up to 1 Plague from this City.
 
 ## 6.6 Scheme Slots
 
-Each player has 2 private Scheme Slots.
-
-Players may store cards in Scheme Slots during Cleanup.
+Each player has 1 private Scheme Slot.
 
 Cards in Scheme Slots:
 
 * are private;
-* do not count against hand limit;
+* do not count toward the end-of-Era hand target;
 * may be played during the Plotting Phase;
-* may be swapped with cards from hand during Cleanup.
+* may receive one card from hand during the player's Plotting turn;
+* may be swapped with one card from hand during the player's Plotting turn.
 
 ---
 
-## 6.7 Hand Limit
+## 6.7 Hand Targets
 
-The hand limit is 5.
+The standard end-of-Era hand target is 4 cards.
 
-If a player has more than 5 cards in hand after drawing and scheming, they must discard down to 5.
+The Minister of State has an end-of-Era hand target of 5 cards.
 
-Cards in Scheme Slots do not count toward the hand limit.
+Cards in Scheme Slots do not count toward either target. A hand may temporarily
+exceed its target because of card effects; the target does not force discards.
 
 ---
 
@@ -475,14 +477,16 @@ There are four Ministries:
 
 1. Minister of Cities
 2. Minister of State
-3. Minister of Health & Harvest
-4. Minister of War
+3. Minister of War
+4. Minister of Health & Harvest
 
-Ministries are assigned randomly at setup.
+Ministries always remain in this order. There is no Ministry draft.
 
-At the beginning of each new Era after the first, all Ministry cards rotate clockwise.
+At the beginning of each new Era after the first, assignments advance so that
+the player who was Minister of State becomes Minister of War.
 
-There is no Ministry draft.
+The Minister of State and Minister of War may never be held by the same player
+in the same Era.
 
 ---
 
@@ -490,29 +494,17 @@ There is no Ministry draft.
 
 ### 3 Players
 
-Use the four Ministry cards and one vacant placeholder position.
-
-Randomly assign the four Ministry cards among the three players and the vacant placeholder.
-
-Each Era, all Ministry cards rotate clockwise through the three players and the vacant placeholder.
-
-A Ministry on the vacant placeholder is inactive that Era.
+Assign all four Ministries in their fixed order around the players. One player
+holds two Ministries. The shared pair must never be State and War.
 
 ### 4 Players
 
-Randomly assign one Ministry to each player.
-
-Each Era, all Ministry cards rotate clockwise.
+Assign one Ministry to each player in the fixed order.
 
 ### 5 Players
 
-Use the four Ministry cards and one **No Ministry** marker.
-
-Randomly assign the four Ministry cards and the No Ministry marker among the five players.
-
-Each Era, all five status cards rotate clockwise.
-
-The player with the No Ministry marker has no Ministry that Era.
+Assign the four Ministries in their fixed order. One player has no Ministry.
+Advance all assignments in the same direction each Era.
 
 ---
 
@@ -520,7 +512,6 @@ The player with the No Ministry marker has no Ministry that Era.
 
 A Ministry may be vacant because:
 
-* it is assigned to the vacant placeholder in a 3-player game;
 * it is lost due to Suspicion;
 * a card effect disables it;
 * no player currently holds it.
@@ -551,7 +542,7 @@ When an effect places Unrest and does not specify whether it is City Unrest or G
 
 If City Unrest is chosen, the Minister of State also chooses the City.
 
-During Cleanup, the Minister of State draws up to 2 cards instead of 1, without exceeding the hand limit.
+At the end of the Era, the Minister of State draws until their hand contains 5 cards.
 
 ---
 
@@ -574,6 +565,9 @@ This protection applies only to forced discard. The Minister may still voluntari
 ## 8.4 Minister of War
 
 The Minister of War resolves revolts.
+
+During Plotting, the Minister of War may optionally discard up to 2 eligible
+cards instead of the normal limit of 1.
 
 When Global Unrest reaches its threshold, the Minister of War chooses how the Imperial Unrest Crisis is resolved.
 
@@ -598,7 +592,7 @@ Each Era follows this sequence:
 7. Stalled Project Vote
 8. Condition Phase
 9. Storage Phase
-10. Scheme / Draw / Cleanup
+10. Draw / Cleanup
 
 During the first Era, do not rotate the Minister of the Empire or Ministries after setup. Begin with Suspicion.
 
@@ -705,6 +699,19 @@ A player may commit:
 
 * one card from hand;
 * or one card from a Scheme Slot.
+
+Before committing, the active player may perform each of these optional actions:
+
+* place one hand card into their empty Scheme Slot, or swap one hand card with
+  the card already in that slot;
+* discard one card from hand or from their Scheme Slot.
+
+The Minister of War may discard up to 2 cards instead of 1.
+
+A Crisis card cannot be discarded during Plotting. Every card voluntarily
+discarded during Plotting enters the common Empire discard pile.
+
+Committing a card ends that player's Plotting turn.
 
 Cards are normally committed face-down.
 
@@ -1108,21 +1115,14 @@ The remaining Labor and Wealth are discarded.
 
 ---
 
-# 24. Scheme / Draw / Cleanup
+# 24. Draw / Cleanup
 
-At the end of each Era, each player may manage Scheme Slots.
+At the end of each Era, each player draws until their hand contains 4 cards.
 
-A player may do one of the following:
+The Minister of State instead draws until their hand contains 5 cards.
 
-* place one card from hand into an empty Scheme Slot;
-* swap one card from hand with one card in a Scheme Slot;
-* do nothing.
-
-Then each player draws 1 card.
-
-The Minister of State draws up to 2 cards instead of 1, without exceeding the hand limit.
-
-After drawing, each player discards down to the hand limit of 5.
+Players whose hands already meet or exceed their target do not draw and are not
+forced to discard.
 
 Cards discarded from hand or Scheme Slots go to the discard pile.
 
@@ -1342,11 +1342,9 @@ The other resources are discarded.
 
 ## Cleanup
 
-Each player may Scheme or swap one card.
+Each player draws until their hand contains 4 cards.
 
-Each player draws 1 card.
-
-The Ministry of State was vacant this Era, so no player receives the Minister of State draw bonus.
+The Ministry of State was vacant this Era, so no player draws to 5.
 
 All Suspicion tokens are removed.
 

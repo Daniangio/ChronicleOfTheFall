@@ -1083,7 +1083,7 @@ const effectIconCodeOptions = [
   { value: "modify_pillar", label: "Modify Pillar" },
   { value: "modify_resources", label: "Modify Resources" },
   { value: "convert_resources", label: "Convert Resources" },
-  { value: "draw_card", label: "Draw a Card" },
+  { value: "draw_card", label: "Draw 3, Keep 1" },
   { value: "destroy_building", label: "Destroy Building" },
   { value: "remove_all_resources", label: "Remove All Resources" },
   { value: "discard_cards", label: "Discard Cards" },
@@ -1471,7 +1471,7 @@ const eventEffectOptions = [
   { value: "modify_pillar", label: "Modify pillar" },
   { value: "modify_resources", label: "Add or remove resources" },
   { value: "convert_resources", label: "Convert resources" },
-  { value: "draw_card", label: "Choice Minister draws a card" },
+  { value: "draw_card", label: "Choice Minister draws 3 and keeps 1" },
   { value: "destroy_building", label: "Destroy building" },
   { value: "remove_all_resources", label: "Remove all remaining resources" },
   { value: "discard_cards", label: "Discard cards from hand" },
@@ -1590,7 +1590,7 @@ const EventEffects = ({ effects, setEffects, tagEntries, pillarEntries }) => {
               </>
             ) : effect.effect_type === "draw_card" ? (
               <p className="self-end pb-2 text-sm text-slate-400 sm:col-span-2">
-                The Choice Minister draws one card; the Minister of the Empire draws if missing.
+                The Choice Minister draws 3 cards, keeps 1, and discards the others. The Minister of the Empire chooses if missing.
               </p>
             ) : effect.effect_type === "discard_cards" ? (
               <>

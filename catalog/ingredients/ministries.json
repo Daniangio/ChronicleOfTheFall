@@ -10,6 +10,7 @@
       "summary": "The provider. Controls provisioning and public health events.",
       "color": null,
       "data": {
+        "rotation_order": 4,
         "domain_id": "provision",
         "domain_symbol": "HLT",
         "abilities": [
@@ -28,6 +29,7 @@
       "summary": "The builder. Finalizes projects and decides which building is destroyed by infrastructure damage.",
       "color": null,
       "data": {
+        "rotation_order": 1,
         "domain_id": "infrastructure",
         "domain_symbol": "INF",
         "can_finalize_projects": true,
@@ -54,12 +56,15 @@
       "summary": "The diplomat. Controls diplomacy events and may propose Politics or Economy cards.",
       "color": null,
       "data": {
+        "rotation_order": 2,
+        "exclusive_holder_group": "state-war",
         "domain_id": "diplomacy",
         "domain_symbol": "DIP",
         "can_propose_politics_economy": true,
         "abilities": [
           "diplomacy_event_edicts",
-          "propose_politics_and_economy"
+          "propose_politics_and_economy",
+          "draw_to_five"
         ],
         "domain_icon_image_id": "minister-state",
         "icon_image_id": "minister-state",
@@ -74,11 +79,14 @@
       "summary": "The defender. Resolves City Revolts and Imperial Unrest Crises, controls military event edicts, and performs reconnaissance.",
       "color": null,
       "data": {
+        "rotation_order": 3,
+        "exclusive_holder_group": "state-war",
         "domain_id": "military",
         "domain_symbol": "WAR",
         "abilities": [
           "military_event_edicts",
           "resolve_unrest_crises",
+          "discard_two_during_plotting",
           "peek_event_queue"
         ],
         "domain_icon_image_id": "minister-war",

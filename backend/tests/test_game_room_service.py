@@ -5,7 +5,7 @@ import unittest
 from backend.app.game_room_service import GameRoomService, ROOM_STATE_FINISHED, ROOM_STATE_IN_GAME
 from backend.app.goldfishing_engine import (
     _apply_on_build_effects,
-    _begin_ministry_assignment,
+    _assign_ministries,
     _end_era,
     build_goldfishing_state,
     perform_action,
@@ -142,9 +142,6 @@ def build_state(**overrides) -> dict:
 
 
 def finish_ministry_draft(state: dict) -> dict:
-    while state["phase"] == "ministry_assignment":
-        action = state["possible_actions"][0]
-        state = perform_action(state, "choose_ministry", action)
     return state
 
 
@@ -178,26 +175,53 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
     def test_setup_deals_base_and_empire_cards_and_places_initial_city(self):
         state = build_state()
 
-        self.assertEqual(state["phase"], "ministry_assignment")
-        self.assertEqual(state["rules_version"], "anonymous-council-v0.3")
+        self.assertEqual(state["phase"], "suspicion")
+        self.assertEqual(state["rules_version"], "anonymous-council")
         self.assertEqual(state["cities"][0]["city_card_id"], "capital")
         self.assertEqual(state["cities"][0]["building_slots"], 4)
-        self.assertTrue(all(len(player["hand"]) == 5 for player in state["players"]))
-        self.assertTrue(all(len(player["scheme_slots"]) == 2 for player in state["players"]))
+        self.assertTrue(all(len(player["hand"]) == 4 for player in state["players"]))
+        self.assertTrue(all(len(player["scheme_slots"]) == 1 for player in state["players"]))
         self.assertEqual(state["pillars"], {"treasury": 5, "stability": 5, "morale": 5})
 
-    def test_ministry_draft_starts_left_of_empire_and_wraps(self):
+    def test_ministries_auto_assign_in_order_and_state_rotates_to_war(self):
         state = build_state()
-        chooser_order = []
-        while state["phase"] == "ministry_assignment":
-            chooser_order.append(state["active_player_id"])
-            state = perform_action(state, "choose_ministry", state["possible_actions"][0])
-
-        self.assertEqual(chooser_order, ["player-2", "player-3", "player-4", "player-1"])
-        self.assertEqual(state["phase"], "suspicion")
-        self.assertEqual(state["active_player_id"], "player-1")
+        state_holder = next(
+            holder for ministry_id, holder in state["ministry_assignments"].items()
+            if "state" in ministry_id
+        )
+        war_holder = next(
+            holder for ministry_id, holder in state["ministry_assignments"].items()
+            if "war" in ministry_id
+        )
+        self.assertNotEqual(state_holder, war_holder)
         self.assertEqual(len(state["ministry_assignments"]), 5)
         self.assertEqual(len(state["players"][0]["ministry_ids"]), 2)
+
+        state["era"] = 2
+        _assign_ministries(state, rotate=True)
+        next_war_holder = next(
+            holder for ministry_id, holder in state["ministry_assignments"].items()
+            if "war" in ministry_id
+        )
+        self.assertEqual(next_war_holder, state_holder)
+
+    def test_three_players_assign_all_ministries_without_combining_state_and_war(self):
+        state = build_state()
+        state["players"] = state["players"][:3]
+        state["minister_of_empire_player_id"] = "player-1"
+
+        _assign_ministries(state, rotate=False)
+
+        non_empire_assignments = {
+            ministry_id: holder
+            for ministry_id, holder in state["ministry_assignments"].items()
+            if "empire" not in ministry_id
+        }
+        state_holder = next(holder for ministry_id, holder in non_empire_assignments.items() if "state" in ministry_id)
+        war_holder = next(holder for ministry_id, holder in non_empire_assignments.items() if "war" in ministry_id)
+        self.assertEqual(len(non_empire_assignments), 4)
+        self.assertNotEqual(state_holder, war_holder)
+        self.assertEqual(len(set(non_empire_assignments.values())), 3)
 
     def test_suspicion_controls_commit_visibility_and_event_eligibility(self):
         state = finish_ministry_draft(build_state())
@@ -218,6 +242,92 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
         commitment = state["commitments"][-1]
         self.assertTrue(commitment["face_up"])
         self.assertEqual(commitment["item_id"], "farm")
+
+    def test_plotting_allows_one_scheme_action_and_limited_non_crisis_discards(self):
+        state = build_state()
+        war_player_id = next(
+            holder for ministry_id, holder in state["ministry_assignments"].items()
+            if "war" in ministry_id
+        )
+        war_player = next(player for player in state["players"] if player["id"] == war_player_id)
+        war_player["hand"] = ["farm", "garrison", "tax-riots", "border-raid"]
+        war_player["scheme_slots"] = [None]
+        state["phase"] = "plotting"
+        state["active_player_id"] = war_player_id
+
+        state = perform_action(
+            state,
+            "plotting_scheme",
+            {"player_id": war_player_id, "hand_index": 0},
+        )
+        self.assertEqual(war_player_id, state["active_player_id"])
+        self.assertEqual(state["players"][int(war_player_id[-1]) - 1]["scheme_slots"], ["farm"])
+        with self.assertRaisesRegex(ValueError, "already managed"):
+            perform_action(
+                state,
+                "plotting_scheme",
+                {"player_id": war_player_id, "hand_index": 0},
+            )
+        with self.assertRaisesRegex(ValueError, "Crisis cards cannot"):
+            perform_action(
+                state,
+                "plotting_discard",
+                {"player_id": war_player_id, "source": "hand", "index": 2},
+            )
+
+        state = perform_action(
+            state,
+            "plotting_discard",
+            {"player_id": war_player_id, "source": "hand", "index": 0},
+        )
+        state = perform_action(
+            state,
+            "plotting_discard",
+            {"player_id": war_player_id, "source": "hand", "index": 0},
+        )
+        with self.assertRaisesRegex(ValueError, "cannot discard another"):
+            perform_action(
+                state,
+                "plotting_discard",
+                {"player_id": war_player_id, "source": "scheme", "index": 0},
+            )
+        self.assertIn("garrison", state["empire_discard"])
+        self.assertIn("tax-riots", state["empire_discard"])
+        self.assertTrue(
+            all(
+                action.get("item_id") != "border-raid"
+                for action in state["possible_actions"]
+                if action["type"] == "plotting_discard"
+            )
+        )
+
+    def test_non_war_player_can_discard_only_once_during_plotting(self):
+        state = build_state()
+        war_player_id = next(
+            holder for ministry_id, holder in state["ministry_assignments"].items()
+            if "war" in ministry_id
+        )
+        player_id = next(
+            player["id"]
+            for player in state["players"]
+            if player["id"] != war_player_id
+        )
+        player = next(entry for entry in state["players"] if entry["id"] == player_id)
+        player["hand"] = ["farm", "garrison"]
+        state["phase"] = "plotting"
+        state["active_player_id"] = player_id
+
+        state = perform_action(
+            state,
+            "plotting_discard",
+            {"player_id": player_id, "source": "hand", "index": 0},
+        )
+        with self.assertRaisesRegex(ValueError, "cannot discard another"):
+            perform_action(
+                state,
+                "plotting_discard",
+                {"player_id": player_id, "source": "hand", "index": 0},
+            )
 
     def test_minister_of_empire_cannot_receive_suspicion(self):
         state = finish_ministry_draft(build_state())
@@ -241,7 +351,8 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
         state = build_state()
         state["blocked_players_next_era"] = ["player-2"]
 
-        _begin_ministry_assignment(state, rotate=True)
+        state["era"] = 2
+        _assign_ministries(state, rotate=True)
 
         self.assertEqual(state["minister_of_empire_player_id"], "player-2")
         self.assertNotIn("player-2", state["blocked_players"])
@@ -567,13 +678,20 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
                     player["id"]: len(player["hand"])
                     for player in state["players"]
                 }
+                discard_size = len(state["empire_discard"])
 
                 state = perform_action(state, "reveal_next", {})
+                self.assertEqual(len(state["possible_actions"]), 3)
+                self.assertTrue(
+                    all(action["player_id"] == expected_player_id for action in state["possible_actions"])
+                )
+                state = perform_action(state, "choose_event_draw", state["possible_actions"][1])
 
                 self.assertEqual(
                     len(next(player for player in state["players"] if player["id"] == expected_player_id)["hand"]),
                     hand_sizes[expected_player_id] + 1,
                 )
+                self.assertEqual(len(state["empire_discard"]), discard_size + 3)
                 self.assertTrue(
                     all(
                         len(player["hand"]) == hand_sizes[player["id"]]
@@ -775,6 +893,45 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
         )
         self.assertEqual(stored["stored_resources"], {"labor": 2, "wealth": 2})
         self.assertEqual(stored["phase"], "cleanup")
+
+    def test_cleanup_draws_to_four_and_state_draws_to_five(self):
+        state = build_state()
+        state_player_id = next(
+            holder for ministry_id, holder in state["ministry_assignments"].items()
+            if "state" in ministry_id
+        )
+        state_player = next(player for player in state["players"] if player["id"] == state_player_id)
+        state_player["hand"] = ["farm"]
+        state["phase"] = "cleanup"
+        state["active_player_id"] = state_player_id
+        state["cleanup_completed"] = []
+
+        state = perform_action(
+            state,
+            "cleanup_draw",
+            {"player_id": state_player_id},
+        )
+
+        self.assertEqual(len(next(player for player in state["players"] if player["id"] == state_player_id)["hand"]), 5)
+
+        ordinary_player = next(
+            player for player in state["players"]
+            if player["id"] != state_player_id
+        )
+        ordinary_player["hand"] = ["farm"]
+        state["phase"] = "cleanup"
+        state["active_player_id"] = ordinary_player["id"]
+        state["cleanup_completed"] = []
+        state = perform_action(
+            state,
+            "cleanup_draw",
+            {"player_id": ordinary_player["id"]},
+        )
+
+        self.assertEqual(
+            len(next(player for player in state["players"] if player["id"] == ordinary_player["id"])["hand"]),
+            4,
+        )
 
     def test_event_tag_requirement_uses_permanent_empire_tags(self):
         state = build_state()

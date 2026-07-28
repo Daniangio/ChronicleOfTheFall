@@ -190,7 +190,7 @@ const GameRoomPage = () => {
   const activePlayer = players.find((player) => player.id === gameState?.active_player_id);
   const focusedPlayer = players.find((player) => player.id === focusedPlayerId) || activePlayer || players[0];
   const actions = gameState?.possible_actions || [];
-  const phase = gameState?.phase || "ministry_assignment";
+  const phase = gameState?.phase || "suspicion";
 
   const perform = async (action, payload = {}) => {
     if (!token || busy) return null;
@@ -253,6 +253,29 @@ const GameRoomPage = () => {
   const boardWidth = Math.max(760, (gameState.cities?.length || 1) * 610);
 
   const renderPhaseControls = () => {
+    const drawChoices = actions.filter((entry) => entry.type === "choose_event_draw");
+    if (drawChoices.length) {
+      return (
+        <div>
+          <p className="mb-2 text-sm font-semibold text-amber-100">
+            Choose 1 card to keep. The others enter the Empire discard.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {drawChoices.map((entry) => (
+              <button
+                key={`${entry.draw_index}-${entry.item_id}`}
+                className="rounded-md border border-amber-800 bg-stone-950 px-3 py-2 text-sm font-semibold text-amber-100 hover:bg-amber-950/50 disabled:opacity-50"
+                disabled={busy}
+                onClick={() => performAction(entry)}
+                type="button"
+              >
+                {itemLookup[normalize(entry.item_id)]?.name || entry.item_id}
+              </button>
+            ))}
+          </div>
+        </div>
+      );
+    }
     const tokenCityChoices = actions.filter((entry) => entry.type === "choose_event_token_city");
     if (tokenCityChoices.length) {
       return (
@@ -326,17 +349,6 @@ const GameRoomPage = () => {
               </button>
             ))}
           </div>
-        </div>
-      );
-    }
-    if (phase === "ministry_assignment") {
-      return (
-        <div className="flex flex-wrap gap-2">
-          {actions.map((entry) => (
-            <button key={entry.ministry_id} className="rounded-md border border-amber-800 bg-stone-950 px-3 py-2 text-sm font-semibold text-amber-100 hover:bg-amber-950/50 disabled:opacity-50" disabled={busy} onClick={() => performAction(entry)} type="button">
-              {ministryLookup[normalize(entry.ministry_id)]?.name || entry.ministry_id}
-            </button>
-          ))}
         </div>
       );
     }
@@ -439,8 +451,12 @@ const GameRoomPage = () => {
       );
     }
     if (phase === "cleanup") {
-      const none = actions.find((entry) => entry.type === "cleanup_scheme" && entry.mode === "none");
-      return none ? <button className="rounded-md border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800 disabled:opacity-50" disabled={busy} onClick={() => performAction(none)} type="button">No Scheme change</button> : <p className="text-sm text-rose-200">Discard one card from the active hand.</p>;
+      const drawAction = actions.find((entry) => entry.type === "cleanup_draw");
+      return drawAction ? (
+        <button className="rounded-md border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800 disabled:opacity-50" disabled={busy} onClick={() => performAction(drawAction)} type="button">
+          Draw to {drawAction.hand_target}
+        </button>
+      ) : null;
     }
     return null;
   };
@@ -554,6 +570,22 @@ const GameRoomPage = () => {
 
             <aside className="space-y-4">
               <section className="border border-slate-800 bg-slate-900 p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <h2 className="text-sm font-bold text-white">Empire Discard</h2>
+                  <span className="text-xs text-slate-500">{gameState.empire_discard?.length || 0} cards</span>
+                </div>
+                <div className="mt-3">
+                  {gameState.empire_discard?.length ? (
+                    <ItemVisual
+                      item={itemLookup[normalize(gameState.empire_discard[gameState.empire_discard.length - 1])]}
+                      catalogs={catalogs}
+                      tagLookup={tagLookup}
+                      storageIconSrc={storageIconSrc}
+                    />
+                  ) : <p className="text-xs text-slate-600">The common discard is empty.</p>}
+                </div>
+              </section>
+              <section className="border border-slate-800 bg-slate-900 p-3">
                 <h2 className="text-sm font-bold text-white">Council Docket</h2>
                 <p className="mt-1 text-xs text-slate-500">
                   {phase === "docket_ordering"
@@ -643,7 +675,7 @@ const GameRoomPage = () => {
                   </p>
                 ) : null}
               </div>
-              <p className="text-xs text-slate-500">Hand limit 5 · Scheme slots 2</p>
+              <p className="text-xs text-slate-500">Hand target 4 · State target 5 · Scheme slots 1</p>
             </div>
             <div className="mt-4 grid gap-5 xl:grid-cols-[minmax(0,1fr)_20rem]">
               <div>
@@ -651,9 +683,8 @@ const GameRoomPage = () => {
                 <div className="flex flex-wrap gap-3">
                   {(focusedPlayer?.hand || []).map((itemId, index) => {
                     const plottingAction = actions.find((entry) => entry.type === "commit_card" && entry.source === "hand" && entry.index === index && entry.player_id === focusedPlayer.id);
-                    const discardAction = actions.find((entry) => entry.type === "cleanup_discard" && entry.hand_index === index && entry.player_id === focusedPlayer.id);
-                    const schemeActions = actions.filter((entry) => entry.type === "cleanup_scheme" && entry.hand_index === index && entry.player_id === focusedPlayer.id);
-                    const primary = plottingAction || discardAction;
+                    const discardAction = actions.find((entry) => entry.type === "plotting_discard" && entry.source === "hand" && entry.index === index && entry.player_id === focusedPlayer.id);
+                    const schemeAction = actions.find((entry) => entry.type === "plotting_scheme" && entry.hand_index === index && entry.player_id === focusedPlayer.id);
                     return (
                       <div key={`${itemId}-${index}`} className="space-y-2">
                         <ItemVisual
@@ -661,13 +692,14 @@ const GameRoomPage = () => {
                           catalogs={catalogs}
                           tagLookup={tagLookup}
                           storageIconSrc={storageIconSrc}
-                          actionLabel={primary ? plottingAction ? (plottingAction.face_up ? "Commit face up" : "Commit anonymously") : "Discard" : ""}
-                          onAction={() => performAction(primary)}
-                          disabled={busy || !primary}
+                          actionLabel={plottingAction ? (plottingAction.face_up ? "Commit face up" : "Commit anonymously") : ""}
+                          onAction={() => performAction(plottingAction)}
+                          disabled={busy || !plottingAction}
                         />
-                        {schemeActions.length ? (
-                          <div className="grid gap-1">
-                            {schemeActions.map((entry) => <button key={entry.slot_index} className="border border-slate-700 px-2 py-1 text-[0.65rem] text-slate-300 hover:bg-slate-800 disabled:opacity-50" disabled={busy} onClick={() => performAction(entry)} type="button">{entry.mode === "swap" ? "Swap with" : "Scheme in"} slot {entry.slot_index + 1}</button>)}
+                        {schemeAction || discardAction ? (
+                          <div className="grid grid-cols-2 gap-1">
+                            {schemeAction ? <button className="border border-slate-700 px-2 py-1 text-[0.65rem] text-slate-300 hover:bg-slate-800 disabled:opacity-50" disabled={busy} onClick={() => performAction(schemeAction)} type="button">{schemeAction.mode === "swap" ? "Swap Scheme" : "Scheme"}</button> : null}
+                            {discardAction ? <button className="border border-rose-900 px-2 py-1 text-[0.65rem] text-rose-200 hover:bg-rose-950/50 disabled:opacity-50" disabled={busy} onClick={() => performAction(discardAction)} type="button">Discard</button> : null}
                           </div>
                         ) : null}
                       </div>
@@ -678,11 +710,15 @@ const GameRoomPage = () => {
               </div>
               <div>
                 <h3 className="mb-2 text-xs font-bold uppercase text-slate-500">Scheme Slots</h3>
-                <div className="grid grid-cols-2 gap-2">
-                  {(focusedPlayer?.scheme_slots || [null, null]).map((itemId, index) => {
+                <div className="grid grid-cols-1 gap-2">
+                  {(focusedPlayer?.scheme_slots || [null]).map((itemId, index) => {
                     const plottingAction = actions.find((entry) => entry.type === "commit_card" && entry.source === "scheme" && entry.index === index && entry.player_id === focusedPlayer.id);
+                    const discardAction = actions.find((entry) => entry.type === "plotting_discard" && entry.source === "scheme" && entry.index === index && entry.player_id === focusedPlayer.id);
                     return itemId ? (
-                      <ItemVisual key={`${itemId}-${index}`} item={itemLookup[normalize(itemId)]} catalogs={catalogs} tagLookup={tagLookup} storageIconSrc={storageIconSrc} actionLabel={plottingAction ? plottingAction.face_up ? "Commit face up" : "Commit anonymously" : ""} onAction={() => performAction(plottingAction)} disabled={busy || !plottingAction} />
+                      <div key={`${itemId}-${index}`} className="space-y-2">
+                        <ItemVisual item={itemLookup[normalize(itemId)]} catalogs={catalogs} tagLookup={tagLookup} storageIconSrc={storageIconSrc} actionLabel={plottingAction ? plottingAction.face_up ? "Commit face up" : "Commit anonymously" : ""} onAction={() => performAction(plottingAction)} disabled={busy || !plottingAction} />
+                        {discardAction ? <button className="w-full border border-rose-900 px-2 py-1 text-[0.65rem] text-rose-200 hover:bg-rose-950/50 disabled:opacity-50" disabled={busy} onClick={() => performAction(discardAction)} type="button">Discard</button> : null}
+                      </div>
                     ) : <div key={index} className="flex aspect-[5/7] items-center justify-center border border-dashed border-slate-700 text-xs text-slate-600">Empty slot {index + 1}</div>;
                   })}
                 </div>
