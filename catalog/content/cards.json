@@ -58,7 +58,7 @@
         "cost": {},
         "tags": {},
         "production": {
-          "labor": 1
+          "labor": 2
         },
         "on_build_effects": [],
         "persistent_effects": [],

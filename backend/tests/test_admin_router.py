@@ -10,6 +10,7 @@ from backend.app.admin_router import (
     admin_create_catalog_entry,
     admin_delete_catalog_entry,
     admin_export_catalog,
+    admin_get_build_paths,
     admin_import_catalog,
     admin_get_user_detail,
     admin_search_catalog_entries,
@@ -104,6 +105,49 @@ def test_non_admin_is_rejected(tmp_path):
     assert exc_info.value.status_code == 403
 
 
+def test_admin_build_paths_use_current_card_catalog(tmp_path):
+    session_factory = build_test_session(f"sqlite:///{tmp_path / 'build_paths.db'}")
+    with session_factory() as db:
+        admin = ensure_user_bootstrap(
+            db,
+            create_registered_user(db, "admin@test.local", "verysecurepassword"),
+            force_admin=True,
+        )
+        for payload in (
+            AdminCatalogEntryCreate(
+                id="capital",
+                name="Capital",
+                category="city",
+                data={"production": {"labor": 1}},
+            ),
+            AdminCatalogEntryCreate(
+                id="market",
+                name="Market",
+                category="structure",
+                data={"cost": {"labor": 1}, "production": {"favor": 1}},
+            ),
+            AdminCatalogEntryCreate(
+                id="palace",
+                name="Palace",
+                category="structure",
+                data={"cost": {"favor": 2}},
+            ),
+        ):
+            asyncio.run(admin_create_catalog_entry("cards", payload, _admin=admin, db=db))
+
+        result = asyncio.run(
+            admin_get_build_paths(
+                city_card_id="capital",
+                target_card_id="palace",
+                _admin=admin,
+                db=db,
+            )
+        )
+
+        assert result.minimum_buildings == 1
+        assert [path.building_card_ids for path in result.paths] == [["market"]]
+
+
 def test_new_database_catalog_starts_with_repository_ingredients(tmp_path):
     session_factory = build_test_session(f"sqlite:///{tmp_path / 'catalog.db'}")
     with session_factory() as db:
@@ -196,6 +240,19 @@ def test_new_database_catalog_starts_with_repository_ingredients(tmp_path):
                 db=db,
             )
         )
+        asyncio.run(
+            admin_create_catalog_entry(
+                "events",
+                AdminCatalogEntryCreate(
+                    id="famine",
+                    name="Famine",
+                    category="event",
+                    data={"subtype": "crisis", "requirements": [], "main_effects": [], "alternative_effects": []},
+                ),
+                _admin=admin,
+                db=db,
+            )
+        )
         created_deck = asyncio.run(
             admin_create_catalog_entry(
                 "decks",
@@ -204,9 +261,23 @@ def test_new_database_catalog_starts_with_repository_ingredients(tmp_path):
                     name="Starter Deck",
                     category="deck",
                     data={
+                        "deck_type": "empire",
                         "item_ids": ["farm"] * 10,
                         "initial_setup": {"3": ["farm"] * 6, "4": ["farm"] * 2, "5": ["farm"] * 2},
                     },
+                ),
+                _admin=admin,
+                db=db,
+            )
+        )
+        created_crisis_deck = asyncio.run(
+            admin_create_catalog_entry(
+                "decks",
+                AdminCatalogEntryCreate(
+                    id="starter-crisis-deck",
+                    name="Starter Crisis Deck",
+                    category="deck",
+                    data={"deck_type": "crisis", "item_ids": ["famine"], "initial_setup": {}},
                 ),
                 _admin=admin,
                 db=db,
@@ -221,7 +292,8 @@ def test_new_database_catalog_starts_with_repository_ingredients(tmp_path):
                     category="level",
                     data={
                         "initial_city_card_id": "capital-foundation",
-                        "deck_id": created_deck.id,
+                        "empire_deck_id": created_deck.id,
+                        "crisis_deck_id": created_crisis_deck.id,
                         "suspicion_start_era": 5,
                     },
                 ),
@@ -514,6 +586,33 @@ def test_export_all_includes_every_catalog_admin_kind(tmp_path):
             force_admin=True,
         )
 
+        asyncio.run(
+            admin_create_catalog_entry(
+                "events",
+                AdminCatalogEntryCreate(
+                    id="test-crisis",
+                    name="Test Crisis",
+                    category="event",
+                    data={"subtype": "crisis", "requirements": [], "main_effects": [], "alternative_effects": []},
+                ),
+                _admin=admin,
+                db=db,
+            )
+        )
+        asyncio.run(
+            admin_create_catalog_entry(
+                "decks",
+                AdminCatalogEntryCreate(
+                    id="test-crisis-deck",
+                    name="Test Crisis Deck",
+                    category="deck",
+                    data={"deck_type": "crisis", "item_ids": ["test-crisis"], "initial_setup": {}},
+                ),
+                _admin=admin,
+                db=db,
+            )
+        )
+
         examples = {
             "cards": AdminCatalogEntryCreate(
                 id="test-card",
@@ -534,7 +633,8 @@ def test_export_all_includes_every_catalog_admin_kind(tmp_path):
                 category="level",
                 data={
                     "initial_city_card_id": "test-card",
-                    "deck_id": "test-deck",
+                    "empire_deck_id": "test-deck",
+                    "crisis_deck_id": "test-crisis-deck",
                     "suspicion_start_era": 5,
                 },
             ),
@@ -543,6 +643,7 @@ def test_export_all_includes_every_catalog_admin_kind(tmp_path):
                 name="Test Deck",
                 category="deck",
                 data={
+                    "deck_type": "empire",
                     "item_ids": ["test-card"] * 10,
                     "initial_setup": {
                         "3": ["test-card"] * 6,

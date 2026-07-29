@@ -64,7 +64,6 @@ class GameRoomCreateRequest(BaseModel):
     mode: str = "solo"
     game_type: str = "chronicle_solo"
     level_id: Optional[str] = None
-    deck_id: Optional[str] = None
 
 
 class GameRoomResponse(BaseModel):
@@ -194,6 +193,17 @@ class AdminCatalogImportResult(BaseModel):
     created: int = 0
     updated: int = 0
     skipped: int = 0
+
+
+class AdminBuildPath(BaseModel):
+    building_card_ids: List[str] = Field(default_factory=list)
+
+
+class AdminBuildPathResult(BaseModel):
+    city_card_id: str
+    target_card_id: str
+    minimum_buildings: Optional[int] = None
+    paths: List[AdminBuildPath] = Field(default_factory=list)
 
 
 class AdminCatalogSummary(BaseModel):

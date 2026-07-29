@@ -79,9 +79,11 @@ def build_goldfishing_state(
     room_id: str,
     card_entries: list[dict[str, Any]],
     tag_entries: list[dict[str, Any]],
-    deck_ids: list[str],
+    empire_deck_ids: list[str],
+    crisis_deck_ids: list[str],
     setup_pool_ids: list[str],
-    deck_id: str,
+    empire_deck_id: str,
+    crisis_deck_id: str,
     initial_city_card_id: str = "capital-foundation",
     level_id: str = "",
     suspicion_start_era: int = 5,
@@ -109,18 +111,16 @@ def build_goldfishing_state(
         initial_city_card_id = city["id"] if city else ""
     initial_city = card_lookup.get(initial_city_card_id, {})
 
-    crisis_item_ids = {
-        entry["id"]
-        for entry in events
-        if str((entry.get("data") or {}).get("subtype") or "").lower() == "crisis"
-    }
-    valid_deck_ids = [item_id for item_id in deck_ids if item_id in item_ids and item_id != initial_city_card_id]
-    crisis_ids = [item_id for item_id in valid_deck_ids if item_id in crisis_item_ids]
-    empire_valid_ids = [item_id for item_id in valid_deck_ids if item_id not in crisis_item_ids]
+    empire_valid_ids = [
+        item_id
+        for item_id in empire_deck_ids
+        if item_id in item_ids and item_id != initial_city_card_id
+    ]
+    crisis_ids = [item_id for item_id in crisis_deck_ids if item_id in item_ids]
     setup_counts = Counter(
         item_id
         for item_id in setup_pool_ids
-        if item_id in item_ids and item_id != initial_city_card_id and item_id not in crisis_item_ids
+        if item_id in item_ids and item_id != initial_city_card_id
     )
     remaining_setup = Counter(setup_counts)
     empire_ids: list[str] = []
@@ -232,7 +232,8 @@ def build_goldfishing_state(
             "agendas": agendas,
         },
         "decks": {
-            "empire": deck_id,
+            "empire": empire_deck_id,
+            "crisis": crisis_deck_id,
         },
         "level_id": level_id,
         "log": [
@@ -318,9 +319,7 @@ def _place_suspicion(state: dict[str, Any], payload: dict[str, Any]) -> None:
     _advance_ordered_player(state, completed_ids=set(state["suspicion_placements"]))
     if len(state["suspicion_placements"]) == len(state["players"]):
         _apply_suspicion_depositions(state)
-        state["phase"] = "production"
-        state["active_player_id"] = state["minister_of_empire_player_id"]
-        state["log"].append("Production Phase began.")
+        _begin_production(state)
 
 
 def _must_commit_face_up(player: dict[str, Any]) -> bool:
@@ -354,10 +353,7 @@ def _apply_suspicion_depositions(state: dict[str, Any]) -> None:
 
 def _continue_phase(state: dict[str, Any], _payload: dict[str, Any]) -> None:
     phase = state.get("phase")
-    if phase == "production":
-        _run_production(state)
-        _begin_plotting(state)
-    elif phase == "reveal":
+    if phase == "reveal":
         if state.get("pending_placement"):
             raise ValueError("The revealed card still needs placement.")
         _reveal_next(state, {})
@@ -379,7 +375,7 @@ def _continue_phase(state: dict[str, Any], _payload: dict[str, Any]) -> None:
 
 def _commit_card(state: dict[str, Any], payload: dict[str, Any]) -> None:
     _require_phase(state, "plotting")
-    player_id = _require_active_player(state, payload)
+    player_id = _require_plotting_player(state, payload)
     player = _player(state, player_id)
     source = str(payload.get("source") or "hand")
     index = int(payload.get("index", -1))
@@ -413,7 +409,7 @@ def _commit_card(state: dict[str, Any], payload: dict[str, Any]) -> None:
 
 def _commit_none(state: dict[str, Any], payload: dict[str, Any]) -> None:
     _require_phase(state, "plotting")
-    player_id = _require_active_player(state, payload)
+    player_id = _require_plotting_player(state, payload)
     if _legal_commit_options(state, _player(state, player_id)):
         raise ValueError("This player has a legal card to commit.")
     player = _player(state, player_id)
@@ -433,7 +429,7 @@ def _commit_none(state: dict[str, Any], payload: dict[str, Any]) -> None:
 
 def _plotting_scheme(state: dict[str, Any], payload: dict[str, Any]) -> None:
     _require_phase(state, "plotting")
-    player_id = _require_active_player(state, payload)
+    player_id = _require_plotting_player(state, payload)
     player = _player(state, player_id)
     mode = str(payload.get("mode") or "")
     hand_index = int(payload.get("hand_index", -1))
@@ -635,9 +631,8 @@ def _assign_ministries(state: dict[str, Any], *, rotate: bool) -> None:
 
 def _begin_suspicion(state: dict[str, Any]) -> None:
     if int(state.get("era", 1)) < int(state.get("suspicion_start_era", 5)):
-        state["phase"] = "production"
-        state["active_player_id"] = state["minister_of_empire_player_id"]
-        state["log"].append("Suspicion is not active yet. Production Phase began.")
+        state["log"].append("Suspicion is not active yet.")
+        _begin_production(state)
         return
     state["phase"] = "suspicion"
     state["suspicion_placements"] = {}
@@ -662,20 +657,27 @@ def _run_production(state: dict[str, Any]) -> None:
     state["log"].append(f"Production generated {sum(production.values())} resources.")
 
 
+def _begin_production(state: dict[str, Any]) -> None:
+    state["phase"] = "production"
+    state["active_player_id"] = ""
+    state["log"].append("Production Phase began.")
+    _run_production(state)
+    _begin_plotting(state)
+
+
 def _begin_plotting(state: dict[str, Any]) -> None:
     state["phase"] = "plotting"
     state["commitments"] = []
     state["council_stack"] = []
     for player in state["players"]:
         player["committed"] = False
-    state["active_player_id"] = state["minister_of_empire_player_id"]
+    state["active_player_id"] = ""
     state["log"].append("Plotting Phase began.")
 
 
 def _advance_plotting(state: dict[str, Any]) -> None:
     committed = {player["id"] for player in state["players"] if player.get("committed")}
     if len(committed) < len(state["players"]):
-        _advance_ordered_player(state, completed_ids=committed)
         return
     state["council_stack"] = list(state["commitments"])
     _begin_hand_reset(state)
@@ -822,61 +824,64 @@ def _possible_actions(state: dict[str, Any]) -> list[dict[str, Any]]:
                 ],
             ]
         ]
-    if phase == "production":
-        return [{"type": "continue_phase"}]
     if phase == "plotting":
-        player = _player(state, active)
-        commit_actions = [
-            {
-                "type": "commit_card",
-                "player_id": active,
-                "item_id": item_id,
-                "source": source,
-                "index": index,
-                "face_up": _must_commit_face_up(player),
-            }
-            for source, index, item_id in _legal_commit_options(state, player)
-        ]
-        scheme_actions = [
-            *[
+        actions: list[dict[str, Any]] = []
+        for player in state["players"]:
+            if player.get("committed"):
+                continue
+            player_id = player["id"]
+            commit_actions = [
                 {
-                    "type": "plotting_scheme",
-                    "player_id": active,
-                    "hand_index": index,
-                    "slot_index": slot_index,
-                    "mode": "to_scheme",
+                    "type": "commit_card",
+                    "player_id": player_id,
+                    "item_id": item_id,
+                    "source": source,
+                    "index": index,
+                    "face_up": _must_commit_face_up(player),
                 }
-                for index, item_id in enumerate(player["hand"])
-                if item_id
-                for slot_index, slot_item in enumerate(player["scheme_slots"])
-                if not slot_item
-            ],
-            *[
-                {
-                    "type": "plotting_scheme",
-                    "player_id": active,
-                    "slot_index": slot_index,
-                    "mode": "to_hand",
-                }
-                for slot_index, slot_item in enumerate(player["scheme_slots"])
-                if slot_item
-            ],
-            *[
-                {
-                    "type": "plotting_scheme",
-                    "player_id": active,
-                    "hand_index": index,
-                    "slot_index": slot_index,
-                    "mode": "swap",
-                }
-                for index, item_id in enumerate(player["hand"])
-                if item_id
-                for slot_index, slot_item in enumerate(player["scheme_slots"])
-                if slot_item
-            ],
-        ]
-        mandatory_action = commit_actions or [{"type": "commit_none", "player_id": active}]
-        return [*mandatory_action, *scheme_actions]
+                for source, index, item_id in _legal_commit_options(state, player)
+            ]
+            scheme_actions = [
+                *[
+                    {
+                        "type": "plotting_scheme",
+                        "player_id": player_id,
+                        "hand_index": index,
+                        "slot_index": slot_index,
+                        "mode": "to_scheme",
+                    }
+                    for index, item_id in enumerate(player["hand"])
+                    if item_id
+                    for slot_index, slot_item in enumerate(player["scheme_slots"])
+                    if not slot_item
+                ],
+                *[
+                    {
+                        "type": "plotting_scheme",
+                        "player_id": player_id,
+                        "slot_index": slot_index,
+                        "mode": "to_hand",
+                    }
+                    for slot_index, slot_item in enumerate(player["scheme_slots"])
+                    if slot_item
+                ],
+                *[
+                    {
+                        "type": "plotting_scheme",
+                        "player_id": player_id,
+                        "hand_index": index,
+                        "slot_index": slot_index,
+                        "mode": "swap",
+                    }
+                    for index, item_id in enumerate(player["hand"])
+                    if item_id
+                    for slot_index, slot_item in enumerate(player["scheme_slots"])
+                    if slot_item
+                ],
+            ]
+            actions.extend(commit_actions or [{"type": "commit_none", "player_id": player_id}])
+            actions.extend(scheme_actions)
+        return actions
     if phase == "docket_ordering":
         docket = state.get("council_stack", [])
         actions = [
@@ -1983,6 +1988,16 @@ def _require_active_player(state: dict[str, Any], payload: dict[str, Any]) -> st
     player_id = str(payload.get("player_id") or "")
     if player_id != state.get("active_player_id"):
         raise ValueError("It is not this player's decision.")
+    return player_id
+
+
+def _require_plotting_player(state: dict[str, Any], payload: dict[str, Any]) -> str:
+    player_id = str(payload.get("player_id") or "")
+    player = next((entry for entry in state.get("players", []) if entry["id"] == player_id), None)
+    if player is None:
+        raise ValueError("Plotting player not found.")
+    if player.get("committed"):
+        raise ValueError("This player already committed for this Plotting Phase.")
     return player_id
 
 

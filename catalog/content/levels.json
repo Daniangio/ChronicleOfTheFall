@@ -7,11 +7,12 @@
       "name": "Chronicle Default Level",
       "kind": "levels",
       "category": "level",
-      "summary": "Default level template using the Capital and Chronicle deck.",
+      "summary": "Default level template using the Capital and Chronicle decks.",
       "color": null,
       "data": {
         "initial_city_card_id": "capital",
-        "deck_id": "chronicle-default-deck"
+        "empire_deck_id": "chronicle-default-empire-deck",
+        "crisis_deck_id": "chronicle-default-crisis-deck"
       }
     }
   ]

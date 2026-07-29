@@ -46,6 +46,7 @@ const ItemVisual = ({ item, catalogs, tagLookup, storageIconSrc = "", actionLabe
           pillars={catalogs.pillars}
           tokens={catalogs.tokens}
           effectIcons={catalogs.effect_icons}
+          size="hand"
         />
         {actionLabel ? (
           <button
@@ -204,7 +205,11 @@ const GameRoomPage = () => {
       const nextState = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(nextState.detail || "Action failed.");
       setGameState(nextState);
-      setFocusedPlayerId(nextState.active_player_id || nextState.players?.[0]?.id || "");
+      setFocusedPlayerId((current) => (
+        nextState.phase === "plotting" && nextState.players?.some((player) => player.id === current)
+          ? current
+          : nextState.active_player_id || nextState.players?.[0]?.id || ""
+      ));
       return nextState;
     } catch (actionError) {
       setError(actionError.message || "Action failed.");
@@ -391,9 +396,6 @@ const GameRoomPage = () => {
         </div>
       );
     }
-    if (phase === "production" && actions.some((entry) => entry.type === "continue_phase")) {
-      return <button className="rounded-md bg-amber-300 px-4 py-2 text-sm font-bold text-stone-950 hover:bg-amber-200 disabled:opacity-50" disabled={busy} onClick={() => perform("continue_phase")} type="button">Resolve phase</button>;
-    }
     if (phase === "docket_ordering") {
       const confirmAction = actions.find((entry) => entry.type === "confirm_docket_order");
       return (
@@ -465,9 +467,9 @@ const GameRoomPage = () => {
   };
 
   return (
-    <main className="imperial-theme min-h-screen bg-slate-950 text-slate-100">
-      <div className="grid min-h-screen grid-cols-1 lg:grid-cols-[15rem_minmax(0,1fr)]">
-        <aside className="border-b border-slate-800 bg-slate-900/75 p-4 lg:border-b-0 lg:border-r">
+    <main className="imperial-theme min-h-screen bg-slate-950 text-slate-100 lg:h-screen lg:overflow-hidden">
+      <div className="grid min-h-screen grid-cols-1 lg:h-screen lg:grid-cols-[14rem_minmax(0,1fr)]">
+        <aside className="border-b border-slate-800 bg-slate-900/75 p-3 lg:h-screen lg:overflow-y-auto lg:border-b-0 lg:border-r">
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-xs uppercase text-amber-700">Anonymous Council</p>
@@ -480,12 +482,14 @@ const GameRoomPage = () => {
             {players.map((player) => {
               const focused = player.id === focusedPlayer?.id;
               const active = player.id === activePlayer?.id;
+              const awaitingPlot = phase === "plotting" && !player.committed;
               const ministries = ministryNamesFor(player.id);
               return (
                 <button key={player.id} className={`w-full border p-3 text-left ${focused ? "border-amber-500 bg-amber-950/25" : "border-slate-800 bg-slate-950 hover:border-slate-600"}`} onClick={() => setFocusedPlayerId(player.id)} type="button">
                   <span className="flex items-center justify-between gap-2">
                     <span className="font-semibold text-white">{player.name}</span>
                     {active ? <span className="bg-amber-300 px-1.5 py-0.5 text-[0.6rem] font-bold text-stone-950">DECIDING</span> : null}
+                    {awaitingPlot ? <span className="bg-teal-300 px-1.5 py-0.5 text-[0.6rem] font-bold text-stone-950">PLOTTING</span> : null}
                   </span>
                   <span className="mt-2 block text-xs text-slate-500">Hand {player.hand?.length || 0} · Suspicion {player.suspicion || 0}</span>
                   <span className="mt-1 block text-[0.65rem] leading-4 text-amber-700">{ministries.join(" · ") || "No ministry"}</span>
@@ -495,16 +499,18 @@ const GameRoomPage = () => {
           </div>
         </aside>
 
-        <section className="min-w-0">
+        <section className="min-w-0 lg:flex lg:h-screen lg:min-h-0 lg:flex-col lg:overflow-hidden">
           {error ? <p className="m-4 border border-rose-900 bg-rose-950/70 px-3 py-2 text-sm text-rose-200">{error}</p> : null}
 
-          <header className="m-4 border border-amber-900/60 bg-stone-950/80 p-4">
+          <header className="m-3 shrink-0 border border-amber-900/60 bg-stone-950/80 px-3 py-2">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <p className="text-xs font-semibold uppercase text-amber-700">Current Phase</p>
-                <h2 className="mt-1 text-xl font-bold text-amber-50">{titleCase(phase)}</h2>
+                <h2 className="mt-0.5 text-lg font-bold text-amber-50">{titleCase(phase)}</h2>
                 <p className="mt-1 text-xs text-slate-500">
-                  {activePlayer
+                  {phase === "plotting"
+                    ? `${players.filter((player) => !player.committed).length} players still plotting`
+                    : activePlayer
                     ? `${activePlayer.name} is deciding`
                     : gameState.winner_player_ids?.length
                       ? `Winners: ${gameState.winner_player_ids.map((playerId) => players.find((player) => player.id === playerId)?.name || playerId).join(", ")}`
@@ -515,35 +521,9 @@ const GameRoomPage = () => {
             </div>
           </header>
 
-          <div className="grid gap-4 px-4 xl:grid-cols-[minmax(0,1fr)_19rem]">
-            <div className="min-w-0 space-y-4">
-              <section className="grid gap-3 md:grid-cols-3">
-                <div className="border border-slate-800 bg-slate-900 p-3">
-                  <div className="flex items-center gap-2 text-slate-400"><Crown className="h-4 w-4 text-amber-400" /><span className="text-xs font-bold uppercase">Pillars</span></div>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {Object.entries(gameState.pillars || {}).map(([pillarId, value]) => (
-                      <span key={pillarId} className="border border-amber-900/60 bg-stone-950 px-2 py-1 text-xs text-amber-100" title={pillarLookup[normalize(pillarId)]?.name || pillarId}>{pillarLookup[normalize(pillarId)]?.name || titleCase(pillarId)} <strong>{value}</strong></span>
-                    ))}
-                  </div>
-                </div>
-                <div className="border border-slate-800 bg-slate-900 p-3">
-                  <div className="flex items-center gap-2 text-slate-400"><Archive className="h-4 w-4 text-teal-400" /><span className="text-xs font-bold uppercase">Global Resources</span></div>
-                  <div className="mt-3 flex flex-wrap gap-1.5">
-                    {Object.entries(resourcePool).map(([tagId, amount]) => <TagIcon key={tagId} tag={tagLookup[normalize(tagId)]} label={tagId} count={amount} size="sm" />)}
-                    {!Object.keys(resourcePool).length ? <span className="text-xs text-slate-600">Empty</span> : null}
-                  </div>
-                </div>
-                <div className="border border-slate-800 bg-slate-900 p-3">
-                  <div className="flex items-center gap-2 text-slate-400"><Users className="h-4 w-4 text-rose-400" /><span className="text-xs font-bold uppercase">Empire Tags</span></div>
-                  <div className="mt-3 flex flex-wrap gap-1.5">
-                    {Object.entries(gameState.empire_tags || {}).map(([tagId, amount]) => <TagIcon key={tagId} tag={tagLookup[normalize(tagId)]} label={tagId} count={amount} size="sm" />)}
-                    {!Object.keys(gameState.empire_tags || {}).length ? <span className="text-xs text-slate-600">None</span> : null}
-                  </div>
-                </div>
-              </section>
-
-
-              <section className="border border-slate-800 bg-slate-900">
+          <div className="grid gap-3 px-3 pb-3 lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(0,1fr)_17rem] lg:overflow-hidden xl:grid-cols-[minmax(0,1fr)_18rem]">
+            <div className="min-w-0 lg:min-h-0">
+              <section className="border border-slate-800 bg-slate-900 lg:flex lg:h-full lg:min-h-0 lg:flex-col">
                 <div className="flex items-center justify-between gap-3 border-b border-slate-800 p-4">
                   <div>
                     <h2 className="font-bold text-white">Empire Map</h2>
@@ -555,7 +535,7 @@ const GameRoomPage = () => {
                     <button className="h-8 w-8 border border-slate-700 hover:bg-slate-800" onClick={() => setBoardZoom((value) => Math.min(1.2, value + 0.1))} title="Zoom in" type="button"><Plus className="mx-auto h-4 w-4" /></button>
                   </div>
                 </div>
-                <div className="h-[38rem] overflow-auto bg-stone-950/60 p-5">
+                <div className="h-[30rem] overflow-auto bg-stone-950/60 p-5 lg:h-auto lg:min-h-0 lg:flex-1">
                   <div className="relative" style={{ width: boardWidth * boardZoom, height: 760 * boardZoom }}>
                     <div className="absolute left-0 top-0 flex origin-top-left gap-8" style={{ width: boardWidth, height: 760, transform: `scale(${boardZoom})` }}>
                       {(gameState.cities || []).map((city) => <CityZone key={city.id} city={city} cardLookup={cardLookup} tagLookup={tagLookup} pillarLookup={pillarLookup} tokenLookup={tokenLookup} storageIconSrc={storageIconSrc} />)}
@@ -565,7 +545,29 @@ const GameRoomPage = () => {
               </section>
             </div>
 
-            <aside className="space-y-4">
+            <aside className="space-y-3 lg:min-h-0 lg:overflow-y-auto lg:pr-1">
+              <section className="border border-slate-800 bg-slate-900 p-3">
+                <div className="flex items-center gap-2 text-slate-400"><Crown className="h-4 w-4 text-amber-400" /><h2 className="text-xs font-bold uppercase">Imperial Status</h2></div>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {Object.entries(gameState.pillars || {}).map(([pillarId, value]) => (
+                    <span key={pillarId} className="border border-amber-900/60 bg-stone-950 px-2 py-1 text-xs text-amber-100" title={pillarLookup[normalize(pillarId)]?.name || pillarId}>{pillarLookup[normalize(pillarId)]?.name || titleCase(pillarId)} <strong>{value}</strong></span>
+                  ))}
+                </div>
+                <div className="mt-3 border-t border-slate-800 pt-2">
+                  <div className="mb-1.5 flex items-center gap-1.5 text-[0.65rem] font-bold uppercase text-slate-500"><Archive className="h-3.5 w-3.5 text-teal-400" />Resources</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {Object.entries(resourcePool).map(([tagId, amount]) => <TagIcon key={tagId} tag={tagLookup[normalize(tagId)]} label={tagId} count={amount} size="sm" />)}
+                    {!Object.keys(resourcePool).length ? <span className="text-xs text-slate-600">Empty</span> : null}
+                  </div>
+                </div>
+                <div className="mt-3 border-t border-slate-800 pt-2">
+                  <div className="mb-1.5 flex items-center gap-1.5 text-[0.65rem] font-bold uppercase text-slate-500"><Users className="h-3.5 w-3.5 text-rose-400" />Empire Tags</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {Object.entries(gameState.empire_tags || {}).map(([tagId, amount]) => <TagIcon key={tagId} tag={tagLookup[normalize(tagId)]} label={tagId} count={amount} size="sm" />)}
+                    {!Object.keys(gameState.empire_tags || {}).length ? <span className="text-xs text-slate-600">None</span> : null}
+                  </div>
+                </div>
+              </section>
               <section className="border border-slate-800 bg-slate-900 p-3">
                 <h2 className="text-sm font-bold text-white">Council Docket</h2>
                 <p className="mt-1 text-xs text-slate-500">
@@ -655,7 +657,7 @@ const GameRoomPage = () => {
             </aside>
           </div>
 
-          <section className="mt-4 border-t border-slate-800 bg-slate-900 p-4">
+          <section className="shrink-0 border-t border-slate-800 bg-slate-900 p-3 lg:max-h-[20rem] lg:overflow-hidden">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h2 className="text-lg font-bold text-white">{focusedPlayer?.name || "Player"}</h2>
@@ -672,10 +674,10 @@ const GameRoomPage = () => {
               </div>
               <p className="text-xs text-slate-500">Refill 3 · State refill 4 · Scheme slots 2</p>
             </div>
-            <div className="mt-4 grid gap-5 xl:grid-cols-[minmax(0,1fr)_20rem]">
-              <div>
+            <div className="mt-3 grid gap-4 lg:grid-cols-[minmax(0,1fr)_18rem] xl:grid-cols-[minmax(0,1fr)_20rem]">
+              <div className="min-w-0">
                 <h3 className="mb-2 text-xs font-bold uppercase text-slate-500">Hand</h3>
-                <div className="flex flex-wrap gap-3">
+                <div className="flex flex-nowrap gap-2 overflow-x-auto pb-2">
                   {(focusedPlayer?.hand || []).map((itemId, index) => {
                     const plottingAction = actions.find((entry) => entry.type === "commit_card" && entry.source === "hand" && entry.index === index && entry.player_id === focusedPlayer.id);
                     const schemeActions = actions.filter((entry) => entry.type === "plotting_scheme" && entry.hand_index === index && entry.player_id === focusedPlayer.id);

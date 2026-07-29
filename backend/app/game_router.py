@@ -51,18 +51,23 @@ async def create_game_room(
         if level is None:
             raise ValueError("No level is configured.")
         level_data = getattr(level, "data", {}) or {}
-        deck = _deck_by_id(decks, payload.deck_id) or _deck_by_id(decks, level_data.get("deck_id"))
-        if deck is None:
-            raise ValueError("The selected level has no valid deck.")
+        empire_deck = _deck_by_id(decks, level_data.get("empire_deck_id"))
+        crisis_deck = _deck_by_id(decks, level_data.get("crisis_deck_id"))
+        if empire_deck is None or str((getattr(empire_deck, "data", {}) or {}).get("deck_type") or "") != "empire":
+            raise ValueError("The selected level has no valid Empire deck.")
+        if crisis_deck is None or str((getattr(crisis_deck, "data", {}) or {}).get("deck_type") or "") != "crisis":
+            raise ValueError("The selected level has no valid Crisis deck.")
         initial_city_card_id = str(level_data.get("initial_city_card_id") or "capital-foundation")
         room_id = service.new_room_id()
         game_state = build_goldfishing_state(
             room_id=room_id,
             card_entries=cards,
             tag_entries=tags,
-            deck_ids=_deck_item_ids(deck),
-            setup_pool_ids=_deck_setup_ids(deck, player_count=4),
-            deck_id=str(getattr(deck, "id", "") or ""),
+            empire_deck_ids=_deck_item_ids(empire_deck),
+            crisis_deck_ids=_deck_item_ids(crisis_deck),
+            setup_pool_ids=_deck_setup_ids(empire_deck, player_count=4),
+            empire_deck_id=str(getattr(empire_deck, "id", "") or ""),
+            crisis_deck_id=str(getattr(crisis_deck, "id", "") or ""),
             initial_city_card_id=initial_city_card_id,
             level_id=str(getattr(level, "id", "") or ""),
             suspicion_start_era=max(1, int(level_data.get("suspicion_start_era") or 5)),
@@ -105,8 +110,10 @@ async def list_game_levels(current_user: User = Depends(get_current_user), db: S
             "summary": level.get("summary") or "",
             "initial_city_card_id": (level.get("data") or {}).get("initial_city_card_id") or "",
             "initial_city_name": cards.get((level.get("data") or {}).get("initial_city_card_id"), {}).get("name") or "",
-            "deck_id": (level.get("data") or {}).get("deck_id") or "",
-            "deck_name": decks.get((level.get("data") or {}).get("deck_id"), {}).get("name") or "",
+            "empire_deck_id": (level.get("data") or {}).get("empire_deck_id") or "",
+            "empire_deck_name": decks.get((level.get("data") or {}).get("empire_deck_id"), {}).get("name") or "",
+            "crisis_deck_id": (level.get("data") or {}).get("crisis_deck_id") or "",
+            "crisis_deck_name": decks.get((level.get("data") or {}).get("crisis_deck_id"), {}).get("name") or "",
         }
         for level in levels
     ]

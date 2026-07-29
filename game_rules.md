@@ -438,7 +438,7 @@ Place the Capital in play.
 **Capital**
 Type: City
 Slots: 4
-Production: 2 Labor, 1 Food, 1 Favor
+Production: 2 Labor
 Storage: 2
 
 The Capital may also have starting Tags if required by the current prototype deck. If no deck-specific setup is provided, the Capital starts with no specialized Tags.
@@ -747,6 +747,7 @@ all those cards and commit nothing.
 # 13. Production Phase
 
 During Production, the Empire produces resources.
+Production resolves automatically as soon as the phase begins.
 
 Add to the Global Resource Pool:
 
@@ -762,15 +763,13 @@ Example:
 
 The Empire has:
 
-* Capital: 2 Labor, 1 Food, 1 Favor
+* Capital: 2 Labor
 * Quarry: +1 Material
 * Market Hall: +1 Wealth
 
 The Global Resource Pool becomes:
 
 * 2 Labor
-* 1 Food
-* 1 Favor
 * 1 Material
 * 1 Wealth
 
@@ -785,13 +784,14 @@ A player may commit:
 * 1 card from hand;
 * or 1 card from a Scheme Slot.
 
-Starting with the Minister of the Empire and proceeding clockwise, each player takes one Plotting turn.
+Players perform Plotting in parallel. There is no active-player order during this
+phase. Once a player commits, that player has completed Plotting for the Era.
 
 ---
 
 ## 14.1 Scheming During Plotting
 
-Before committing, the active player may rearrange cards between their hand and Scheme Slots.
+Before committing, each player may rearrange cards between their hand and Scheme Slots.
 
 The player may:
 

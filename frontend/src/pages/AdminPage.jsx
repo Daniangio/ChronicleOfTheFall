@@ -1,4 +1,4 @@
-import { Download, Edit3, Plus, Save, Search, Trash2, Upload, X } from "lucide-react";
+import { ArrowDown, Download, Edit3, Plus, Save, Search, Trash2, Upload, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, Navigate, NavLink, useParams } from "react-router-dom";
 import { PageSubnavigation } from "../components/AuthenticatedLayout.jsx";
@@ -14,6 +14,7 @@ const sections = [
   { key: "tags", label: "Tags", to: "/admin/tags" },
   { key: "images", label: "Images", to: "/admin/images" },
   { key: "cards", label: "Cards", to: "/admin/cards" },
+  { key: "build-paths", label: "Build Paths", to: "/admin/build-paths" },
   { key: "ministries", label: "Ministries", to: "/admin/ministries" },
   { key: "pillars", label: "Pillars", to: "/admin/pillars" },
   { key: "tokens", label: "Tokens", to: "/admin/tokens" },
@@ -21,7 +22,7 @@ const sections = [
   { key: "agendas", label: "Agendas", to: "/admin/agendas" },
   { key: "edicts", label: "Edicts", to: "/admin/edicts" },
   { key: "crises", label: "Crises", to: "/admin/crises" },
-  { key: "decks", label: "Empire Decks", to: "/admin/decks" },
+  { key: "decks", label: "Decks", to: "/admin/decks" },
   { key: "levels", label: "Levels", to: "/admin/levels" },
 ];
 
@@ -535,6 +536,18 @@ const repeatedListToCounts = (items) => {
     if (!tagId) return counts;
     return { ...counts, [tagId]: Number(counts[tagId] || 0) + 1 };
   }, {});
+};
+
+const defaultEmpireInitialSetup = (items) => {
+  const ids = items
+    .filter((item) => item.kind === "cards" && item.category === "structure")
+    .map((item) => item.id)
+    .slice(0, 10);
+  return {
+    "3": ids.slice(0, 6),
+    "4": ids.slice(6, 8),
+    "5": ids.slice(8, 10),
+  };
 };
 
 const countsToRepeatedList = (counts) =>
@@ -1806,6 +1819,12 @@ const EventGuidedFields = ({ data, setField, tagEntries, ministryEntries, pillar
 };
 
 const UnifiedDeckGuidedFields = ({ data, setField, items }) => {
+  const deckType = data.deck_type === "crisis" ? "crisis" : "empire";
+  const eligibleItems = items.filter((item) => (
+    deckType === "crisis"
+      ? item.kind === "events" && item.data?.subtype === "crisis"
+      : item.kind === "cards" || (item.kind === "events" && item.data?.subtype === "edict")
+  ));
   const itemIds = Array.isArray(data.item_ids) ? data.item_ids : [];
   const setup = data.initial_setup && typeof data.initial_setup === "object"
     ? data.initial_setup
@@ -1817,6 +1836,8 @@ const UnifiedDeckGuidedFields = ({ data, setField, items }) => {
   const setDeckCopies = (itemId, copies) => {
     const normalized = Math.max(0, Math.min(99, Number(copies) || 0));
     const otherIds = itemIds.filter((id) => id !== itemId);
+    setField("item_ids", [...otherIds, ...Array.from({ length: normalized }, () => itemId)]);
+    if (deckType === "crisis") return;
     const nextSetup = Object.fromEntries(["3", "4", "5"].map((tier) => {
       const allowed = Math.max(0, normalized - ["3", "4", "5"]
         .filter((candidate) => candidate !== tier)
@@ -1825,7 +1846,6 @@ const UnifiedDeckGuidedFields = ({ data, setField, items }) => {
       const withoutItem = (setup[tier] || []).filter((id) => id !== itemId);
       return [tier, [...withoutItem, ...Array.from({ length: count }, () => itemId)]];
     }));
-    setField("item_ids", [...otherIds, ...Array.from({ length: normalized }, () => itemId)]);
     setField("initial_setup", nextSetup);
   };
   const setTierCopies = (tier, itemId, copies) => {
@@ -1845,37 +1865,58 @@ const UnifiedDeckGuidedFields = ({ data, setField, items }) => {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-[minmax(0,1fr)_5rem_repeat(3,5.5rem)] gap-2 px-3 text-xs font-semibold text-slate-500">
-        <span>Card</span><span>Deck</span><span>3 players</span><span>+4th</span><span>+5th</span>
+      <SelectField
+        label="Deck Type"
+        value={deckType}
+        options={[
+          { value: "empire", label: "Empire" },
+          { value: "crisis", label: "Crisis" },
+        ]}
+        onChange={(value) => {
+          const defaultItems = items.filter((item) => (
+            value === "crisis"
+              ? item.kind === "events" && item.data?.subtype === "crisis"
+              : item.kind === "cards" || (item.kind === "events" && item.data?.subtype === "edict")
+          ));
+          setField("deck_type", value);
+          setField("item_ids", defaultItems.map((item) => item.id));
+          setField("initial_setup", value === "empire" ? defaultEmpireInitialSetup(defaultItems) : {});
+        }}
+      />
+      <div className={`grid gap-2 px-3 text-xs font-semibold text-slate-500 ${deckType === "empire" ? "grid-cols-[minmax(0,1fr)_5rem_repeat(3,5.5rem)]" : "grid-cols-[minmax(0,1fr)_5rem]"}`}>
+        <span>Card</span><span>Deck</span>
+        {deckType === "empire" ? <><span>Initial 3+</span><span>Initial 4+</span><span>Initial 5</span></> : null}
       </div>
-      {items.map((item) => (
-        <div key={item.id} className="grid grid-cols-[minmax(0,1fr)_5rem_repeat(3,5.5rem)] items-center gap-2 rounded-md border border-slate-800 bg-slate-950 p-3">
+      {eligibleItems.map((item) => (
+        <div key={item.id} className={`grid items-center gap-2 rounded-md border border-slate-800 bg-slate-950 p-3 ${deckType === "empire" ? "grid-cols-[minmax(0,1fr)_5rem_repeat(3,5.5rem)]" : "grid-cols-[minmax(0,1fr)_5rem]"}`}>
           <span className="min-w-0">
             <span className="block truncate text-sm font-semibold text-slate-200">{item.name}</span>
             <span className="block text-xs text-slate-500">{item.kind === "events" ? `Event - ${item.data?.subtype || "event"}` : item.category}</span>
           </span>
           <input className="h-8 rounded border border-slate-700 bg-slate-900 px-1 text-center text-sm text-white" min="0" max="99" type="number" value={deckCounts[item.id] || 0} onChange={(event) => setDeckCopies(item.id, event.target.value)} />
-          {["3", "4", "5"].map((tier) => (
+          {deckType === "empire" ? ["3", "4", "5"].map((tier) => (
             <input key={tier} className="h-8 rounded border border-slate-700 bg-slate-900 px-1 text-center text-sm text-white disabled:opacity-40" disabled={!deckCounts[item.id]} min="0" max={deckCounts[item.id] || 0} type="number" value={tierCounts[tier][item.id] || 0} onChange={(event) => setTierCopies(tier, item.id, event.target.value)} />
-          ))}
+          )) : null}
         </div>
       ))}
-      <div className="grid gap-2 sm:grid-cols-3">
+      {deckType === "empire" ? <div className="grid gap-2 sm:grid-cols-3">
         {["3", "4", "5"].map((tier) => {
           const total = (setup[tier] || []).length;
           return (
             <p key={tier} className={`rounded-md border px-3 py-2 text-sm ${total === tierTargets[tier] ? "border-emerald-800 text-emerald-200" : "border-amber-800 text-amber-200"}`}>
-              {tier === "3" ? "3 players" : `Add player ${tier}`}: {total}/{tierTargets[tier]}
+              {tier === "3" ? "Initial 3+" : tier === "4" ? "Initial 4+" : "Initial 5"}: {total}/{tierTargets[tier]}
             </p>
           );
         })}
-      </div>
+      </div> : null}
     </div>
   );
 };
 
 const LevelGuidedFields = ({ data, setField, cardEntries, deckEntries }) => {
   const cityCards = cardEntries.filter((card) => card.category === "city");
+  const empireDecks = deckEntries.filter((deck) => deck.data?.deck_type === "empire");
+  const crisisDecks = deckEntries.filter((deck) => deck.data?.deck_type === "crisis");
   return (
     <>
       <SelectField
@@ -1886,9 +1927,15 @@ const LevelGuidedFields = ({ data, setField, cardEntries, deckEntries }) => {
       />
       <SelectField
         label="Empire Deck"
-        value={data.deck_id || ""}
-        options={[{ value: "", label: "Select deck" }, ...deckEntries.map((deck) => ({ value: deck.id, label: deck.name }))]}
-        onChange={(value) => setField("deck_id", value)}
+        value={data.empire_deck_id || ""}
+        options={[{ value: "", label: "Select Empire deck" }, ...empireDecks.map((deck) => ({ value: deck.id, label: deck.name }))]}
+        onChange={(value) => setField("empire_deck_id", value)}
+      />
+      <SelectField
+        label="Crisis Deck"
+        value={data.crisis_deck_id || ""}
+        options={[{ value: "", label: "Select Crisis deck" }, ...crisisDecks.map((deck) => ({ value: deck.id, label: deck.name }))]}
+        onChange={(value) => setField("crisis_deck_id", value)}
       />
       <NumberField
         label="Suspicion Starts in Era"
@@ -2104,6 +2151,10 @@ const AdminPage = () => {
   const [ministryEntries, setMinistryEntries] = useState([]);
   const [deckEntries, setDeckEntries] = useState([]);
   const [levelEntries, setLevelEntries] = useState([]);
+  const [buildPathCityId, setBuildPathCityId] = useState("");
+  const [buildPathTargetId, setBuildPathTargetId] = useState("");
+  const [buildPathResult, setBuildPathResult] = useState(null);
+  const [buildPathsLoading, setBuildPathsLoading] = useState(false);
   const [catalogSummary, setCatalogSummary] = useState(null);
   const [editingEntry, setEditingEntry] = useState(null);
   const [catalogForm, setCatalogForm] = useState(emptyCatalogForm);
@@ -2234,6 +2285,38 @@ const AdminPage = () => {
     }
   };
 
+  const loadBuildPathCatalog = async () => {
+    if (!token) return;
+    setError("");
+    try {
+      const [cards, tags, images, pillars, tokens, effectIcons] = await Promise.all([
+        request("/api/admin/cards"),
+        request("/api/admin/tags"),
+        request("/api/admin/images"),
+        request("/api/admin/pillars"),
+        request("/api/admin/tokens"),
+        request("/api/admin/effect-icons"),
+      ]);
+      setCardEntries(cards);
+      setTagEntries(tags);
+      setImageEntries(images);
+      setPillarEntries(pillars);
+      setTokenEntries(tokens);
+      setEffectIconEntries(effectIcons);
+      const cities = cards.filter((entry) => entry.category === "city");
+      const structures = cards.filter((entry) => entry.category === "structure");
+      setBuildPathCityId((current) => (
+        cities.some((entry) => entry.id === current) ? current : cities[0]?.id || ""
+      ));
+      setBuildPathTargetId((current) => (
+        structures.some((entry) => entry.id === current) ? current : structures[0]?.id || ""
+      ));
+    } catch (loadError) {
+      setError(loadError.message || "Failed to load build path cards.");
+      setCardEntries([]);
+    }
+  };
+
   const loadUserDetail = async (userId) => {
     setError("");
     try {
@@ -2250,10 +2333,57 @@ const AdminPage = () => {
       void loadAudit();
     } else if (activeSection === "catalog-inspector") {
       void loadCatalogInspector();
+    } else if (activeSection === "build-paths") {
+      void loadBuildPathCatalog();
     } else if (isCatalogSection) {
       void loadCatalog(activeCatalogKind);
     }
   }, [activeCatalogKind, activeSection, isCatalogSection, token]);
+
+  useEffect(() => {
+    if (activeSection !== "build-paths" || !buildPathCityId || !buildPathTargetId) {
+      setBuildPathResult(null);
+      return undefined;
+    }
+    let cancelled = false;
+    setBuildPathsLoading(true);
+    setError("");
+    request(
+      `/api/admin/build-paths?city_card_id=${encodeURIComponent(buildPathCityId)}&target_card_id=${encodeURIComponent(buildPathTargetId)}`
+    )
+      .then((result) => {
+        if (!cancelled) setBuildPathResult(result);
+      })
+      .catch((loadError) => {
+        if (!cancelled) {
+          setError(loadError.message || "Failed to calculate build paths.");
+          setBuildPathResult(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setBuildPathsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSection, buildPathCityId, buildPathTargetId, token]);
+
+  const cityCardEntries = useMemo(
+    () => cardEntries
+      .filter((entry) => entry.category === "city")
+      .sort((left, right) => left.name.localeCompare(right.name)),
+    [cardEntries]
+  );
+  const structureCardEntries = useMemo(
+    () => cardEntries
+      .filter((entry) => entry.category === "structure")
+      .sort((left, right) => left.name.localeCompare(right.name)),
+    [cardEntries]
+  );
+  const buildPathCardById = useMemo(
+    () => Object.fromEntries(cardEntries.map((entry) => [entry.id, entry])),
+    [cardEntries]
+  );
 
   const filteredCatalogEntries = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -2310,9 +2440,24 @@ const AdminPage = () => {
             : "",
       dataText:
         activeCatalogKind === "decks"
-              ? stringifyData({ item_ids: [], initial_setup: { "3": [], "4": [], "5": [] } })
+              ? (() => {
+                  const defaultItems = [
+                    ...cardEntries,
+                    ...eventEntries.filter((entry) => entry.data?.subtype === "edict"),
+                  ];
+                  return stringifyData({
+                    deck_type: "empire",
+                    item_ids: defaultItems.map((entry) => entry.id),
+                    initial_setup: defaultEmpireInitialSetup(defaultItems),
+                  });
+                })()
             : activeCatalogKind === "levels"
-              ? stringifyData({ initial_city_card_id: "", deck_id: "", suspicion_start_era: 5 })
+              ? stringifyData({
+                  initial_city_card_id: "",
+                  empire_deck_id: "",
+                  crisis_deck_id: "",
+                  suspicion_start_era: 5,
+                })
             : activeCatalogKind === "ministries"
               ? stringifyData({
                   infrastructure_resources: [],
@@ -2405,14 +2550,18 @@ const AdminPage = () => {
         data: activeCatalogKind === "decks"
             ? {
                 ...normalizedData,
+                deck_type: normalizedData.deck_type === "crisis" ? "crisis" : "empire",
                 item_ids: Array.isArray(normalizedData.item_ids) ? normalizedData.item_ids : [],
-                initial_setup: normalizedData.initial_setup || { "3": [], "4": [], "5": [] },
+                ...(normalizedData.deck_type === "crisis"
+                  ? { initial_setup: {} }
+                  : { initial_setup: normalizedData.initial_setup || { "3": [], "4": [], "5": [] } }),
               }
           : activeCatalogKind === "levels"
             ? {
                 ...normalizedData,
                 initial_city_card_id: normalizedData.initial_city_card_id || "",
-                deck_id: normalizedData.deck_id || "",
+                empire_deck_id: normalizedData.empire_deck_id || "",
+                crisis_deck_id: normalizedData.crisis_deck_id || "",
                 suspicion_start_era: Math.max(1, Number(normalizedData.suspicion_start_era) || 5),
               }
           : activeCatalogKind === "tags"
@@ -2855,6 +3004,119 @@ const AdminPage = () => {
               </tbody>
             </table>
             {inspectorEntries.length === 0 ? <p className="py-5 text-slate-400">No catalog entries found.</p> : null}
+          </div>
+        </section>
+      ) : null}
+
+      {activeSection === "build-paths" ? (
+        <section className="space-y-5">
+          <div className="rounded-lg border border-slate-800 bg-slate-900 p-5">
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="space-y-2 text-sm text-slate-300">
+                <span className="block font-medium text-white">Starting City</span>
+                <select
+                  className="w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none focus:border-teal-400"
+                  value={buildPathCityId}
+                  onChange={(event) => setBuildPathCityId(event.target.value)}
+                >
+                  {cityCardEntries.length === 0 ? <option value="">No city cards available</option> : null}
+                  {cityCardEntries.map((entry) => (
+                    <option key={entry.id} value={entry.id}>{entry.name}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="space-y-2 text-sm text-slate-300">
+                <span className="block font-medium text-white">Target Structure</span>
+                <select
+                  className="w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none focus:border-teal-400"
+                  value={buildPathTargetId}
+                  onChange={(event) => setBuildPathTargetId(event.target.value)}
+                >
+                  {structureCardEntries.length === 0 ? <option value="">No structure cards available</option> : null}
+                  {structureCardEntries.map((entry) => (
+                    <option key={entry.id} value={entry.id}>{entry.name}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          </div>
+
+          <div className="min-h-[24rem] overflow-x-auto rounded-lg border border-slate-800 bg-slate-950 p-6">
+            {buildPathsLoading ? <p className="text-sm text-slate-400">Calculating minimum build paths...</p> : null}
+            {!buildPathsLoading && buildPathResult?.paths?.length ? (
+              <div className="min-w-max">
+                <div className="flex justify-center">
+                  <CatalogItemVisual
+                    entry={buildPathCardById[buildPathResult.city_card_id]}
+                    tags={tagEntries}
+                    cards={cardEntries}
+                    images={imageEntries}
+                    pillars={pillarEntries}
+                    tokens={tokenEntries}
+                    effectIcons={effectIconEntries}
+                  />
+                </div>
+                <div className="mx-auto h-7 w-px bg-slate-600" />
+                <div className="mx-auto h-px bg-slate-600" style={{ width: `max(1px, calc(100% - 12rem))` }} />
+                <div className="flex items-start justify-center gap-10 px-6">
+                  {buildPathResult.paths.map((path, pathIndex) => (
+                    <div
+                      key={`${path.building_card_ids.join(":")}:${pathIndex}`}
+                      className="flex w-[clamp(12rem,16vw,15rem)] flex-col items-center"
+                    >
+                      <div className="h-7 w-px bg-slate-600" />
+                      <span className="mb-3 rounded bg-slate-800 px-2 py-1 text-xs font-medium text-slate-300">
+                        Path {pathIndex + 1}
+                      </span>
+                      {path.building_card_ids.map((cardId, cardIndex) => (
+                        <div key={`${cardId}:${cardIndex}`} className="flex flex-col items-center">
+                          <CatalogItemVisual
+                            entry={buildPathCardById[cardId]}
+                            tags={tagEntries}
+                            cards={cardEntries}
+                            images={imageEntries}
+                            pillars={pillarEntries}
+                            tokens={tokenEntries}
+                            effectIcons={effectIconEntries}
+                          />
+                          <ArrowDown className="my-3 h-5 w-5 text-slate-500" aria-hidden="true" />
+                        </div>
+                      ))}
+                      <CatalogItemVisual
+                        entry={buildPathCardById[buildPathResult.target_card_id]}
+                        tags={tagEntries}
+                        cards={cardEntries}
+                        images={imageEntries}
+                        pillars={pillarEntries}
+                        tokens={tokenEntries}
+                        effectIcons={effectIconEntries}
+                      />
+                    </div>
+                  ))}
+                </div>
+                <p className="mt-6 text-center text-sm text-slate-400">
+                  {buildPathResult.minimum_buildings === 0
+                    ? "The starting city already satisfies this structure."
+                    : `${buildPathResult.paths.length} minimum path${buildPathResult.paths.length === 1 ? "" : "s"}, ${buildPathResult.minimum_buildings} prerequisite structure${buildPathResult.minimum_buildings === 1 ? "" : "s"} each.`}
+                </p>
+              </div>
+            ) : null}
+            {!buildPathsLoading && buildPathResult && buildPathResult.paths.length === 0 ? (
+              <div className="flex min-h-[20rem] items-center justify-center text-center">
+                <div>
+                  <h2 className="font-semibold text-white">No build path found</h2>
+                  <p className="mt-2 text-sm text-slate-400">
+                    {Object.keys(buildPathCardById[buildPathCityId]?.data?.production || {}).length === 0
+                      && Object.keys(buildPathCardById[buildPathCityId]?.data?.tags || {}).length === 0
+                      ? `${buildPathCardById[buildPathCityId]?.name || "The starting city"} provides no resources or tags, so no first structure can be built.`
+                      : "Existing structures cannot provide all resources and tags required by this target."}
+                  </p>
+                </div>
+              </div>
+            ) : null}
+            {!buildPathsLoading && !buildPathResult && (!buildPathCityId || !buildPathTargetId) ? (
+              <p className="text-sm text-slate-400">Create at least one city and one structure card to calculate build paths.</p>
+            ) : null}
           </div>
         </section>
       ) : null}

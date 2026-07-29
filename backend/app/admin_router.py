@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from .database import get_db
 from .db_models import AdminAuditLogRecord, GameCatalogEntryRecord, UserProfileRecord
+from .build_path_solver import find_minimal_build_paths
 from .empire_catalog import (
     DYNAMIC_CATALOG_KINDS,
     STATIC_CATALOG_KINDS,
@@ -30,6 +31,7 @@ from .schemas import (
     AdminCatalogImportResult,
     AdminCatalogEntryUpdate,
     AdminCatalogSummary,
+    AdminBuildPathResult,
     AdminAuditLogEntry,
     AdminMutationStatus,
     AdminUserAdminUpdate,
@@ -333,6 +335,33 @@ async def admin_list_images(_admin: User = Depends(require_admin), db: Session =
 @router.get("/admin/cards", response_model=list[AdminCatalogEntry])
 async def admin_list_cards(_admin: User = Depends(require_admin), db: Session = Depends(get_db)):
     return _catalog_response(db, "cards")
+
+
+@router.get("/admin/build-paths", response_model=AdminBuildPathResult)
+async def admin_get_build_paths(
+    city_card_id: str = Query(min_length=1, max_length=128),
+    target_card_id: str = Query(min_length=1, max_length=128),
+    _admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    cards = [entry.model_dump() for entry in _catalog_response(db, "cards")]
+    try:
+        result = find_minimal_build_paths(
+            cards,
+            city_card_id=_query_text(city_card_id),
+            target_card_id=_query_text(target_card_id),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return AdminBuildPathResult(
+        city_card_id=result.city_card_id,
+        target_card_id=result.target_card_id,
+        minimum_buildings=result.minimum_buildings,
+        paths=[
+            {"building_card_ids": list(path.building_card_ids)}
+            for path in result.paths
+        ],
+    )
 
 
 @router.get("/admin/ministries", response_model=list[AdminCatalogEntry])

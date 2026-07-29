@@ -350,50 +350,78 @@ def _validate_catalog_data(
             raise ValueError("Effect icon code is not supported.")
         return
     if kind == "decks":
+        deck_type = str(data.get("deck_type") or "")
+        if deck_type not in {"empire", "crisis"}:
+            raise ValueError("Deck type must be empire or crisis.")
         item_ids = data.get("item_ids")
         if not isinstance(item_ids, list):
             raise ValueError("Deck item_ids must be a list.")
-        initial_setup = data.get("initial_setup")
-        if not isinstance(initial_setup, dict):
-            raise ValueError("Deck initial_setup must contain 3, 4, and 5 player tiers.")
-        expected_tier_sizes = {"3": 6, "4": 2, "5": 2}
-        setup_ids: list[str] = []
-        for player_count, expected_size in expected_tier_sizes.items():
-            tier = initial_setup.get(player_count)
-            if not isinstance(tier, list) or len(tier) != expected_size:
-                raise ValueError(
-                    f"The {player_count}-player setup tier must contain exactly {expected_size} cards."
-                )
-            setup_ids.extend(str(item_id) for item_id in tier)
         deck_counts: dict[str, int] = {}
-        setup_counts: dict[str, int] = {}
         for item_id in item_ids:
             deck_counts[str(item_id)] = deck_counts.get(str(item_id), 0) + 1
         for item_id in deck_counts:
             item = db.get(GameCatalogEntryRecord, item_id)
-            if item is None or item.kind not in {"cards", "events"}:
-                raise ValueError(f"Deck item {item_id} is not a Development or Event card.")
-        for item_id in setup_ids:
-            setup_counts[item_id] = setup_counts.get(item_id, 0) + 1
-        if any(count > deck_counts.get(item_id, 0) for item_id, count in setup_counts.items()):
-            raise ValueError("Initial setup copies must also exist in the deck.")
+            event_subtype = str((item.data or {}).get("subtype") or "") if item and item.kind == "events" else ""
+            is_crisis = item is not None and item.kind == "events" and event_subtype == "crisis"
+            is_empire = item is not None and (
+                item.kind == "cards" or (item.kind == "events" and event_subtype == "edict")
+            )
+            if deck_type == "crisis" and not is_crisis:
+                raise ValueError(f"Crisis deck item {item_id} is not a Crisis card.")
+            if deck_type == "empire" and not is_empire:
+                raise ValueError(f"Empire deck item {item_id} is not a Development or Edict card.")
+        if deck_type == "empire":
+            initial_setup = data.get("initial_setup")
+            if not isinstance(initial_setup, dict):
+                raise ValueError("Empire deck initial_setup must contain 3+, 4+, and 5-player tiers.")
+            expected_tier_sizes = {"3": 6, "4": 2, "5": 2}
+            setup_ids: list[str] = []
+            for player_count, expected_size in expected_tier_sizes.items():
+                tier = initial_setup.get(player_count)
+                if not isinstance(tier, list) or len(tier) != expected_size:
+                    raise ValueError(
+                        f"The {player_count}{'+' if player_count != '5' else ''} initial setup tier "
+                        f"must contain exactly {expected_size} cards."
+                    )
+                setup_ids.extend(str(item_id) for item_id in tier)
+            setup_counts: dict[str, int] = {}
+            for item_id in setup_ids:
+                setup_counts[item_id] = setup_counts.get(item_id, 0) + 1
+            if any(count > deck_counts.get(item_id, 0) for item_id, count in setup_counts.items()):
+                raise ValueError("Initial setup copies must also exist in the Empire deck.")
+        elif data.get("initial_setup") not in (None, {}):
+            raise ValueError("Crisis decks do not support an initial setup.")
         return
     if kind == "levels":
         city_id = str(data.get("initial_city_card_id") or "")
-        deck_id = str(data.get("deck_id") or "")
+        empire_deck_id = str(data.get("empire_deck_id") or "")
+        crisis_deck_id = str(data.get("crisis_deck_id") or "")
         if not city_id:
             raise ValueError("A level requires an initial city card.")
-        if not deck_id:
-            raise ValueError("A level requires a deck.")
+        if not empire_deck_id:
+            raise ValueError("A level requires an Empire deck.")
+        if not crisis_deck_id:
+            raise ValueError("A level requires a Crisis deck.")
         suspicion_start_era = int(data.get("suspicion_start_era") or 5)
         if suspicion_start_era < 1:
             raise ValueError("Suspicion start Era must be at least 1.")
         city = db.get(GameCatalogEntryRecord, city_id)
         if city is None or city.kind != "cards" or city.category != "city":
             raise ValueError("The initial City must reference a City card.")
-        deck = db.get(GameCatalogEntryRecord, deck_id)
-        if deck is None or deck.kind != "decks":
-            raise ValueError("The level deck must reference a unified Empire Deck.")
+        empire_deck = db.get(GameCatalogEntryRecord, empire_deck_id)
+        if (
+            empire_deck is None
+            or empire_deck.kind != "decks"
+            or str((empire_deck.data or {}).get("deck_type") or "") != "empire"
+        ):
+            raise ValueError("The level Empire deck must reference an Empire deck.")
+        crisis_deck = db.get(GameCatalogEntryRecord, crisis_deck_id)
+        if (
+            crisis_deck is None
+            or crisis_deck.kind != "decks"
+            or str((crisis_deck.data or {}).get("deck_type") or "") != "crisis"
+        ):
+            raise ValueError("The level Crisis deck must reference a Crisis deck.")
 
 
 def _validate_count_map(value: Any, field: str) -> None:

@@ -574,13 +574,14 @@ const EventEffectRow = ({ title, effects, tone, eventMinistry, ministryLookup, e
   );
 };
 
-const EventCardVisual = ({ entry, eventMinistry, ministryLookup, effectIconLookup, pillarLookup, tagLookup, imageLookup, actions }) => {
+const EventCardVisual = ({ entry, eventMinistry, ministryLookup, effectIconLookup, pillarLookup, tagLookup, imageLookup, actions, size = "table" }) => {
   const data = entry?.data || {};
   const mainEffects = Array.isArray(data.main_effects) ? data.main_effects : [];
   const alternativeEffects = Array.isArray(data.alternative_effects) ? data.alternative_effects : [];
+  const compact = size === "hand";
   return (
-    <article className="flex aspect-[5/7] w-[clamp(12rem,16vw,15rem)] shrink-0 flex-col rounded-lg border border-amber-900/70 bg-stone-950 p-3 shadow-xl">
-      <div className="grid grid-cols-[3rem_minmax(0,1fr)] gap-2">
+    <article className={`flex aspect-[5/7] ${compact ? "w-[clamp(9rem,13vw,11rem)] p-2" : "w-[clamp(12rem,16vw,15rem)] p-3"} shrink-0 overflow-hidden flex-col rounded-lg border border-amber-900/70 bg-stone-950 shadow-xl`}>
+      <div className={`grid ${compact ? "grid-cols-[2.25rem_minmax(0,1fr)] gap-1" : "grid-cols-[3rem_minmax(0,1fr)] gap-2"}`}>
         <div className="flex flex-col items-center gap-1">
           {eventMinistry ? (
             <SmallIcon
@@ -593,14 +594,14 @@ const EventCardVisual = ({ entry, eventMinistry, ministryLookup, effectIconLooku
           <span className="text-[0.5rem] font-bold uppercase text-amber-500">{data.subtype || "event"}</span>
         </div>
         <div className="min-w-0 text-right">
-          <h3 className="line-clamp-2 text-[0.82rem] font-bold leading-tight text-amber-50">{entry.name}</h3>
-          <div className="mt-2 flex justify-end">
+          <h3 className={`line-clamp-2 font-bold leading-tight text-amber-50 ${compact ? "text-[0.72rem]" : "text-[0.82rem]"}`}>{entry.name}</h3>
+          <div className={`${compact ? "mt-1" : "mt-2"} flex justify-end`}>
             <EventRequirementCost requirements={data.requirements || []} tagLookup={tagLookup} pillarLookup={pillarLookup} imageLookup={imageLookup} />
           </div>
         </div>
       </div>
-      <div className="flex flex-1 flex-col justify-end gap-2 pt-2">
-        {entry.summary ? <p className="line-clamp-3 text-center text-[0.62rem] leading-4 text-stone-300">{entry.summary}</p> : null}
+      <div className={`flex flex-1 flex-col justify-end ${compact ? "gap-1 pt-1" : "gap-2 pt-2"}`}>
+        {entry.summary ? <p className={`${compact ? "line-clamp-2" : "line-clamp-3"} text-center text-[0.62rem] leading-4 text-stone-300`}>{entry.summary}</p> : null}
         {mainEffects.length || alternativeEffects.length ? (
           <div className={`grid gap-2 ${mainEffects.length && alternativeEffects.length ? "grid-cols-2" : ""}`}>
             <EventEffectRow title="Resolved" effects={mainEffects} tone="success" eventMinistry={eventMinistry} ministryLookup={ministryLookup} effectIconLookup={effectIconLookup} pillarLookup={pillarLookup} tagLookup={tagLookup} imageLookup={imageLookup} />
@@ -613,7 +614,7 @@ const EventCardVisual = ({ entry, eventMinistry, ministryLookup, effectIconLooku
   );
 };
 
-const CatalogItemVisual = ({ entry, tags = [], cards = [], ministries = [], images = [], pillars = [], tokens = [], effectIcons = [], actions = null }) => {
+const CatalogItemVisual = ({ entry, tags = [], cards = [], ministries = [], images = [], pillars = [], tokens = [], effectIcons = [], actions = null, size = "table" }) => {
   const color = entry?.color || fallbackColor;
   const cardLookup = Object.fromEntries((cards || []).map((card) => [normalizeTagId(card.id || card.name), card]));
   const imageLookup = Object.fromEntries((images || []).map((image) => [image.id, image]));
@@ -645,6 +646,7 @@ const CatalogItemVisual = ({ entry, tags = [], cards = [], ministries = [], imag
         tagLookup={tagLookup}
         imageLookup={imageLookup}
         actions={actions}
+        size={size}
       />
     );
   }

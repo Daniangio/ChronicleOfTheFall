@@ -3,13 +3,14 @@
   "kind": "decks",
   "entries": [
     {
-      "id": "chronicle-default-deck",
-      "name": "Chronicle Default Deck",
+      "id": "chronicle-default-empire-deck",
+      "name": "Chronicle Default Empire Deck",
       "kind": "decks",
       "category": "deck",
-      "summary": "Default development and crisis deck template.",
+      "summary": "Default Development and Edict deck template.",
       "color": null,
       "data": {
+        "deck_type": "empire",
         "item_ids": [
           "peasant-village-culture",
           "barracks-unrest",
@@ -28,38 +29,44 @@
           "stone-quarry-industry",
           "temple-culture",
           "votive-chapel-faith",
-          "woodcutter-industry",
-          "earthquake",
-          "barbarian-horde",
-          "crimson-plague",
-          "trade-embargo"
+          "woodcutter-industry"
         ],
         "initial_setup": {
           "3": [
             "peasant-village-culture",
             "barracks-unrest",
-            "capital",
             "farm-industry",
             "farm-unrest",
             "fortified-manor-military",
-            "grand-garrison-military",
-            "manor-unrest",
-            "market-hall-culture",
-            "monastery-culture",
-            "mountain-village",
-            "peasant-home-military"
+            "grand-garrison-military"
           ],
           "4": [
-            "peasant-home-unrest",
-            "scriptorium",
-            "stone-quarry-industry"
+            "manor-unrest",
+            "market-hall-culture"
           ],
           "5": [
-            "temple-culture",
-            "votive-chapel-faith",
-            "woodcutter-industry"
+            "monastery-culture",
+            "mountain-village"
           ]
         }
+      }
+    },
+    {
+      "id": "chronicle-default-crisis-deck",
+      "name": "Chronicle Default Crisis Deck",
+      "kind": "decks",
+      "category": "deck",
+      "summary": "Default Crisis deck template.",
+      "color": null,
+      "data": {
+        "deck_type": "crisis",
+        "item_ids": [
+          "earthquake",
+          "barbarian-horde",
+          "crimson-plague",
+          "trade-embargo"
+        ],
+        "initial_setup": {}
       }
     }
   ]

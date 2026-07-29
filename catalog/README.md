@@ -28,7 +28,7 @@ admin-authored:
 
 - cards
 - Events
-- unified Empire decks
+- Empire and Crisis decks
 - Levels
 
 Import the files in dependency order:

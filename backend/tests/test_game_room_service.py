@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import unittest
+from types import SimpleNamespace
 
+from backend.app.game_router import _deck_item_ids, _deck_setup_ids
 from backend.app.game_room_service import GameRoomService, ROOM_STATE_FINISHED, ROOM_STATE_IN_GAME
 from backend.app.goldfishing_engine import (
     _apply_on_build_effects,
@@ -11,6 +13,24 @@ from backend.app.goldfishing_engine import (
     perform_action,
 )
 from backend.app.server_models import User
+
+
+def test_deck_setup_tiers_mark_copies_without_changing_deck_contents():
+    deck = SimpleNamespace(
+        data={
+            "item_ids": ["a", "b", "c", "d"],
+            "initial_setup": {
+                "3": ["a"] * 6,
+                "4": ["b"] * 2,
+                "5": ["c"] * 2,
+            },
+        }
+    )
+
+    assert _deck_item_ids(deck) == ["a", "b", "c", "d"]
+    assert _deck_setup_ids(deck, player_count=3) == ["a"] * 6
+    assert _deck_setup_ids(deck, player_count=4) == [*(["a"] * 6), *(["b"] * 2)]
+    assert _deck_setup_ids(deck, player_count=5) == [*(["a"] * 6), *(["b"] * 2), *(["c"] * 2)]
 
 
 def catalog_entry(entry_id: str, name: str, kind: str, *, category: str = "", data: dict | None = None) -> dict:
@@ -121,9 +141,11 @@ def build_state(**overrides) -> dict:
         "room_id": "test-room",
         "card_entries": CARDS,
         "tag_entries": TAGS,
-        "deck_ids": [*setup_pool_ids, *(["farm", "garrison", "tax-riots", "border-raid"] * 12)],
+        "empire_deck_ids": [*setup_pool_ids, *(["farm", "garrison", "tax-riots"] * 12)],
+        "crisis_deck_ids": ["border-raid"] * 12,
         "setup_pool_ids": setup_pool_ids,
-        "deck_id": "empire-deck",
+        "empire_deck_id": "empire-deck",
+        "crisis_deck_id": "crisis-deck",
         "initial_city_card_id": "capital",
         "suspicion_start_era": 1,
         "event_entries": EVENTS,
@@ -198,8 +220,32 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
     def test_suspicion_is_skipped_until_the_level_start_era(self):
         state = build_state(suspicion_start_era=5)
 
-        self.assertEqual(state["phase"], "production")
+        self.assertEqual(state["phase"], "plotting")
+        self.assertEqual(state["global_resource_pool"], {"labor": 2, "wealth": 1})
+        self.assertEqual(
+            {action["player_id"] for action in state["possible_actions"]},
+            {player["id"] for player in state["players"]},
+        )
         self.assertEqual(state["suspicion_start_era"], 5)
+
+    def test_goldfishing_plotting_accepts_any_uncommitted_player(self):
+        state = build_state(suspicion_start_era=5)
+        player_id = "player-3"
+        action = next(
+            entry
+            for entry in state["possible_actions"]
+            if entry["type"] == "commit_card" and entry["player_id"] == player_id
+        )
+
+        state = perform_action(state, action["type"], action)
+
+        self.assertTrue(next(player for player in state["players"] if player["id"] == player_id)["committed"])
+        self.assertEqual(state["phase"], "plotting")
+        self.assertNotIn(player_id, {entry.get("player_id") for entry in state["possible_actions"]})
+        self.assertEqual(
+            {entry.get("player_id") for entry in state["possible_actions"]},
+            {"player-1", "player-2", "player-4"},
+        )
 
     def test_ministries_auto_assign_in_order_and_state_rotates_to_war(self):
         state = build_state()
@@ -276,7 +322,6 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
         self.assertEqual(state["players"][1]["suspicion"], 3)
         self.assertFalse(state["players"][1]["hand_revealed"])
         self.assertFalse(state["players"][1]["ministry_ids"])
-        state = perform_action(state, "continue_phase", {})
         self.assertEqual(state["phase"], "plotting")
         player_two = state["players"][1]
         player_two["hand"] = ["tax-riots", "farm"]
@@ -505,12 +550,10 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
 
     def test_production_combines_storage_and_all_built_cards(self):
         state = finish_ministry_draft(build_state())
-        for _ in range(4):
-            state = perform_action(state, "place_suspicion", state["possible_actions"][0])
         state["cities"][0]["cards"].append("farm")
         state["stored_resources"] = {"wealth": 2}
-
-        state = perform_action(state, "continue_phase", {})
+        for _ in range(4):
+            state = perform_action(state, "place_suspicion", state["possible_actions"][0])
 
         self.assertEqual(state["phase"], "plotting")
         self.assertEqual(state["global_resource_pool"], {"wealth": 3, "labor": 3})
