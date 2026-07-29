@@ -213,6 +213,7 @@ def build_goldfishing_state(
         "council_stack": [],
         "current_reveal": None,
         "revealed_cards": [],
+        "docket_resolution": [],
         "pending_placement": None,
         "pending_event_resource_effect": None,
         "pending_event_resource_conversion": None,
@@ -540,6 +541,15 @@ def _confirm_docket_order(state: dict[str, Any], payload: dict[str, Any]) -> Non
     state["phase"] = "reveal"
     state["current_reveal"] = None
     state["revealed_cards"] = []
+    state["docket_resolution"] = [
+        {
+            **commitment,
+            "name": item_by_id(state, commitment["item_id"]).get("name") or commitment["item_id"],
+            "is_crisis": _is_crisis(item_by_id(state, commitment["item_id"])),
+            "status": "queued",
+        }
+        for commitment in state.get("council_stack", [])
+    ]
     state["log"].append("The Minister of the Empire ordered the Council Docket.")
 
 
@@ -560,6 +570,7 @@ def _reveal_next(state: dict[str, Any], _payload: dict[str, Any]) -> None:
     }
     state["current_reveal"] = reveal
     state["revealed_cards"].append(reveal)
+    _mark_docket_resolution(state, commitment["id"], "resolving")
     state["log"].append(f"Council revealed {reveal['name']}.")
     if _is_event(item):
         data = item.get("data") or {}
@@ -594,6 +605,7 @@ def _place_revealed_card(state: dict[str, Any], payload: dict[str, Any]) -> None
     _pay_cost(state, item)
     _build_card(state, item, city_id)
     state["current_reveal"]["status"] = "built"
+    _mark_docket_resolution(state, state["current_reveal"]["id"], "built")
     state["pending_placement"] = None
 
 
@@ -618,20 +630,27 @@ def _store_resources(state: dict[str, Any], payload: dict[str, Any]) -> None:
     _begin_crisis_intake(state)
 
 
+def _refill_draw_amount(state: dict[str, Any], player: dict[str, Any]) -> int:
+    player_id = str(player.get("id") or "")
+    target_size = STATE_REFILL_SIZE if _player_has_ministry(state, player_id, "state") else NORMAL_REFILL_SIZE
+    target_size = max(
+        0,
+        target_size
+        + max(0, int(player.get("pending_draws", 0)))
+        - max(0, int(state.get("refill_draw_penalty", 0))),
+    )
+    return max(0, target_size - len(player.get("hand", [])))
+
+
 def _refill_hand(state: dict[str, Any], payload: dict[str, Any]) -> None:
     _require_phase(state, "hand_refill")
     player_id = _require_active_player(state, payload)
     player = _player(state, player_id)
-    draw_amount = STATE_REFILL_SIZE if _player_has_ministry(state, player_id, "state") else NORMAL_REFILL_SIZE
-    draw_amount = max(
-        0,
-        draw_amount
-        + max(0, int(player.get("pending_draws", 0)))
-        - max(0, int(state.get("refill_draw_penalty", 0))),
-    )
-    player["hand"].extend(_draw_empire(state, draw_amount))
+    draw_amount = _refill_draw_amount(state, player)
+    drawn = _draw_empire(state, draw_amount)
+    player["hand"].extend(drawn)
     player["pending_draws"] = 0
-    state["log"].append(f"{player['name']} refilled with {draw_amount} cards.")
+    state["log"].append(f"{player['name']} drew {len(drawn)} cards during Hand Refill.")
     state["refill_completed"].append(player_id)
     if len(state["refill_completed"]) == len(state["players"]):
         _begin_cleanup(state)
@@ -753,6 +772,7 @@ def _begin_plotting(state: dict[str, Any]) -> None:
     state["phase"] = "plotting"
     state["commitments"] = []
     state["council_stack"] = []
+    state["docket_resolution"] = []
     for player in state["players"]:
         player["committed"] = False
         player["selected_commitment"] = None
@@ -780,6 +800,7 @@ def _resolve_buildable_item(
         _discard_item(state, card["id"])
         if state.get("current_reveal"):
             state["current_reveal"]["status"] = "discarded"
+        _mark_docket_resolution(state, reference_id, "discarded")
         state["log"].append(f"{card['name']} could not be built and was discarded.")
         return
     if len(placements) == 1:
@@ -787,6 +808,7 @@ def _resolve_buildable_item(
         _build_card(state, card, placements[0])
         if state.get("current_reveal"):
             state["current_reveal"]["status"] = "built"
+        _mark_docket_resolution(state, reference_id, "built")
         return
     state["pending_placement"] = _placement_payload(state, card, placements, source, reference_id)
 
@@ -931,6 +953,10 @@ def _possible_actions(state: dict[str, Any]) -> list[dict[str, Any]]:
                     "source": source,
                     "index": index,
                     "face_up": _must_commit_face_up(player),
+                    "resolution_preview": _plotting_resolution_preview(
+                        state,
+                        item_by_id(state, item_id),
+                    ),
                     "selected": (
                         (player.get("selected_commitment") or {}).get("source") == source
                         and (player.get("selected_commitment") or {}).get("index") == index
@@ -1106,13 +1132,7 @@ def _possible_actions(state: dict[str, Any]) -> list[dict[str, Any]]:
     if phase in {"crisis_intake", "hand_reset", "cleanup"}:
         return [{"type": "continue_phase"}]
     if phase == "hand_refill":
-        draw_amount = STATE_REFILL_SIZE if _player_has_ministry(state, active, "state") else NORMAL_REFILL_SIZE
-        draw_amount = max(
-            0,
-            draw_amount
-            + max(0, int(_player(state, active).get("pending_draws", 0)))
-            - max(0, int(state.get("refill_draw_penalty", 0))),
-        )
+        draw_amount = _refill_draw_amount(state, _player(state, active))
         return [{"type": "refill_hand", "player_id": active, "draw_amount": draw_amount}]
     return []
 
@@ -1148,6 +1168,24 @@ def _legal_commit_options(state: dict[str, Any], player: dict[str, Any]) -> list
             if not _is_event(item_by_id(state, option[2]))
         ]
     return options
+
+
+def _plotting_resolution_preview(state: dict[str, Any], item: dict[str, Any]) -> str:
+    if _is_event(item):
+        requirements_met = _event_requirements_met(
+            state,
+            (item.get("data") or {}).get("requirements") or [],
+        )
+        if requirements_met:
+            return "success"
+        return "failure" if _is_crisis(item) else "unresolved"
+    if (
+        _requirements_satisfied(state, item)
+        and _can_pay_cost(state, item)
+        and _legal_placements(state, item)
+    ):
+        return "success"
+    return "unresolved"
 
 
 def _requirements_satisfied(state: dict[str, Any], card: dict[str, Any]) -> bool:
@@ -1816,9 +1854,19 @@ def _complete_event_resolution(
     if continuation == "reveal":
         if state.get("current_reveal"):
             state["current_reveal"]["status"] = "resolved"
+            alternative_effects = (event.get("data") or {}).get("alternative_effects") or []
+            outcome = "succeeded" if requirements_met else ("failed" if alternative_effects else "discarded")
+            _mark_docket_resolution(state, state["current_reveal"]["id"], outcome)
         _discard_item(state, event_id)
         return
     raise ValueError("Unknown event resolution continuation.")
+
+
+def _mark_docket_resolution(state: dict[str, Any], commitment_id: str, status: str) -> None:
+    for entry in state.get("docket_resolution", []):
+        if entry.get("id") == commitment_id:
+            entry["status"] = status
+            return
 
 
 def _effect_condition_met(state: dict[str, Any], condition: dict[str, Any] | None) -> bool:

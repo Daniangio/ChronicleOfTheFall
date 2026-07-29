@@ -361,12 +361,12 @@ An Event may create a **pending draw effect**.
 
 Unless the card says otherwise, a draw effect means:
 
-> The chosen player draws 1 additional card during the Hand Refill Phase of the current Era.
+> The chosen player's Hand Refill target increases by 1 card during the current Era.
 
 Examples:
 
-* A normal player with one pending draw effect draws 4 cards instead of 3.
-* The Minister of State with one pending draw effect draws 5 cards instead of 4.
+* A normal player with one pending draw effect draws up to a hand size of 4 instead of 3.
+* The Minister of State with one pending draw effect draws up to a hand size of 5 instead of 4.
 * Multiple draw effects stack.
 
 Draw effects do not cause immediate card draw during the Council Docket unless a card explicitly says so.
@@ -669,7 +669,7 @@ When an effect places Unrest and does not specify whether it is City Unrest or G
 
 If City Unrest is chosen, the Minister of State also chooses the City.
 
-During the Hand Refill Phase, the Minister of State draws to a hand size of 4 instead of 3.
+During the Hand Refill Phase, the Minister of State draws up to a hand size of 4 instead of 3.
 
 ---
 
@@ -1245,14 +1245,17 @@ If the Crisis Deck is empty, skip any draw it cannot supply.
 
 # 26. Hand Refill Phase
 
-Each player draws a new hand.
+Each player draws only as many cards as needed to reach their Hand Refill target.
 
-* Normal players draw 3 cards.
-* The Minister of State draws 4 cards.
+* Normal players draw up to a hand size of 3.
+* The Minister of State draws up to a hand size of 4.
 
-If a player has one or more pending draw effects, they draw 1 additional card for each pending draw effect.
+Each pending draw effect increases that player's target hand size by 1.
 
-Subtract 1 card for each active reduced-refill effect, to a minimum of 0.
+Each active reduced-refill effect decreases the target hand size by 1, to a minimum of 0.
+
+Cards already in hand count toward this target. A player whose hand already meets
+or exceeds the target draws no cards and does not discard down to the target.
 
 After drawing, clear all pending draw effects.
 

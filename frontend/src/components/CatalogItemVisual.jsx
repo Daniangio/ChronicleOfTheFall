@@ -614,7 +614,7 @@ const EventCardVisual = ({ entry, eventMinistry, ministryLookup, effectIconLooku
   );
 };
 
-const AgendaCardVisual = ({ entry, actions, size = "table" }) => {
+const AgendaCardVisual = ({ entry, actions, size = "table", result = null }) => {
   const data = entry?.data || {};
   const compact = size === "hand";
   const sections = [
@@ -623,21 +623,38 @@ const AgendaCardVisual = ({ entry, actions, size = "table" }) => {
     ["collapse", "Collapse", "text-sky-200"],
     ["forbidden", "Forbidden", "text-rose-200"],
   ];
+  const outcomeClass = result
+    ? result.eligible
+      ? "border-emerald-600/90"
+      : "border-rose-800/90"
+    : "border-amber-900/70";
   return (
-    <article className={`flex aspect-[8/5] ${compact ? "w-[clamp(20rem,26vw,22rem)] p-2" : "w-full max-w-[30rem] p-3"} shrink-0 flex-col overflow-hidden rounded-lg border border-amber-900/70 bg-stone-950 shadow-xl`}>
+    <article className={`flex aspect-[8/5] ${compact ? "w-[clamp(20rem,26vw,22rem)] p-2" : "w-full max-w-[30rem] p-3"} ${outcomeClass} shrink-0 flex-col overflow-visible rounded-lg border bg-stone-950 shadow-xl`}>
       <div className="border-b border-amber-900/50 pb-2 text-right">
         <p className="text-[0.5rem] font-bold uppercase text-amber-600">Hidden Agenda</p>
         <h3 className={`${compact ? "text-[0.72rem]" : "text-[0.82rem]"} line-clamp-2 font-bold leading-tight text-amber-50`}>{entry.name}</h3>
       </div>
       {!compact && entry.summary ? <p className="my-2 line-clamp-2 text-center text-[0.58rem] leading-4 text-stone-400">{entry.summary}</p> : null}
-      <div className="grid min-h-0 flex-1 grid-cols-2 grid-rows-2 gap-1.5 overflow-hidden pt-1.5">
+      <div className="grid min-h-0 flex-1 grid-cols-2 grid-rows-2 gap-1.5 overflow-visible pt-1.5">
         {sections.map(([sectionKey, label, tone]) => {
           const section = data[sectionKey] || {};
+          const conditionMet = result?.sections?.[sectionKey];
+          const objectiveAchieved = sectionKey === "forbidden" ? conditionMet === false : conditionMet === true;
+          const resultClass = result
+            ? objectiveAchieved
+              ? "border-emerald-700/80 bg-emerald-950/35"
+              : "border-rose-800/80 bg-rose-950/30"
+            : "border-slate-800 bg-slate-900/70";
+          const resultLabel = sectionKey === "forbidden"
+            ? objectiveAchieved ? "Avoided" : "Violated"
+            : objectiveAchieved ? "Achieved" : "Missed";
           return (
-            <div key={sectionKey} className="min-h-0 overflow-hidden border border-slate-800 bg-slate-900/70 px-2 py-1">
+            <div key={sectionKey} className={`min-h-0 overflow-visible border px-2 py-1 ${resultClass}`}>
               <div className="flex items-center justify-between gap-2">
                 <span className={`text-[0.52rem] font-bold uppercase ${tone}`}>{label}</span>
-                {sectionKey !== "forbidden" ? <span className="text-[0.52rem] font-bold text-slate-400">{section.points || 0}</span> : null}
+                <span className={`text-[0.52rem] font-bold ${result ? objectiveAchieved ? "text-emerald-300" : "text-rose-300" : "text-slate-400"}`}>
+                  {result ? resultLabel : sectionKey !== "forbidden" ? section.points || 0 : ""}
+                </span>
               </div>
               <p className="truncate text-[0.6rem] font-semibold text-stone-200">{section.name || "Undefined"}</p>
               {section.text ? <p className="line-clamp-3 text-[0.52rem] leading-3 text-slate-500">{section.text}</p> : null}
@@ -653,7 +670,7 @@ const AgendaCardVisual = ({ entry, actions, size = "table" }) => {
   );
 };
 
-const CatalogItemVisual = ({ entry, tags = [], cards = [], ministries = [], images = [], pillars = [], tokens = [], effectIcons = [], actions = null, size = "table" }) => {
+const CatalogItemVisual = ({ entry, tags = [], cards = [], ministries = [], images = [], pillars = [], tokens = [], effectIcons = [], actions = null, size = "table", agendaResult = null }) => {
   const color = entry?.color || fallbackColor;
   const cardLookup = Object.fromEntries((cards || []).map((card) => [normalizeTagId(card.id || card.name), card]));
   const imageLookup = Object.fromEntries((images || []).map((image) => [image.id, image]));
@@ -691,7 +708,7 @@ const CatalogItemVisual = ({ entry, tags = [], cards = [], ministries = [], imag
   }
 
   if (visualEntry.kind === "agendas") {
-    return <AgendaCardVisual entry={visualEntry} actions={actions} size={size} />;
+    return <AgendaCardVisual entry={visualEntry} actions={actions} size={size} result={agendaResult} />;
   }
 
   if (visualEntry.kind === "cards") {

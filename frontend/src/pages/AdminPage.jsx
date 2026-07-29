@@ -463,7 +463,7 @@ const IconImageEditor = ({ label, value, onChange }) => {
               </button>
             </div>
             <div
-              className="relative mt-4 inline-block max-w-full select-none overflow-hidden rounded-md border border-slate-700"
+              className="relative mt-4 inline-block max-w-full select-none overflow-visible rounded-md border border-slate-700"
               onMouseDown={beginCrop}
               onMouseMove={updateCrop}
               onMouseUp={() => setDragStart(null)}

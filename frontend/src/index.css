@@ -108,3 +108,22 @@ select {
     "Segoe UI",
     sans-serif;
 }
+
+@keyframes docket-card-enter {
+  from {
+    transform: translateY(-1rem) scale(0.96);
+  }
+  to {
+    transform: translateY(0) scale(1);
+  }
+}
+
+.docket-resolution-card {
+  animation: docket-card-enter 420ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .docket-resolution-card {
+    animation: none;
+  }
+}

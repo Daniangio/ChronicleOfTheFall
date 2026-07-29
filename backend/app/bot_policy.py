@@ -67,6 +67,8 @@ def advance_bot_players(state: dict[str, Any]) -> dict[str, Any]:
 def _automatic_system_action(state: dict[str, Any]) -> dict[str, Any] | None:
     actions = list(state.get("possible_actions") or [])
     if len(actions) == 1 and not actions[0].get("player_id"):
+        if actions[0].get("type") == "reveal_next":
+            return None
         return actions[0]
     return None
 

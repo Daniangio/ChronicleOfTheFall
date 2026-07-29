@@ -516,7 +516,7 @@ export default function AlienHexColony() {
               <span className="text-xs uppercase font-bold text-green-700">Maturity</span>
               <div className="text-2xl font-bold text-green-800 pt-2">{maturity} / 100</div>
             </div>
-            <div className="bg-blue-100 p-2 rounded text-center flex items-center justify-center flex-col relative overflow-hidden">
+            <div className="bg-blue-100 p-2 rounded text-center flex items-center justify-center flex-col relative overflow-visible">
               <span className="text-xs uppercase font-bold text-blue-700">Wind Vector</span>
               <div className="text-lg font-bold text-blue-800 flex items-center gap-1 z-10 pt-1">
                 <Wind size={16} /> {DIRECTIONS[windDir].name}
@@ -581,7 +581,7 @@ export default function AlienHexColony() {
         </div>
       </div>
 
-      <div className="flex-grow bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden relative flex flex-col">
+      <div className="flex-grow bg-white rounded-xl shadow-sm border border-gray-200 overflow-visible relative flex flex-col">
         {gameOver && (
           <div className="absolute inset-0 z-10 bg-white/80 backdrop-blur-sm flex flex-col items-center justify-center p-8 text-center">
             <h2 className={`text-4xl font-black mb-2 ${gameOver === 'win' ? 'text-green-600' : 'text-red-600'}`}>
@@ -597,7 +597,7 @@ export default function AlienHexColony() {
           </div>
         )}
         
-        <div className="flex-grow flex items-center justify-center overflow-auto p-4 bg-slate-100/50">
+        <div className="flex-grow flex items-center justify-center overflow-visible p-4 bg-slate-100/50">
           <svg viewBox="-250 -200 500 400" className="w-full h-full min-w-[400px]">
              {renderHexagons()}
           </svg>

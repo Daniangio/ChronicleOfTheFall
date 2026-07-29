@@ -4,6 +4,8 @@ import {
   ArrowRight,
   Castle,
   Check,
+  CircleCheck,
+  CircleX,
   Crown,
   Hand,
   ListOrdered,
@@ -13,6 +15,7 @@ import {
   ScrollText,
   Shield,
   Trash2,
+  Trophy,
   Users,
   X,
 } from "lucide-react";
@@ -141,7 +144,9 @@ const GameRoomPage = () => {
   const [selectedSchemeCardAnchor, setSelectedSchemeCardAnchor] = useState(null);
   const [schemeSourceIndex, setSchemeSourceIndex] = useState(null);
   const [docketOpen, setDocketOpen] = useState(false);
+  const [resolutionOpen, setResolutionOpen] = useState(false);
   const [discardOpen, setDiscardOpen] = useState(false);
+  const [empireFallOpen, setEmpireFallOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [ending, setEnding] = useState(false);
   const [error, setError] = useState("");
@@ -185,6 +190,17 @@ const GameRoomPage = () => {
 
   useEffect(() => {
     if (gameState?.phase === "docket_ordering") setDocketOpen(true);
+  }, [gameState?.phase]);
+
+  useEffect(() => {
+    if (gameState?.phase === "reveal" && gameState?.docket_resolution?.length) {
+      setDocketOpen(false);
+      setResolutionOpen(true);
+    }
+  }, [gameState?.phase]);
+
+  useEffect(() => {
+    if (gameState?.phase === "game_over") setEmpireFallOpen(true);
   }, [gameState?.phase]);
 
   const catalogs = {
@@ -298,6 +314,18 @@ const GameRoomPage = () => {
   const boardWidth = Math.max(760, (gameState.cities?.length || 1) * 610);
 
   const renderPhaseControls = () => {
+    if (phase === "game_over") {
+      return (
+        <button
+          className="inline-flex items-center gap-2 border border-amber-700 bg-amber-950/40 px-3 py-2 text-sm font-bold text-amber-100 hover:bg-amber-900/50"
+          onClick={() => setEmpireFallOpen(true)}
+          type="button"
+        >
+          <Trophy className="h-4 w-4 text-amber-300" aria-hidden="true" />
+          View final results
+        </button>
+      );
+    }
     const unrestScopeChoices = actions.filter((entry) => entry.type === "choose_event_unrest_scope");
     if (unrestScopeChoices.length) {
       return (
@@ -565,7 +593,7 @@ const GameRoomPage = () => {
           </div>
         </aside>
 
-        <section className="relative min-w-0 lg:grid lg:h-screen lg:min-h-0 lg:grid-rows-[15vh_45vh_40vh] lg:overflow-hidden">
+        <section className="relative min-w-0 lg:grid lg:h-screen lg:min-h-0 lg:grid-rows-[15vh_45vh_40vh] lg:overflow-visible">
           {error ? <p className="absolute left-4 right-4 top-2 z-40 border border-rose-900 bg-rose-950/95 px-3 py-2 text-sm text-rose-200">{error}</p> : null}
 
           <header className="m-2 shrink-0 border border-amber-900/60 bg-stone-950/80 px-3 py-1.5">
@@ -589,7 +617,7 @@ const GameRoomPage = () => {
             </div>
           </header>
 
-          <div className="grid h-[45vh] gap-3 px-3 pb-3 lg:h-full lg:min-h-0 lg:grid-cols-[minmax(0,1fr)_17rem] lg:overflow-hidden xl:grid-cols-[minmax(0,1fr)_18rem]">
+          <div className="grid h-[45vh] gap-3 px-3 pb-3 lg:h-full lg:min-h-0 lg:grid-cols-[minmax(0,1fr)_17rem] lg:overflow-visible xl:grid-cols-[minmax(0,1fr)_18rem]">
             <div className="min-w-0 lg:min-h-0">
               <section className="relative border border-slate-800 bg-slate-900 lg:flex lg:h-full lg:min-h-0 lg:flex-col">
                 <div className="absolute right-3 top-3 z-30 flex items-center gap-2 border border-slate-700 bg-slate-950/95 p-1 shadow-lg">
@@ -597,7 +625,7 @@ const GameRoomPage = () => {
                   <span className="w-11 text-center text-xs text-slate-400">{Math.round(boardZoom * 100)}%</span>
                   <button className="h-8 w-8 border border-slate-700 hover:bg-slate-800" onClick={() => setBoardZoom((value) => Math.min(1.2, value + 0.1))} title="Zoom in" type="button"><Plus className="mx-auto h-4 w-4" /></button>
                 </div>
-                <div className="h-full overflow-auto bg-stone-950/60 p-5 lg:min-h-0 lg:flex-1">
+                <div className="h-full overflow-y-scroll bg-stone-950/60 p-5 lg:min-h-0 lg:flex-1">
                   <div className="relative" style={{ width: boardWidth * boardZoom, height: 760 * boardZoom }}>
                     <div className="absolute left-0 top-0 flex origin-top-left gap-8" style={{ width: boardWidth, height: 760, transform: `scale(${boardZoom})` }}>
                       {(gameState.cities || []).map((city) => <CityZone key={city.id} city={city} cardLookup={cardLookup} tagLookup={tagLookup} pillarLookup={pillarLookup} tokenLookup={tokenLookup} storageIconSrc={storageIconSrc} />)}
@@ -657,15 +685,23 @@ const GameRoomPage = () => {
               </section>
               <button
                 className="flex w-full items-center justify-between gap-3 border border-slate-800 bg-slate-900 p-3 text-left hover:border-amber-900/70 hover:bg-amber-950/20"
-                onClick={() => setDocketOpen(true)}
+                onClick={() => {
+                  if (gameState.docket_resolution?.length && phase !== "docket_ordering") {
+                    setResolutionOpen(true);
+                  } else {
+                    setDocketOpen(true);
+                  }
+                }}
                 type="button"
               >
                 <span className="flex items-center gap-2 text-sm font-bold text-white">
                   <ListOrdered className="h-4 w-4 text-amber-400" aria-hidden="true" />
-                  Council Docket
+                  {gameState.docket_resolution?.length && phase !== "docket_ordering"
+                    ? "Docket Resolution"
+                    : "Council Docket"}
                 </span>
                 <span className="border border-slate-700 px-2 py-1 text-xs text-slate-400">
-                  {gameState.council_stack?.length || 0}
+                  {gameState.docket_resolution?.length || gameState.council_stack?.length || 0}
                 </span>
               </button>
               {currentReveal ? (
@@ -689,9 +725,9 @@ const GameRoomPage = () => {
             </aside>
           </div>
 
-          <section className="min-h-0 border-t border-slate-800 bg-slate-900 p-1 lg:fixed lg:inset-x-0 lg:bottom-0 lg:z-50 lg:h-[40vh] lg:overflow-hidden">
+          <section className="min-h-0 border-t border-slate-800 bg-slate-900 p-1 lg:fixed lg:inset-x-0 lg:bottom-0 lg:z-50 lg:h-[40vh] lg:overflow-visible">
             <div className="grid h-full min-h-0 gap-3 lg:grid-cols-[minmax(0,1fr)_22.5rem_5.5rem]">
-              <div className="min-w-0 overflow-hidden">
+              <div className="min-w-0 overflow-visible">
                 <h3 className="mb-2 text-xs font-bold uppercase text-slate-500">{phase === "agenda_selection" ? "Choose Hidden Agenda" : "Hand"}</h3>
                 <div
                   className="flex h-[calc(100%_-_1.5rem)] w-full min-w-0 flex-nowrap items-start gap-2 overflow-x-auto overflow-y-hidden px-1 pb-2"
@@ -702,11 +738,21 @@ const GameRoomPage = () => {
                   }}
                 >
                   {phase === "agenda_selection" ? null : (focusedPlayer?.hand || []).map((itemId, index) => {
+                    const item = itemLookup[normalize(itemId)];
                     const plottingAction = actions.find((entry) => entry.type === "select_commit_card" && entry.source === "hand" && entry.index === index && entry.player_id === focusedPlayer.id);
                     const schemeActions = actions.filter((entry) => entry.type === "plotting_scheme" && entry.hand_index === index && entry.player_id === focusedPlayer.id);
                     const choosingSchemeSlot = schemeSourceIndex === index;
                     const selected = selectedHandCardIndex === index;
                     const selectable = Boolean(plottingAction || schemeActions.length);
+                    const isCrisis = item?.kind === "events" && item?.data?.subtype === "crisis";
+                    const preview = plottingAction?.resolution_preview;
+                    const previewClass = preview === "unresolved"
+                      ? "opacity-50 grayscale"
+                      : isCrisis && preview === "success"
+                        ? "rounded-lg bg-emerald-950/25 ring-2 ring-emerald-500/80"
+                        : isCrisis && preview === "failure"
+                          ? "rounded-lg bg-rose-950/30 ring-2 ring-rose-500/80"
+                          : "";
                     const selectCard = (event) => {
                       if (!selectable || busy) return;
                       if (selected) {
@@ -741,12 +787,23 @@ const GameRoomPage = () => {
                         role={selectable ? "button" : undefined}
                         tabIndex={selectable ? 0 : undefined}
                       >
-                        <ItemVisual
-                          item={itemLookup[normalize(itemId)]}
-                          catalogs={catalogs}
-                          tagLookup={tagLookup}
-                          storageIconSrc={storageIconSrc}
-                        />
+                        <div
+                          className={`transition-all duration-300 ${previewClass}`}
+                          title={preview === "unresolved"
+                            ? "This card cannot currently resolve."
+                            : isCrisis && preview === "success"
+                              ? "This Crisis currently meets its main resolution."
+                              : isCrisis && preview === "failure"
+                                ? "This Crisis currently triggers its alternative resolution."
+                                : undefined}
+                        >
+                          <ItemVisual
+                            item={item}
+                            catalogs={catalogs}
+                            tagLookup={tagLookup}
+                            storageIconSrc={storageIconSrc}
+                          />
+                        </div>
                         {selected && selectedHandCardAnchor && (plottingAction || schemeActions.length) ? (
                           <div
                             className="fixed z-[1400] flex items-center gap-2 border border-amber-900/70 bg-slate-950 p-1.5 shadow-xl"
@@ -802,8 +859,18 @@ const GameRoomPage = () => {
                 <h3 className="mb-1 text-xs font-bold uppercase text-slate-500">Scheme Slots</h3>
                 <div className="flex items-start gap-2">
                   {(focusedPlayer?.scheme_slots || [null, null]).map((itemId, index) => {
+                    const item = itemLookup[normalize(itemId)];
                     const plottingAction = actions.find((entry) => entry.type === "select_commit_card" && entry.source === "scheme" && entry.index === index && entry.player_id === focusedPlayer.id);
                     const returnAction = actions.find((entry) => entry.type === "plotting_scheme" && entry.mode === "to_hand" && entry.slot_index === index && entry.player_id === focusedPlayer.id);
+                    const isCrisis = item?.kind === "events" && item?.data?.subtype === "crisis";
+                    const preview = plottingAction?.resolution_preview;
+                    const previewClass = preview === "unresolved"
+                      ? "opacity-50 grayscale"
+                      : isCrisis && preview === "success"
+                        ? "rounded-lg bg-emerald-950/25 ring-2 ring-emerald-500/80"
+                        : isCrisis && preview === "failure"
+                          ? "rounded-lg bg-rose-950/30 ring-2 ring-rose-500/80"
+                          : "";
                     const placementAction = schemeSourceIndex === null
                       ? null
                       : actions.find(
@@ -859,7 +926,18 @@ const GameRoomPage = () => {
                         role={schemeCardSelectable ? "button" : undefined}
                         tabIndex={schemeCardSelectable ? 0 : undefined}
                       >
-                        <ItemVisual item={itemLookup[normalize(itemId)]} catalogs={catalogs} tagLookup={tagLookup} storageIconSrc={storageIconSrc} />
+                        <div
+                          className={`transition-all duration-300 ${previewClass}`}
+                          title={preview === "unresolved"
+                            ? "This card cannot currently resolve."
+                            : isCrisis && preview === "success"
+                              ? "This Crisis currently meets its main resolution."
+                              : isCrisis && preview === "failure"
+                                ? "This Crisis currently triggers its alternative resolution."
+                                : undefined}
+                        >
+                          <ItemVisual item={item} catalogs={catalogs} tagLookup={tagLookup} storageIconSrc={storageIconSrc} />
+                        </div>
                         {placementAction ? (
                           <button
                             className="absolute inset-0 z-30 flex items-center justify-center bg-teal-950/75 p-2 text-xs font-bold text-teal-50 hover:bg-teal-900/85 disabled:opacity-50"
@@ -1117,6 +1195,7 @@ const GameRoomPage = () => {
                     if (confirmAction) {
                       await performAction(confirmAction);
                       setDocketOpen(false);
+                      setResolutionOpen(true);
                     }
                   }}
                   type="button"
@@ -1126,6 +1205,116 @@ const GameRoomPage = () => {
                 </button>
               </div>
             ) : null}
+          </section>
+        </div>
+      ) : null}
+
+      {resolutionOpen && gameState.docket_resolution?.length ? (
+        <div
+          className="fixed inset-0 z-[1275] flex items-center justify-center bg-slate-950/90 p-6"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setResolutionOpen(false);
+          }}
+        >
+          <section className="flex max-h-[92vh] w-full max-w-[96rem] flex-col border border-amber-900/70 bg-slate-900 p-5 shadow-2xl">
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-bold uppercase text-amber-600">Ordered Resolution</p>
+                <h2 className="mt-1 text-lg font-bold text-amber-50">Council Docket</h2>
+                <p className="mt-1 text-xs text-slate-500">
+                  {phase === "reveal"
+                    ? "Cards resolve from left to right."
+                    : "Docket resolution is complete."}
+                </p>
+              </div>
+              <button
+                className="inline-flex h-8 w-8 items-center justify-center border border-slate-700 text-slate-300 hover:bg-slate-800"
+                onClick={() => setResolutionOpen(false)}
+                title="Close Docket Resolution"
+                type="button"
+              >
+                <X className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-x-auto overflow-y-hidden py-3">
+              <div className="flex min-w-max items-start gap-4 px-2">
+                {gameState.docket_resolution.map((resolution, index) => {
+                  const status = resolution.status || "queued";
+                  const succeeded = ["built", "succeeded"].includes(status);
+                  const failed = status === "failed";
+                  const discarded = status === "discarded";
+                  const resolving = status === "resolving";
+                  const statusLabel = succeeded
+                    ? status === "built" ? "Built" : "Succeeded"
+                    : failed
+                      ? resolution.is_crisis ? "Crisis consequence" : "Alternative effect"
+                      : discarded
+                        ? "No effect"
+                        : resolving
+                          ? "Resolving"
+                          : "Queued";
+                  const toneClass = succeeded
+                    ? "border-emerald-400 bg-emerald-950/35 ring-2 ring-emerald-400/70"
+                    : failed
+                      ? "border-rose-500 bg-rose-950/40 ring-2 ring-rose-500/70"
+                      : discarded
+                        ? "border-slate-700 bg-slate-950/60 opacity-45 grayscale"
+                        : resolving
+                          ? "animate-pulse border-amber-300 bg-amber-950/35 ring-2 ring-amber-300/70"
+                          : "border-slate-800 bg-slate-950/30 opacity-65";
+                  return (
+                    <div
+                      key={resolution.id}
+                      className={`docket-resolution-card relative shrink-0 border p-2 transition-all duration-500 ${toneClass}`}
+                      style={{ animationDelay: `${index * 110}ms` }}
+                    >
+                      <div className="mb-2 flex items-center justify-between gap-3 text-[0.65rem] font-bold uppercase">
+                        <span className="text-slate-500">{index + 1}</span>
+                        <span className={
+                          succeeded
+                            ? "text-emerald-300"
+                            : failed
+                              ? "text-rose-300"
+                              : discarded
+                                ? "text-slate-500"
+                                : resolving
+                                  ? "text-amber-200"
+                                  : "text-slate-600"
+                        }>
+                          {statusLabel}
+                        </span>
+                      </div>
+                      <ItemVisual
+                        item={itemLookup[normalize(resolution.item_id)]}
+                        catalogs={catalogs}
+                        tagLookup={tagLookup}
+                        storageIconSrc={storageIconSrc}
+                      />
+                      {succeeded ? (
+                        <CircleCheck className="absolute right-3 top-8 z-20 h-7 w-7 bg-emerald-950 text-emerald-300" aria-hidden="true" />
+                      ) : failed ? (
+                        <CircleX className="absolute right-3 top-8 z-20 h-7 w-7 bg-rose-950 text-rose-300" aria-hidden="true" />
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="mt-4 flex min-h-12 items-center justify-end border-t border-slate-800 pt-4">
+              {phase === "reveal" ? (
+                renderPhaseControls()
+              ) : (
+                <button
+                  className="bg-amber-300 px-4 py-2 text-sm font-bold text-stone-950 hover:bg-amber-200"
+                  onClick={() => setResolutionOpen(false)}
+                  type="button"
+                >
+                  Continue
+                </button>
+              )}
+            </div>
           </section>
         </div>
       ) : null}
@@ -1238,6 +1427,93 @@ const GameRoomPage = () => {
               tokens={catalogs.tokens}
               effectIcons={catalogs.effect_icons}
             />
+          </section>
+        </div>
+      ) : null}
+
+      {empireFallOpen && phase === "game_over" ? (
+        <div
+          className="fixed inset-0 z-[1500] overflow-y-auto bg-slate-950/95 p-6"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setEmpireFallOpen(false);
+          }}
+        >
+          <section className="mx-auto w-full max-w-[96rem] border border-rose-900/70 bg-slate-900 p-5 shadow-2xl">
+            <div className="mb-5 flex items-start justify-between gap-4 border-b border-slate-800 pb-4">
+              <div>
+                <p className="text-xs font-bold uppercase text-rose-400">The Empire Has Fallen</p>
+                <h2 className="mt-1 text-2xl font-bold text-amber-50">Final Agendas</h2>
+                <p className="mt-2 text-sm text-slate-400">
+                  {gameState.winner_player_ids?.length
+                    ? `Winner${gameState.winner_player_ids.length > 1 ? "s" : ""}: ${gameState.winner_player_ids
+                      .map((playerId) => players.find((player) => player.id === playerId)?.name || playerId)
+                      .join(", ")}`
+                    : "No player completed an eligible Agenda."}
+                </p>
+              </div>
+              <button
+                className="inline-flex h-9 w-9 items-center justify-center border border-slate-700 text-slate-300 hover:bg-slate-800"
+                onClick={() => setEmpireFallOpen(false)}
+                title="Close final results"
+                type="button"
+              >
+                <X className="h-5 w-5" aria-hidden="true" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 items-start gap-5 md:grid-cols-2 xl:grid-cols-3">
+              {players.map((player) => {
+                const result = gameState.agenda_results?.[player.id] || {
+                  agenda_id: player.hidden_agenda_id,
+                  eligible: false,
+                  score: 0,
+                  sections: {},
+                };
+                const agenda = agendaLookup[normalize(result.agenda_id || player.hidden_agenda_id)];
+                const winner = gameState.winner_player_ids?.includes(player.id);
+                return (
+                  <section
+                    key={player.id}
+                    className="min-w-0"
+                  >
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <h3 className="truncate text-sm font-bold text-white">{player.name}</h3>
+                        <p className={`mt-0.5 text-xs font-semibold ${
+                          winner ? "text-amber-300" : result.eligible ? "text-emerald-300" : "text-rose-300"
+                        }`}>
+                          {winner ? "Winner" : result.eligible ? "Agenda achieved" : "Agenda not achieved"}
+                        </p>
+                      </div>
+                      <div className={`flex h-12 min-w-12 flex-col items-center justify-center border ${
+                        winner ? "border-amber-500 text-amber-200" : "border-slate-700 text-slate-300"
+                      }`}>
+                        <strong className="text-lg leading-none">{result.score || 0}</strong>
+                        <span className="mt-0.5 text-[0.55rem] font-bold uppercase">Points</span>
+                      </div>
+                    </div>
+
+                    {agenda ? (
+                      <CatalogItemVisual
+                        entry={agenda}
+                        tags={catalogs.tags}
+                        cards={catalogs.cards}
+                        ministries={catalogs.ministries}
+                        images={catalogs.images}
+                        pillars={catalogs.pillars}
+                        tokens={catalogs.tokens}
+                        effectIcons={catalogs.effect_icons}
+                        agendaResult={result}
+                      />
+                    ) : (
+                      <div className="flex aspect-[8/5] items-center justify-center border border-dashed border-slate-700 text-sm text-slate-500">
+                        Agenda unavailable
+                      </div>
+                    )}
+                  </section>
+                );
+              })}
+            </div>
           </section>
         </div>
       ) : null}

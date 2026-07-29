@@ -10,6 +10,7 @@ from backend.app.goldfishing_engine import (
     _apply_on_build_effects,
     _assign_ministries,
     _end_era,
+    _plotting_resolution_preview,
     build_goldfishing_state,
     perform_action,
 )
@@ -206,6 +207,23 @@ def finish_ministry_draft(state: dict) -> dict:
 
 
 class TestAnonymousCouncilEngine(unittest.TestCase):
+    def test_plotting_preview_uses_full_current_resources_and_tags(self):
+        state = build_state()
+        farm = next(card for card in state["catalog"]["cards"] if card["id"] == "farm")
+        edict = next(event for event in state["catalog"]["events"] if event["id"] == "tax-riots")
+        crisis = next(event for event in state["catalog"]["events"] if event["id"] == "border-raid")
+
+        state["global_resource_pool"] = {"labor": 1}
+        state["pillars"]["morale"] = 4
+        self.assertEqual(_plotting_resolution_preview(state, farm), "success")
+        self.assertEqual(_plotting_resolution_preview(state, edict), "success")
+        self.assertEqual(_plotting_resolution_preview(state, crisis), "failure")
+
+        state["global_resource_pool"] = {}
+        state["pillars"]["morale"] = 5
+        self.assertEqual(_plotting_resolution_preview(state, farm), "unresolved")
+        self.assertEqual(_plotting_resolution_preview(state, edict), "unresolved")
+
     def test_agenda_condition_vocabulary_uses_final_empire_state(self):
         state = build_state()
         capital = next(card for card in state["catalog"]["cards"] if card["id"] == "capital")
@@ -344,6 +362,7 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
             for entry in state["possible_actions"]
             if entry["type"] == "select_commit_card" and entry["player_id"] == player_id
         )
+        self.assertIn(action["resolution_preview"], {"success", "failure", "unresolved"})
 
         state = perform_action(state, action["type"], action)
 
@@ -602,6 +621,10 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
         )
         self.assertEqual(state["phase"], "reveal")
         self.assertEqual(state["possible_actions"], [{"type": "reveal_next"}])
+        self.assertEqual(
+            [entry["status"] for entry in state["docket_resolution"]],
+            ["queued", "queued", "queued"],
+        )
 
     def test_crises_are_ordered_before_all_other_docket_cards(self):
         state = build_state()
@@ -735,6 +758,15 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
                         "face_up": False,
                     }
                 ],
+                "docket_resolution": [
+                    {
+                        "id": "commitment-1",
+                        "item_id": "farm",
+                        "name": "Farm",
+                        "is_crisis": False,
+                        "status": "queued",
+                    }
+                ],
                 "pending_placement": None,
             }
         )
@@ -745,6 +777,7 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
         self.assertEqual(state["cities"][0]["cards"], ["farm"])
         self.assertEqual(state["pillars"]["morale"], 6)
         self.assertEqual(state["current_reveal"]["status"], "built")
+        self.assertEqual(state["docket_resolution"][0]["status"], "built")
 
     def test_event_requirements_choose_main_or_alternative_effects(self):
         state = build_state()
@@ -762,6 +795,15 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
                         "face_up": False,
                     }
                 ],
+                "docket_resolution": [
+                    {
+                        "id": "commitment-1",
+                        "item_id": "tax-riots",
+                        "name": "Tax Riots",
+                        "is_crisis": False,
+                        "status": "queued",
+                    }
+                ],
             }
         )
 
@@ -770,6 +812,41 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
         self.assertEqual(state["pillars"]["stability"], 4)
         self.assertEqual(state["pillars"]["treasury"], 5)
         self.assertIn("tax-riots", state["empire_discard"])
+        self.assertEqual(state["docket_resolution"][0]["status"], "succeeded")
+
+    def test_unpaid_event_records_alternative_effect_as_failed(self):
+        state = build_state()
+        state.update(
+            {
+                "phase": "reveal",
+                "pillars": {"treasury": 5, "stability": 5, "morale": 5},
+                "global_resource_pool": {},
+                "council_stack": [
+                    {
+                        "id": "commitment-1",
+                        "item_id": "tax-riots",
+                        "kind": "events",
+                        "owner_player_id": "player-1",
+                        "face_up": False,
+                    }
+                ],
+                "docket_resolution": [
+                    {
+                        "id": "commitment-1",
+                        "item_id": "tax-riots",
+                        "name": "Tax Riots",
+                        "is_crisis": False,
+                        "status": "queued",
+                    }
+                ],
+            }
+        )
+
+        state = perform_action(state, "reveal_next", {})
+
+        self.assertEqual(state["pillars"]["treasury"], 4)
+        self.assertEqual(state["pillars"]["stability"], 5)
+        self.assertEqual(state["docket_resolution"][0]["status"], "failed")
 
     def test_general_event_resource_effect_is_chosen_by_health_minister(self):
         state = finish_ministry_draft(build_state())
@@ -1312,7 +1389,7 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
         self.assertEqual(stored["stored_resources"], {"labor": 2, "wealth": 2})
         self.assertEqual(stored["phase"], "crisis_intake")
 
-    def test_hand_refill_draws_three_and_state_draws_four_plus_pending(self):
+    def test_hand_refill_draws_up_to_three_and_state_up_to_four_plus_pending(self):
         state = build_state()
         state_player_id = next(
             holder for ministry_id, holder in state["ministry_assignments"].items()
@@ -1331,7 +1408,7 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
             {"player_id": state_player_id},
         )
 
-        self.assertEqual(len(next(player for player in state["players"] if player["id"] == state_player_id)["hand"]), 6)
+        self.assertEqual(len(next(player for player in state["players"] if player["id"] == state_player_id)["hand"]), 5)
         self.assertEqual(next(player for player in state["players"] if player["id"] == state_player_id)["pending_draws"], 0)
 
         ordinary_player = next(
@@ -1350,7 +1427,7 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
 
         self.assertEqual(
             len(next(player for player in state["players"] if player["id"] == ordinary_player["id"])["hand"]),
-            4,
+            3,
         )
 
     def test_event_reduces_every_players_refill_by_one(self):
