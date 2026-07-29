@@ -542,6 +542,55 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
         self.assertEqual(player["hand"], ["border-raid", "garrison"])
         self.assertEqual(player["scheme_slots"], ["farm", None])
 
+    def test_scheming_preserves_and_rebases_selected_commitment(self):
+        state = build_state()
+        player_id = state["minister_of_empire_player_id"]
+        player = next(entry for entry in state["players"] if entry["id"] == player_id)
+        player["hand"] = ["border-raid", "farm"]
+        player["scheme_slots"] = [None, "garrison"]
+        state["phase"] = "plotting"
+
+        state = perform_action(
+            state,
+            "select_commit_card",
+            {"player_id": player_id, "source": "hand", "index": 1},
+        )
+        state = perform_action(
+            state,
+            "plotting_scheme",
+            {"player_id": player_id, "hand_index": 0, "slot_index": 0, "mode": "to_scheme"},
+        )
+        player = next(entry for entry in state["players"] if entry["id"] == player_id)
+        self.assertEqual(
+            player["selected_commitment"],
+            {
+                "item_id": "farm",
+                "source": "hand",
+                "index": 0,
+                "face_up": False,
+            },
+        )
+
+        state = perform_action(
+            state,
+            "plotting_scheme",
+            {"player_id": player_id, "hand_index": 0, "slot_index": 0, "mode": "swap"},
+        )
+        player = next(entry for entry in state["players"] if entry["id"] == player_id)
+        self.assertEqual(player["selected_commitment"]["source"], "scheme")
+        self.assertEqual(player["selected_commitment"]["index"], 0)
+        self.assertEqual(player["selected_commitment"]["item_id"], "farm")
+
+        state = perform_action(
+            state,
+            "plotting_scheme",
+            {"player_id": player_id, "slot_index": 0, "mode": "to_hand"},
+        )
+        player = next(entry for entry in state["players"] if entry["id"] == player_id)
+        self.assertEqual(player["selected_commitment"]["source"], "hand")
+        self.assertEqual(player["selected_commitment"]["index"], 1)
+        self.assertEqual(player["hand"][1], "farm")
+
     def test_plotting_offers_no_voluntary_discard_actions(self):
         state = build_state()
         state["phase"] = "plotting"

@@ -286,6 +286,16 @@ const GameRoomPage = () => {
     return perform(type, { ...payload, ...extra });
   };
 
+  useEffect(() => {
+    const possibleActions = gameState?.possible_actions || [];
+    const automaticReveal = possibleActions.length === 1 && possibleActions[0].type === "reveal_next";
+    if (!resolutionOpen || gameState?.phase !== "reveal" || !automaticReveal || busy) return undefined;
+    const timer = window.setTimeout(() => {
+      void performAction(possibleActions[0]);
+    }, 500);
+    return () => window.clearTimeout(timer);
+  }, [busy, gameState, resolutionOpen]);
+
   const endGame = async () => {
     if (!token || ending) return;
     setEnding(true);
@@ -308,6 +318,31 @@ const GameRoomPage = () => {
   }
 
   const currentReveal = gameState.current_reveal;
+  const resolutionDecisionAction = phase === "reveal"
+    ? actions.find((entry) => entry.type !== "reveal_next")
+    : null;
+  const automaticRevealPending = phase === "reveal"
+    && actions.length === 1
+    && actions[0].type === "reveal_next";
+  const resolutionDecisionMessage = (() => {
+    if (!resolutionDecisionAction) return "";
+    const decisionPlayer = players.find((player) => player.id === resolutionDecisionAction.player_id);
+    const ministries = Object.entries(gameState.ministry_assignments || {})
+      .filter(([, holder]) => holder === resolutionDecisionAction.player_id)
+      .map(([ministryId]) => ministryLookup[normalize(ministryId)]?.name || ministryId);
+    const actor = ministries.length
+      ? `${ministries.join(" and ")} (${decisionPlayer?.name || resolutionDecisionAction.player_id})`
+      : decisionPlayer?.name || "The responsible player";
+    const choice = {
+      choose_event_unrest_scope: "choose whether Unrest is placed globally or in a City",
+      choose_event_destroy_building: "choose which eligible Structure is destroyed",
+      choose_event_token_city: "choose the City receiving the token effects",
+      choose_event_conversion_resource: "choose how the resource conversion is resolved",
+      choose_event_resource: "choose the affected resource",
+      place_revealed_card: "choose where the completed Structure is built",
+    }[resolutionDecisionAction.type] || "make the required resolution choice";
+    return `${actor} must ${choice}.`;
+  })();
   const storageAction = actions.find((entry) => entry.type === "store_resources");
   const resourcePool = gameState.global_resource_pool || {};
   const selectedStorageTotal = Object.values(storageSelection).reduce((total, amount) => total + Number(amount || 0), 0);
@@ -1003,7 +1038,7 @@ const GameRoomPage = () => {
                   })}
                 </div>
               </div> : null}
-              <aside className="flex min-w-0 flex-col items-center gap-2 border-l border-slate-800 pl-3 lg:col-start-3">
+              <aside className="flex min-w-0 flex-col items-center gap-2 border-l border-slate-800 px-1 lg:col-start-3">
                 <div className="grid grid-cols-2 gap-2">
                   {focusedMinistries.map((ministry) => {
                     const iconSrc = buildAssetUrl(
@@ -1055,20 +1090,21 @@ const GameRoomPage = () => {
                     </button>
                   ) : null}
                 </div>
-                <div className="mt-auto flex items-center justify-center">
-                  {phase === "plotting" && confirmPlottingAction ? (
-                    <button
-                      aria-label={confirmPlottingAction.has_selection ? "Confirm Plot" : "Confirm no card"}
-                      className="inline-flex h-9 w-9 items-center justify-center bg-amber-300 text-stone-950 hover:bg-amber-200 disabled:opacity-50"
-                      disabled={busy}
-                      onClick={() => performAction(confirmPlottingAction)}
-                      title={confirmPlottingAction.has_selection ? "Confirm Plot" : "Confirm no card"}
-                      type="button"
-                    >
-                      <Check className="h-5 w-5" aria-hidden="true" />
-                    </button>
-                  ) : null}
-                </div>
+                {phase === "plotting" && confirmPlottingAction ? (
+                  <button
+                    aria-label={confirmPlottingAction.has_selection ? "Confirm submitted card" : "Confirm no card"}
+                    className="inline-flex h-9 w-full items-center justify-center gap-1 bg-amber-300 px-1 text-stone-950 hover:bg-amber-200 disabled:opacity-50"
+                    disabled={busy}
+                    onClick={() => performAction(confirmPlottingAction)}
+                    title={confirmPlottingAction.has_selection ? "Confirm submitted card" : "Confirm no card"}
+                    type="button"
+                  >
+                    <Check className="h-4 w-4 shrink-0" aria-hidden="true" />
+                    <span className="text-[0.6rem] font-bold uppercase">
+                      {confirmPlottingAction.has_selection ? "Confirm" : "No card"}
+                    </span>
+                  </button>
+                ) : null}
               </aside>
             </div>
           </section>
@@ -1302,10 +1338,19 @@ const GameRoomPage = () => {
               </div>
             </div>
 
-            <div className="mt-4 flex min-h-12 items-center justify-end border-t border-slate-800 pt-4">
-              {phase === "reveal" ? (
-                renderPhaseControls()
-              ) : (
+            <div className="mt-4 min-h-12 border-t border-slate-800 pt-4">
+              {resolutionDecisionMessage ? (
+                <div className="mb-3 border border-amber-800/80 bg-amber-950/35 px-3 py-2">
+                  <p className="text-[0.65rem] font-bold uppercase text-amber-500">Resolution paused for a decision</p>
+                  <p className="mt-1 text-sm text-amber-100">{resolutionDecisionMessage}</p>
+                </div>
+              ) : null}
+              <div className="flex items-center justify-end">
+                {automaticRevealPending ? (
+                  <p className="animate-pulse text-sm font-semibold text-amber-200">Resolving the next Docket card...</p>
+                ) : phase === "reveal" ? (
+                  renderPhaseControls()
+                ) : (
                 <button
                   className="bg-amber-300 px-4 py-2 text-sm font-bold text-stone-950 hover:bg-amber-200"
                   onClick={() => setResolutionOpen(false)}
@@ -1313,7 +1358,8 @@ const GameRoomPage = () => {
                 >
                   Continue
                 </button>
-              )}
+                )}
+              </div>
             </div>
           </section>
         </div>

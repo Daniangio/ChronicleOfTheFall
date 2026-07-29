@@ -490,11 +490,16 @@ def _plotting_scheme(state: dict[str, Any], payload: dict[str, Any]) -> None:
     if slot_index < 0 or slot_index >= SCHEME_SLOTS:
         raise ValueError("Scheme Slot not found.")
     slot_card = player["scheme_slots"][slot_index]
+    selected = player.get("selected_commitment")
     if mode == "to_hand":
         if not slot_card:
             raise ValueError("Scheme Slot is empty.")
+        destination_index = len(player["hand"])
         player["scheme_slots"][slot_index] = None
         player["hand"].append(slot_card)
+        if selected and selected.get("source") == "scheme" and int(selected.get("index", -1)) == slot_index:
+            selected["source"] = "hand"
+            selected["index"] = destination_index
     elif mode in {"to_scheme", "swap"}:
         if hand_index < 0 or hand_index >= len(player["hand"]):
             raise ValueError("Hand card not found.")
@@ -508,9 +513,23 @@ def _plotting_scheme(state: dict[str, Any], payload: dict[str, Any]) -> None:
             player["hand"][hand_index] = slot_card
         else:
             player["hand"].pop(hand_index)
+        if selected and selected.get("source") == "hand":
+            selected_index = int(selected.get("index", -1))
+            if selected_index == hand_index:
+                selected["source"] = "scheme"
+                selected["index"] = slot_index
+            elif mode == "to_scheme" and hand_index < selected_index:
+                selected["index"] = selected_index - 1
+        elif (
+            selected
+            and mode == "swap"
+            and selected.get("source") == "scheme"
+            and int(selected.get("index", -1)) == slot_index
+        ):
+            selected["source"] = "hand"
+            selected["index"] = hand_index
     else:
         raise ValueError("Unknown Scheme action.")
-    player["selected_commitment"] = None
     state["log"].append(f"{player['name']} rearranged their Scheme Slots.")
 
 
