@@ -35,6 +35,8 @@ async def create_game_room(
     db: Session = Depends(get_db),
 ):
     try:
+        if payload.mode not in {"goldfishing", "solo_bots"}:
+            raise ValueError("Game mode must be goldfishing or solo_bots.")
         service = _service()
         cards = [public_catalog_entry(entry) for entry in list_catalog_records(db, "cards")]
         tags = [public_catalog_entry(entry) for entry in list_catalog_records(db, "tags")]
@@ -65,12 +67,15 @@ async def create_game_room(
             tag_entries=tags,
             empire_deck_ids=_deck_item_ids(empire_deck),
             crisis_deck_ids=_deck_item_ids(crisis_deck),
-            setup_pool_ids=_deck_setup_ids(empire_deck, player_count=4),
+            setup_pool_ids=_deck_setup_ids(empire_deck, player_count=payload.player_count),
             empire_deck_id=str(getattr(empire_deck, "id", "") or ""),
             crisis_deck_id=str(getattr(crisis_deck, "id", "") or ""),
             initial_city_card_id=initial_city_card_id,
             level_id=str(getattr(level, "id", "") or ""),
             suspicion_start_era=max(1, int(level_data.get("suspicion_start_era") or 5)),
+            player_count=payload.player_count,
+            mode=payload.mode,
+            human_player_name=current_user.username or current_user.email or "You",
             event_entries=events,
             agenda_entries=agendas,
             ministry_entries=ministries,

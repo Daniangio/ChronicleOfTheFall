@@ -8,8 +8,9 @@ and an admin console for preparing the game catalog.
 The admin console manages cards, Edicts, Crises, Hidden Agendas, decks, and
 Levels. Fixed game ingredients such as tags, resources, Ministries, Pillars,
 tokens, and effect icons are versioned in the repository and shown read-only.
-Goldfishing runs the Anonymous Council rules in the backend and exposes only
-legal actions to the React client.
+Goldfishing and single-player versus bots run the Anonymous Council rules in the
+backend and expose only legal actions to the React client. Both modes support
+three, four, or five players.
 
 ## Stack
 
@@ -62,4 +63,6 @@ cd frontend && npm install && npm run build
   curated starter content.
 - [`documentation/catalog_data_storage.md`](documentation/catalog_data_storage.md)
   distinguishes repository JSON from live PostgreSQL and Redis data.
+- [`documentation/bot_policy.md`](documentation/bot_policy.md) describes the
+  Agenda-driven bot evaluation and its current limits.
 - [`game_rules.md`](game_rules.md) is the current prototype rulebook.

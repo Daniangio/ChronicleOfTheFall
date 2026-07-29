@@ -7,6 +7,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Optional
 
+from .bot_policy import advance_bot_players, public_game_state, require_human_action
 from .server_models import User
 from .goldfishing_engine import perform_action
 
@@ -73,18 +74,19 @@ class GameRoomService:
             raise ValueError("Only Chronicle solo rooms are available right now.")
         room_id = room_id or self.new_room_id()
         now = _now_iso()
+        resolved_game_state = advance_bot_players(game_state or {})
         room = {
             "id": room_id,
             "owner_user_id": user.id,
             "owner_username": user.username or user.email or user.id,
-            "mode": "solo",
+            "mode": resolved_game_state.get("mode", "solo"),
             "game_type": normalized_game_type,
             "state": ROOM_STATE_IN_GAME,
             "created_at": now,
             "started_at": now,
             "ended_at": "",
             "result_id": "",
-            "game_state": json.dumps(game_state or {}),
+            "game_state": json.dumps(resolved_game_state),
         }
         if self.redis is None:
             self._memory_rooms[room_id] = room
@@ -96,7 +98,7 @@ class GameRoomService:
         room = await self._load_room(room_id)
         if not room or room.get("owner_user_id") != user.id:
             return None
-        return _decode_state(room.get("game_state"))
+        return public_game_state(_decode_state(room.get("game_state")))
 
     async def apply_goldfishing_action(
         self,
@@ -112,15 +114,17 @@ class GameRoomService:
         if room.get("state") == ROOM_STATE_FINISHED:
             raise ValueError("Game room is finished.")
         state = _decode_state(room.get("game_state"))
-        if state.get("mode") != "goldfishing":
-            raise ValueError("This room is not a goldfishing game.")
+        if state.get("mode") not in {"goldfishing", "solo_bots"}:
+            raise ValueError("This room does not contain a playable Chronicle game.")
+        require_human_action(state, payload)
         state = perform_action(state, action, payload)
+        state = advance_bot_players(state)
         room["game_state"] = json.dumps(state)
         if self.redis is None:
             self._memory_rooms[room_id] = room
         else:
             await self.redis.hset(_room_key(room_id), mapping=room)
-        return state
+        return public_game_state(state)
 
     async def get_room(self, *, room_id: str, user: User) -> dict[str, Any] | None:
         room = await self._load_room(room_id)

@@ -61,9 +61,10 @@ class LobbyStateResponse(BaseModel):
 
 
 class GameRoomCreateRequest(BaseModel):
-    mode: str = "solo"
+    mode: str = "goldfishing"
     game_type: str = "chronicle_solo"
     level_id: Optional[str] = None
+    player_count: int = Field(default=4, ge=3, le=5)
 
 
 class GameRoomResponse(BaseModel):

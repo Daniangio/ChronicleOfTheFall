@@ -190,7 +190,7 @@ def build_state(**overrides) -> dict:
                 "agendas",
                 data=TEST_AGENDA_DATA,
             )
-        ] * 8,
+        ] * 10,
     }
     arguments.update(overrides)
     auto_choose_agendas = arguments.pop("auto_choose_agendas", True)

@@ -146,7 +146,7 @@ const GameRoomPage = () => {
       if (!stateResponse.ok) throw new Error(statePayload.detail || "Failed to load game state.");
       setRoom(roomPayload);
       setGameState(statePayload);
-      setFocusedPlayerId(statePayload.active_player_id || statePayload.players?.[0]?.id || "");
+      setFocusedPlayerId(statePayload.human_player_id || statePayload.active_player_id || statePayload.players?.[0]?.id || "");
       if (roomPayload.state === "FINISHED") navigate(`/games/${roomId}/post-game`, { replace: true });
     } catch (loadError) {
       setError(loadError.message || "Failed to load game.");
@@ -191,6 +191,8 @@ const GameRoomPage = () => {
   const focusedPlayer = players.find((player) => player.id === focusedPlayerId) || activePlayer || players[0];
   const actions = gameState?.possible_actions || [];
   const phase = gameState?.phase || "suspicion";
+  const isBotMode = gameState?.mode === "solo_bots";
+  const focusedPrivateBot = isBotMode && focusedPlayer?.controller === "bot" && !focusedPlayer?.hand_revealed;
 
   const perform = async (action, payload = {}) => {
     if (!token || busy) return null;
@@ -206,9 +208,11 @@ const GameRoomPage = () => {
       if (!response.ok) throw new Error(nextState.detail || "Action failed.");
       setGameState(nextState);
       setFocusedPlayerId((current) => (
-        ["plotting", "agenda_selection"].includes(nextState.phase) && nextState.players?.some((player) => player.id === current)
-          ? current
-          : nextState.active_player_id || nextState.players?.[0]?.id || ""
+        nextState.mode === "solo_bots"
+          ? nextState.human_player_id
+          : ["plotting", "agenda_selection"].includes(nextState.phase) && nextState.players?.some((player) => player.id === current)
+            ? current
+            : nextState.active_player_id || nextState.players?.[0]?.id || ""
       ));
       return nextState;
     } catch (actionError) {
@@ -483,17 +487,19 @@ const GameRoomPage = () => {
               const focused = player.id === focusedPlayer?.id;
               const active = player.id === activePlayer?.id;
               const awaitingPlot = phase === "plotting" && !player.committed;
-              const choosingAgenda = phase === "agenda_selection" && !player.hidden_agenda_id;
+              const choosingAgenda = phase === "agenda_selection" && !(player.agenda_selected ?? Boolean(player.hidden_agenda_id));
               const ministries = ministryNamesFor(player.id);
+              const inspectable = !isBotMode || player.controller !== "bot" || player.hand_revealed || gameState.agendas_revealed;
               return (
-                <button key={player.id} className={`w-full border p-3 text-left ${focused ? "border-amber-500 bg-amber-950/25" : "border-slate-800 bg-slate-950 hover:border-slate-600"}`} onClick={() => setFocusedPlayerId(player.id)} type="button">
+                <button key={player.id} className={`w-full border p-3 text-left ${focused ? "border-amber-500 bg-amber-950/25" : "border-slate-800 bg-slate-950 hover:border-slate-600"} disabled:cursor-default`} disabled={!inspectable} onClick={() => setFocusedPlayerId(player.id)} type="button">
                   <span className="flex items-center justify-between gap-2">
                     <span className="font-semibold text-white">{player.name}</span>
+                    {player.controller === "bot" ? <span className="border border-slate-700 px-1.5 py-0.5 text-[0.6rem] font-bold text-slate-400">BOT</span> : null}
                     {active ? <span className="bg-amber-300 px-1.5 py-0.5 text-[0.6rem] font-bold text-stone-950">DECIDING</span> : null}
                     {awaitingPlot ? <span className="bg-teal-300 px-1.5 py-0.5 text-[0.6rem] font-bold text-stone-950">PLOTTING</span> : null}
                     {choosingAgenda ? <span className="bg-sky-300 px-1.5 py-0.5 text-[0.6rem] font-bold text-stone-950">AGENDA</span> : null}
                   </span>
-                  <span className="mt-2 block text-xs text-slate-500">Hand {player.hand?.length || 0} · Suspicion {player.suspicion || 0}</span>
+                  <span className="mt-2 block text-xs text-slate-500">Hand {player.hand_count ?? player.hand?.length ?? 0} · Suspicion {player.suspicion || 0}</span>
                   <span className="mt-1 block text-[0.65rem] leading-4 text-amber-700">{ministries.join(" · ") || "No ministry"}</span>
                 </button>
               );
@@ -511,7 +517,7 @@ const GameRoomPage = () => {
                 <h2 className="mt-0.5 text-lg font-bold text-amber-50">{titleCase(phase)}</h2>
                 <p className="mt-1 text-xs text-slate-500">
                   {phase === "agenda_selection"
-                    ? `${players.filter((player) => !player.hidden_agenda_id).length} players choosing Agendas`
+                    ? `${players.filter((player) => !(player.agenda_selected ?? Boolean(player.hidden_agenda_id))).length} players choosing Agendas`
                     : phase === "plotting"
                     ? `${players.filter((player) => !player.committed).length} players still plotting`
                     : activePlayer
@@ -728,10 +734,13 @@ const GameRoomPage = () => {
                   {phase === "agenda_selection" && focusedPlayer?.hidden_agenda_id ? (
                     <p className="border border-emerald-900 bg-emerald-950/30 p-5 text-sm text-emerald-200">Agenda selected.</p>
                   ) : null}
-                  {phase !== "agenda_selection" && !focusedPlayer?.hand?.length ? <p className="border border-dashed border-slate-800 p-5 text-sm text-slate-600">Hand is empty.</p> : null}
+                  {focusedPrivateBot ? (
+                    <p className="border border-dashed border-slate-800 p-5 text-sm text-slate-500">This bot's hand and Scheme cards are private.</p>
+                  ) : null}
+                  {phase !== "agenda_selection" && !focusedPlayer?.hand?.length && !focusedPrivateBot ? <p className="border border-dashed border-slate-800 p-5 text-sm text-slate-600">Hand is empty.</p> : null}
                 </div>
               </div>
-              {phase !== "agenda_selection" ? <div>
+              {phase !== "agenda_selection" && !focusedPrivateBot ? <div>
                 <h3 className="mb-2 text-xs font-bold uppercase text-slate-500">Scheme Slots</h3>
                 <div className="grid grid-cols-2 gap-2">
                   {(focusedPlayer?.scheme_slots || [null, null]).map((itemId, index) => {

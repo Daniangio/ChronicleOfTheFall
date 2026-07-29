@@ -7,7 +7,7 @@ from copy import deepcopy
 from typing import Any
 
 
-PLAYER_COUNT = 4
+DEFAULT_PLAYER_COUNT = 4
 BASE_HAND_SIZE = 2
 EMPIRE_HAND_SIZE = 1
 NORMAL_REFILL_SIZE = 3
@@ -89,6 +89,9 @@ def build_goldfishing_state(
     initial_city_card_id: str = "capital-foundation",
     level_id: str = "",
     suspicion_start_era: int = 5,
+    player_count: int = DEFAULT_PLAYER_COUNT,
+    mode: str = "goldfishing",
+    human_player_name: str = "Player 1",
     event_entries: list[dict[str, Any]] | None = None,
     agenda_entries: list[dict[str, Any]] | None = None,
     ministry_entries: list[dict[str, Any]] | None = None,
@@ -97,6 +100,10 @@ def build_goldfishing_state(
     effect_icon_entries: list[dict[str, Any]] | None = None,
     image_entries: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
+    if player_count not in {3, 4, 5}:
+        raise ValueError("Player count must be between 3 and 5.")
+    if mode not in {"goldfishing", "solo_bots"}:
+        raise ValueError("Game mode must be goldfishing or solo_bots.")
     card_entries = deepcopy(card_entries)
     tag_entries = deepcopy(tag_entries)
     events = deepcopy(event_entries or [])
@@ -143,9 +150,9 @@ def build_goldfishing_state(
     players: list[dict[str, Any]] = []
     agenda_deck = Deck([entry["id"] for entry in agendas])
     agenda_deck.shuffle(f"{room_id}:agendas")
-    if agendas and len(agendas) < PLAYER_COUNT * 2:
+    if agendas and len(agendas) < player_count * 2:
         raise ValueError("The Hidden Agenda pool requires at least two cards per player.")
-    for index in range(PLAYER_COUNT):
+    for index in range(player_count):
         base_cards = base_deck.draw(BASE_HAND_SIZE, seed=f"{room_id}:base:{index}")
         empire_cards = empire_deck.draw(EMPIRE_HAND_SIZE, seed=f"{room_id}:empire:{index}")
         if len(base_cards) < BASE_HAND_SIZE:
@@ -157,7 +164,12 @@ def build_goldfishing_state(
         players.append(
             {
                 "id": f"player-{index + 1}",
-                "name": f"Player {index + 1}",
+                "name": (
+                    human_player_name
+                    if mode == "solo_bots" and index == 0
+                    else f"Bot {index}" if mode == "solo_bots" else f"Player {index + 1}"
+                ),
+                "controller": "bot" if mode == "solo_bots" and index > 0 else "human",
                 "hand": [*base_cards, *empire_cards, *starting_crisis],
                 "scheme_slots": [None] * SCHEME_SLOTS,
                 "ministry_ids": [],
@@ -177,9 +189,11 @@ def build_goldfishing_state(
         pillar_values = {"treasury": 5, "stability": 5, "morale": 5}
 
     state: dict[str, Any] = {
-        "mode": "goldfishing",
+        "mode": mode,
         "rules_version": "anonymous-council",
         "room_id": room_id,
+        "player_count": player_count,
+        "human_player_id": "player-1" if mode == "solo_bots" else "",
         "era": 1,
         "epoch": 1,
         "suspicion_start_era": max(1, int(suspicion_start_era)),
@@ -245,7 +259,7 @@ def build_goldfishing_state(
         },
         "level_id": level_id,
         "log": [
-            f"Setup complete. {PLAYER_COUNT} players received {BASE_HAND_SIZE} Base cards and "
+            f"Setup complete. {player_count} players received {BASE_HAND_SIZE} Base cards and "
             f"{EMPIRE_HAND_SIZE} Empire cards."
         ],
     }

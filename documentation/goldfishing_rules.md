@@ -1,8 +1,10 @@
 # Goldfishing Engine
 
-Goldfishing controls all four prototype players from one browser, but all legality,
-phase transitions, shuffling, costs, placement checks, effects, storage, and cleanup
-are resolved by the backend.
+The digital engine supports three, four, or five players. Goldfishing exposes
+every seat to one browser. Single-player versus bots exposes one human seat and
+lets the backend control the remaining seats. In both modes, all legality, phase
+transitions, shuffling, costs, placement checks, effects, storage, and cleanup are
+resolved by the backend.
 
 The rules source is [`../game_rules.md`](../game_rules.md). This file documents the
 digital implementation.
@@ -40,6 +42,16 @@ The engine supports Agenda selection, Ministry assignment, Suspicion placement,
 Production, parallel anonymous commitments, Docket ordering, reveal and
 placement, Edict and Crisis effects, resource storage, Scheme management,
 drawing, and cleanup.
+
+In a versus-bots room, deterministic system actions advance automatically. The
+room stops advancing when the human has a legal decision. Bot hands, Scheme
+cards, Agenda options, and chosen Agendas remain private until the normal rules
+reveal them. The browser receives counts for hidden hands and Scheme cards, not
+their identities.
+
+Bot decisions use the policy documented in
+[`bot_policy.md`](bot_policy.md). Bots submit ordinary legal actions to the same
+engine used by the browser; the policy does not modify game state directly.
 
 ## Catalog Data
 
