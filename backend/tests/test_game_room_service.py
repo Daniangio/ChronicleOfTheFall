@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from backend.app.game_router import _deck_item_ids, _deck_setup_ids
 from backend.app.game_room_service import GameRoomService, ROOM_STATE_FINISHED, ROOM_STATE_IN_GAME
 from backend.app.goldfishing_engine import (
+    _agenda_condition_met,
     _apply_on_build_effects,
     _assign_ministries,
     _end_era,
@@ -43,6 +44,37 @@ def catalog_entry(entry_id: str, name: str, kind: str, *, category: str = "", da
         "color": None,
         "data": data or {},
     }
+
+TEST_AGENDA_DATA = {
+    "max_points": 8,
+    "win_threshold": 6,
+    "primary_mandatory": True,
+    "forbidden_is_veto": True,
+    "primary": {
+        "name": "Urban Legacy",
+        "points": 4,
+        "text": "Urban is present.",
+        "conditions": [{"type": "tag_count", "tag": "urban", "operator": "gte", "amount": 1}],
+    },
+    "secondary": {
+        "name": "Labor Base",
+        "points": 2,
+        "text": "Labor production is present.",
+        "conditions": [{"type": "production", "resource": "labor", "operator": "gte", "amount": 1}],
+    },
+    "collapse": {
+        "name": "Morale Falls",
+        "points": 2,
+        "text": "Morale collapses.",
+        "conditions": [{"type": "collapsed_pillar", "pillar": "pillar-of-morale"}],
+    },
+    "forbidden": {
+        "name": "No Science Supremacy",
+        "points": 0,
+        "text": "Science is not highest.",
+        "conditions": [{"type": "tag_is_highest", "tag": "science"}],
+    },
+}
 
 
 MINISTRIES = [
@@ -156,12 +188,17 @@ def build_state(**overrides) -> dict:
                 "survivor",
                 "Survivor",
                 "agendas",
-                data={"conditions": [{"source_type": "tag", "source_id": "food", "operator": "gte", "amount": 1}]},
+                data=TEST_AGENDA_DATA,
             )
-        ] * 4,
+        ] * 8,
     }
     arguments.update(overrides)
-    return build_goldfishing_state(**arguments)
+    auto_choose_agendas = arguments.pop("auto_choose_agendas", True)
+    state = build_goldfishing_state(**arguments)
+    while auto_choose_agendas and state["phase"] == "agenda_selection":
+        action = state["possible_actions"][0]
+        state = perform_action(state, action["type"], action)
+    return state
 
 
 def finish_ministry_draft(state: dict) -> dict:
@@ -169,6 +206,59 @@ def finish_ministry_draft(state: dict) -> dict:
 
 
 class TestAnonymousCouncilEngine(unittest.TestCase):
+    def test_agenda_condition_vocabulary_uses_final_empire_state(self):
+        state = build_state()
+        capital = next(card for card in state["catalog"]["cards"] if card["id"] == "capital")
+        capital["data"]["tags"] = {
+            "culture": 2,
+            "military": 2,
+            "science": 1,
+            "sanitary": 2,
+        }
+        capital["data"]["production"] = {"labor": 3, "knowledge": 1}
+        state["stored_resources"] = {"knowledge": 1}
+        state["pillars"] = {"treasury": 5, "stability": 4, "morale": 0}
+        state["cities"][0]["condition_tokens"] = {
+            "plague-token": 2,
+            "fortified-token": 1,
+        }
+
+        conditions = [
+            {"type": "tag_count", "tag": "culture", "operator": "gte", "amount": 2},
+            {"type": "tag_compare", "left": "culture", "operator": "gt", "right": "science"},
+            {
+                "type": "tag_sum_compare",
+                "left_tags": ["culture", "military"],
+                "operator": "gt",
+                "right_tags": ["science", "sanitary"],
+            },
+            {"type": "production", "resource": "labor", "operator": "gte", "amount": 3},
+            {"type": "capacity", "resource": "knowledge", "operator": "gte", "amount": 2},
+            {"type": "collapsed_pillar", "pillar": "morale"},
+            {"type": "not_collapsed_pillar", "pillar": "treasury"},
+            {"type": "highest_surviving_pillar", "pillar": "treasury"},
+            {"type": "token_count", "token": "plague", "scope": "empire", "operator": "eq", "amount": 2},
+            {
+                "type": "tag_plus_token_count",
+                "tag": "military",
+                "token": "fortified",
+                "scope": "empire",
+                "operator": "gte",
+                "amount": 3,
+            },
+            {"type": "no_city_has_plague_exceeding_sanitary"},
+            {
+                "type": "distinct_tags_at_least",
+                "tags": ["culture", "military", "science"],
+                "minimum_distinct": 3,
+                "minimum_each": 1,
+            },
+            {"type": "all_tags_at_most", "tags": ["culture", "military", "science"], "amount": 2},
+            {"type": "tag_is_highest", "tag": "culture"},
+        ]
+
+        self.assertTrue(all(_agenda_condition_met(state, condition) for condition in conditions))
+
     def test_on_build_effects_add_and_remove_city_tokens(self):
         state = build_state()
         city = state["cities"][0]
@@ -227,6 +317,24 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
             {player["id"] for player in state["players"]},
         )
         self.assertEqual(state["suspicion_start_era"], 5)
+
+    def test_players_choose_one_of_two_hidden_agendas_in_parallel(self):
+        state = build_state(auto_choose_agendas=False)
+
+        self.assertEqual(state["phase"], "agenda_selection")
+        self.assertTrue(all(len(player["agenda_options"]) == 2 for player in state["players"]))
+        player_three_action = next(
+            action
+            for action in state["possible_actions"]
+            if action["player_id"] == "player-3"
+        )
+        state = perform_action(state, "choose_agenda", player_three_action)
+
+        player_three = next(player for player in state["players"] if player["id"] == "player-3")
+        self.assertEqual(player_three["hidden_agenda_id"], player_three_action["agenda_id"])
+        self.assertEqual(player_three["agenda_options"], [])
+        self.assertEqual(state["sealed_agenda_count"], 1)
+        self.assertEqual(state["phase"], "agenda_selection")
 
     def test_goldfishing_plotting_accepts_any_uncommitted_player(self):
         state = build_state(suspicion_start_era=5)
@@ -1389,7 +1497,9 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
 
         self.assertEqual(state["phase"], "game_over")
         self.assertTrue(state["agendas_revealed"])
-        self.assertEqual(state["winner_player_ids"], [player["id"] for player in state["players"]])
+        self.assertEqual(state["winner_player_ids"], ["player-2"])
+        self.assertTrue(all(result["eligible"] for result in state["agenda_results"].values()))
+        self.assertTrue(all(result["score"] == 8 for result in state["agenda_results"].values()))
 
 
 class TestGameRoomService(unittest.IsolatedAsyncioTestCase):

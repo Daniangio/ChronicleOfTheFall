@@ -34,7 +34,7 @@ const buildTagLookup = (tags = [], imageLookup = {}) =>
 const ItemVisual = ({ item, catalogs, tagLookup, storageIconSrc = "", actionLabel = "", onAction, disabled = false }) => {
   if (!item) return null;
   const tokenLookup = buildTagLookup(catalogs.tokens, lookup(catalogs.images));
-  if (item.kind === "events") {
+  if (item.kind === "events" || item.kind === "agendas") {
     return (
       <div className="space-y-2">
         <CatalogItemVisual
@@ -206,7 +206,7 @@ const GameRoomPage = () => {
       if (!response.ok) throw new Error(nextState.detail || "Action failed.");
       setGameState(nextState);
       setFocusedPlayerId((current) => (
-        nextState.phase === "plotting" && nextState.players?.some((player) => player.id === current)
+        ["plotting", "agenda_selection"].includes(nextState.phase) && nextState.players?.some((player) => player.id === current)
           ? current
           : nextState.active_player_id || nextState.players?.[0]?.id || ""
       ));
@@ -483,6 +483,7 @@ const GameRoomPage = () => {
               const focused = player.id === focusedPlayer?.id;
               const active = player.id === activePlayer?.id;
               const awaitingPlot = phase === "plotting" && !player.committed;
+              const choosingAgenda = phase === "agenda_selection" && !player.hidden_agenda_id;
               const ministries = ministryNamesFor(player.id);
               return (
                 <button key={player.id} className={`w-full border p-3 text-left ${focused ? "border-amber-500 bg-amber-950/25" : "border-slate-800 bg-slate-950 hover:border-slate-600"}`} onClick={() => setFocusedPlayerId(player.id)} type="button">
@@ -490,6 +491,7 @@ const GameRoomPage = () => {
                     <span className="font-semibold text-white">{player.name}</span>
                     {active ? <span className="bg-amber-300 px-1.5 py-0.5 text-[0.6rem] font-bold text-stone-950">DECIDING</span> : null}
                     {awaitingPlot ? <span className="bg-teal-300 px-1.5 py-0.5 text-[0.6rem] font-bold text-stone-950">PLOTTING</span> : null}
+                    {choosingAgenda ? <span className="bg-sky-300 px-1.5 py-0.5 text-[0.6rem] font-bold text-stone-950">AGENDA</span> : null}
                   </span>
                   <span className="mt-2 block text-xs text-slate-500">Hand {player.hand?.length || 0} · Suspicion {player.suspicion || 0}</span>
                   <span className="mt-1 block text-[0.65rem] leading-4 text-amber-700">{ministries.join(" · ") || "No ministry"}</span>
@@ -508,7 +510,9 @@ const GameRoomPage = () => {
                 <p className="text-xs font-semibold uppercase text-amber-700">Current Phase</p>
                 <h2 className="mt-0.5 text-lg font-bold text-amber-50">{titleCase(phase)}</h2>
                 <p className="mt-1 text-xs text-slate-500">
-                  {phase === "plotting"
+                  {phase === "agenda_selection"
+                    ? `${players.filter((player) => !player.hidden_agenda_id).length} players choosing Agendas`
+                    : phase === "plotting"
                     ? `${players.filter((player) => !player.committed).length} players still plotting`
                     : activePlayer
                     ? `${activePlayer.name} is deciding`
@@ -668,7 +672,9 @@ const GameRoomPage = () => {
                 {focusedPlayer?.hidden_agenda_id ? (
                   <p className="mt-1 text-xs text-amber-700">
                     Hidden Agenda: {agendaLookup[normalize(focusedPlayer.hidden_agenda_id)]?.name || focusedPlayer.hidden_agenda_id}
-                    {gameState.agendas_revealed && gameState.winner_player_ids?.includes(focusedPlayer.id) ? " · Satisfied" : ""}
+                    {gameState.agendas_revealed
+                      ? ` · ${gameState.agenda_results?.[focusedPlayer.id]?.score || 0} points${gameState.winner_player_ids?.includes(focusedPlayer.id) ? " · Winner" : ""}`
+                      : ""}
                   </p>
                 ) : null}
               </div>
@@ -676,9 +682,24 @@ const GameRoomPage = () => {
             </div>
             <div className="mt-3 grid gap-4 lg:grid-cols-[minmax(0,1fr)_18rem] xl:grid-cols-[minmax(0,1fr)_20rem]">
               <div className="min-w-0">
-                <h3 className="mb-2 text-xs font-bold uppercase text-slate-500">Hand</h3>
+                <h3 className="mb-2 text-xs font-bold uppercase text-slate-500">{phase === "agenda_selection" ? "Choose Hidden Agenda" : "Hand"}</h3>
                 <div className="flex flex-nowrap gap-2 overflow-x-auto pb-2">
-                  {(focusedPlayer?.hand || []).map((itemId, index) => {
+                  {phase === "agenda_selection" ? (
+                    actions
+                      .filter((entry) => entry.type === "choose_agenda" && entry.player_id === focusedPlayer?.id)
+                      .map((entry) => (
+                        <ItemVisual
+                          key={entry.agenda_id}
+                          item={agendaLookup[normalize(entry.agenda_id)]}
+                          catalogs={catalogs}
+                          tagLookup={tagLookup}
+                          storageIconSrc={storageIconSrc}
+                          actionLabel="Keep this Agenda"
+                          onAction={() => performAction(entry)}
+                          disabled={busy}
+                        />
+                      ))
+                  ) : (focusedPlayer?.hand || []).map((itemId, index) => {
                     const plottingAction = actions.find((entry) => entry.type === "commit_card" && entry.source === "hand" && entry.index === index && entry.player_id === focusedPlayer.id);
                     const schemeActions = actions.filter((entry) => entry.type === "plotting_scheme" && entry.hand_index === index && entry.player_id === focusedPlayer.id);
                     return (
@@ -704,10 +725,13 @@ const GameRoomPage = () => {
                       </div>
                     );
                   })}
-                  {!focusedPlayer?.hand?.length ? <p className="border border-dashed border-slate-800 p-5 text-sm text-slate-600">Hand is empty.</p> : null}
+                  {phase === "agenda_selection" && focusedPlayer?.hidden_agenda_id ? (
+                    <p className="border border-emerald-900 bg-emerald-950/30 p-5 text-sm text-emerald-200">Agenda selected.</p>
+                  ) : null}
+                  {phase !== "agenda_selection" && !focusedPlayer?.hand?.length ? <p className="border border-dashed border-slate-800 p-5 text-sm text-slate-600">Hand is empty.</p> : null}
                 </div>
               </div>
-              <div>
+              {phase !== "agenda_selection" ? <div>
                 <h3 className="mb-2 text-xs font-bold uppercase text-slate-500">Scheme Slots</h3>
                 <div className="grid grid-cols-2 gap-2">
                   {(focusedPlayer?.scheme_slots || [null, null]).map((itemId, index) => {
@@ -721,7 +745,7 @@ const GameRoomPage = () => {
                     ) : <div key={index} className="flex aspect-[5/7] items-center justify-center border border-dashed border-slate-700 text-xs text-slate-600">Empty slot {index + 1}</div>;
                   })}
                 </div>
-              </div>
+              </div> : null}
             </div>
           </section>
         </section>

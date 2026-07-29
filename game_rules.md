@@ -26,11 +26,22 @@ The game ends immediately when any of the three Imperial Pillars reaches 0:
 * **Stability**
 * **Morale**
 
-When the game ends, all players reveal their Hidden Agendas.
+When the game ends, all players reveal their complete Hidden Agenda cards. Each
+Agenda contains:
 
-A player wins if their Hidden Agenda condition is satisfied at the moment of collapse.
+* a **Primary Legacy**, worth 4 points and mandatory;
+* a **Secondary Legacy**, worth 2 points;
+* a **Collapse Preference**, worth 2 points;
+* a **Forbidden Future**, which is a veto rather than a scoring objective.
 
-If multiple players satisfy their Agenda, the Agenda cards determine tie-breakers. If no Agenda-specific tie-breaker is available, the tied player with the most total cards in hand and Scheme Slots wins. If still tied, those players share the victory.
+A player is eligible to win only if their Primary Legacy is satisfied, their
+Forbidden Future is false, and they score at least 6 of the Agenda's 8 points.
+Agenda conditions are evaluated after resolving the effect that caused a Pillar
+to reach 0.
+
+If multiple players are eligible, the player with the highest Agenda score wins.
+If still tied, the tied player with the most total cards in hand and Scheme Slots
+wins. If still tied, those players share the victory.
 
 If no player satisfies their Hidden Agenda, all players lose.
 
@@ -126,6 +137,31 @@ Resources are global. No player owns them.
 Resources are spent to build Development cards or resolve Event cards.
 
 Unused resources are discarded during the Storage Phase unless stored by Cities or card effects.
+
+---
+
+## 3.5 Hidden Agenda Evaluation
+
+Hidden Agendas are prebuilt complete cards. Players never assemble objectives
+from separate modules during play.
+
+Agenda conditions may evaluate:
+
+* individual Tag counts or comparisons between Tags and Tag groups;
+* current production of a Resource;
+* Resource capacity, defined as current production plus stored Resources of that type;
+* the collapsed Pillar or highest surviving Pillar;
+* Plague, Global Unrest, and Fortified token counts;
+* combined Tag and token counts;
+* whether City Plague exceeds that City's Sanitary Tags;
+* the number and maximum value of selected scoring Tags.
+
+All conditions within one Agenda section must be satisfied together for that
+section to be satisfied. A true Forbidden Future prevents victory regardless of
+points.
+
+The supported condition vocabulary and initial Agenda design pool are documented
+in [agenda_system_spec.md](documentation/agenda_system_spec.md).
 
 ---
 
@@ -464,9 +500,15 @@ Recommended prototype deck composition:
 
 ## 7.4 Deal Hidden Agendas
 
-Deal 1 Hidden Agenda to each player.
+Shuffle the deck of complete Hidden Agenda cards and deal 2 face down to each
+player. Each player secretly keeps 1 as their Hidden Agenda. The unchosen Agenda
+is placed face down into a sealed out-of-game discard pile that no player may
+inspect.
 
-Players keep their Agenda secret until the Empire collapses.
+Players keep their chosen Agenda secret until the Empire collapses. Optional
+tabletop variants may instead deal 1 Agenda for faster setup, or deal 3 and let
+each player keep 1 for greater choice. The current digital game implements the
+standard two-card choice.
 
 ---
 

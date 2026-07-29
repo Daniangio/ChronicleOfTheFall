@@ -1,4 +1,6 @@
 import asyncio
+import json
+from pathlib import Path
 
 import pytest
 from fastapi import HTTPException
@@ -52,6 +54,39 @@ def build_test_session(database_url: str):
         future=True,
         expire_on_commit=False,
     )
+
+def agenda_data(**extra):
+    return {
+        "max_points": 8,
+        "win_threshold": 6,
+        "primary_mandatory": True,
+        "forbidden_is_veto": True,
+        "primary": {
+            "name": "Primary",
+            "points": 4,
+            "text": "Culture is present.",
+            "conditions": [{"type": "tag_count", "tag": "culture", "operator": "gte", "amount": 1}],
+        },
+        "secondary": {
+            "name": "Secondary",
+            "points": 2,
+            "text": "Labor production is present.",
+            "conditions": [{"type": "production", "resource": "labor", "operator": "gte", "amount": 1}],
+        },
+        "collapse": {
+            "name": "Collapse",
+            "points": 2,
+            "text": "Morale collapses.",
+            "conditions": [{"type": "collapsed_pillar", "pillar": "pillar-of-morale"}],
+        },
+        "forbidden": {
+            "name": "Forbidden",
+            "points": 0,
+            "text": "Military is highest.",
+            "conditions": [{"type": "tag_is_highest", "tag": "military"}],
+        },
+        **extra,
+    }
 
 
 def test_admin_can_list_update_and_audit_users(tmp_path):
@@ -374,7 +409,7 @@ def test_admin_can_create_update_and_delete_catalog_entries(tmp_path):
                     name="Naval Agenda",
                     category="agenda",
                     summary="Controls fleets and sea lanes.",
-                    data={"scope": "local"},
+                    data=agenda_data(scope="local"),
                 ),
                 _admin=admin,
                 db=db,
@@ -391,7 +426,7 @@ def test_admin_can_create_update_and_delete_catalog_entries(tmp_path):
                     name="Naval Power Agenda",
                     category="agenda",
                     summary="Controls fleets, ports, and sea lanes.",
-                    data={"scope": "global"},
+                    data=agenda_data(scope="global"),
                 ),
                 _admin=admin,
                 db=db,
@@ -408,7 +443,7 @@ def test_admin_can_create_update_and_delete_catalog_entries(tmp_path):
                     id="fleet-agenda",
                     name="Fleet Agenda",
                     category="agenda",
-                    data={},
+                    data=agenda_data(),
                 ),
                 _admin=admin,
                 db=db,
@@ -425,7 +460,7 @@ def test_admin_can_create_update_and_delete_catalog_entries(tmp_path):
                     id="",
                     name="Fleet Command Agenda",
                     category="agenda",
-                    data={},
+                    data=agenda_data(),
                 ),
                 _admin=admin,
                 db=db,
@@ -455,7 +490,7 @@ def test_admin_can_create_update_and_delete_catalog_entries(tmp_path):
                         id="occupied-id",
                         name="Fleet Command Agenda",
                         category="agenda",
-                        data={},
+                        data=agenda_data(),
                     ),
                     _admin=admin,
                     db=db,
@@ -490,7 +525,7 @@ def test_catalog_inspector_finds_cross_kind_id_conflicts(tmp_path):
                     id="shared-dynamic-id",
                     name="Shared Dynamic Id",
                     category="agenda",
-                    data={},
+                    data=agenda_data(),
                 ),
                 _admin=admin,
                 db=db,
@@ -577,6 +612,57 @@ def test_admin_can_export_and_import_catalog_entries(tmp_path):
         assert labor_after.category == "volatile"
 
 
+def test_curated_agenda_pool_is_uploadable(tmp_path):
+    agenda_path = Path(__file__).resolve().parents[2] / "catalog" / "content" / "agendas.json"
+    document = json.loads(agenda_path.read_text(encoding="utf-8"))
+    session_factory = build_test_session(f"sqlite:///{tmp_path / 'agenda_pool.db'}")
+
+    with session_factory() as db:
+        admin = ensure_user_bootstrap(
+            db,
+            create_registered_user(db, "admin@test.local", "verysecurepassword"),
+            force_admin=True,
+        )
+        result = asyncio.run(
+            admin_import_catalog(
+                AdminCatalogImportPayload(**document),
+                _admin=admin,
+                db=db,
+            )
+        )
+        agendas = asyncio.run(admin_list_agendas(_admin=admin, db=db))
+
+        assert result.created == 30
+        assert result.updated == 0
+        assert result.skipped == 0
+        assert len(agendas) == 30
+        assert {agenda.id for agenda in agendas} >= {"iron-regency", "last-archivists"}
+
+
+def test_generated_curated_bundle_is_uploadable(tmp_path):
+    bundle_path = Path(__file__).resolve().parents[2] / "catalog" / "chronicle-catalog-all.json"
+    document = json.loads(bundle_path.read_text(encoding="utf-8"))
+    session_factory = build_test_session(f"sqlite:///{tmp_path / 'curated_bundle.db'}")
+
+    with session_factory() as db:
+        admin = ensure_user_bootstrap(
+            db,
+            create_registered_user(db, "admin@test.local", "verysecurepassword"),
+            force_admin=True,
+        )
+        result = asyncio.run(
+            admin_import_catalog(
+                AdminCatalogImportPayload(**document),
+                _admin=admin,
+                db=db,
+            )
+        )
+
+        assert result.created == len(document["entries"])
+        assert result.updated == 0
+        assert result.skipped == 0
+
+
 def test_export_all_includes_every_catalog_admin_kind(tmp_path):
     session_factory = build_test_session(f"sqlite:///{tmp_path / 'catalog_export_all.db'}")
     with session_factory() as db:
@@ -620,7 +706,7 @@ def test_export_all_includes_every_catalog_admin_kind(tmp_path):
                 category="city",
                 data={"building_slots": 4},
             ),
-            "agendas": AdminCatalogEntryCreate(id="test-agenda", name="Test Agenda", category="agenda", data={}),
+            "agendas": AdminCatalogEntryCreate(id="test-agenda", name="Test Agenda", category="agenda", data=agenda_data()),
             "events": AdminCatalogEntryCreate(
                 id="test-event",
                 name="Test Event",
@@ -727,7 +813,7 @@ def test_catalog_import_skips_unknown_kinds_and_strips_image_payloads(tmp_path):
                             kind="agendas",
                             name="War Agenda",
                             category="agenda",
-                            data={"notes": "keep"},
+                            data=agenda_data(notes="keep"),
                         ),
                     ],
                 ),
@@ -745,7 +831,7 @@ def test_catalog_import_skips_unknown_kinds_and_strips_image_payloads(tmp_path):
 
         exported = asyncio.run(admin_export_catalog(kind="", _admin=admin, db=db))
         exported_by_id = {entry["id"]: entry for entry in exported["entries"]}
-        assert exported_by_id["war-agenda"]["data"] == {"notes": "keep"}
+        assert exported_by_id["war-agenda"]["data"]["notes"] == "keep"
 
 
 def test_ministries_are_loaded_from_repository_catalog(tmp_path):

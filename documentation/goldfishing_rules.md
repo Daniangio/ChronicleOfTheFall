@@ -13,7 +13,9 @@ digital implementation.
 - The Deck's incremental setup tiers form the Base Card Pool for the current
   player count.
 - Each player receives three random Base cards and two random Empire cards.
-- Each player receives one configured Hidden Agenda when enough Agenda cards exist.
+- The backend shuffles the complete Agenda catalog and deals two options to each
+  player. Agenda selection is parallel: each player keeps one, while the rejected
+  card goes to an uninspectable sealed discard.
 - The initial City enters play without consuming one of its own building slots.
 - Pillars use their configured starting values, with Treasury, Stability, and Morale
   defaulting to five when no Pillar catalog exists.
@@ -34,9 +36,10 @@ and submits one through `POST /api/game/rooms/{room_id}/actions`:
 }
 ```
 
-The engine supports Ministry drafting, Suspicion placement, Production, queued
-project resolution, anonymous commitments, reveal and placement, stalled-project
-voting, Crisis defense, resource storage, Scheme management, drawing, and cleanup.
+The engine supports Agenda selection, Ministry assignment, Suspicion placement,
+Production, parallel anonymous commitments, Docket ordering, reveal and
+placement, Edict and Crisis effects, resource storage, Scheme management,
+drawing, and cleanup.
 
 ## Catalog Data
 
@@ -110,6 +113,24 @@ Condition sources are `tag`, `resource`, or `pillar`; operators are `gt`, `gte`,
 `lt`, `lte`, and `eq`. Effects resolve in listed order, so an earlier resource
 effect can change whether a later condition is satisfied.
 
-Hidden Agendas use the same `conditions` shape and may set `condition_mode` to
-`all` (the default) or `any`. When a Pillar reaches zero, the backend reveals all
-Agendas and records every player whose Agenda is satisfied in `winner_player_ids`.
+Hidden Agendas are complete catalog cards with four sections:
+
+```json
+{
+  "max_points": 8,
+  "win_threshold": 6,
+  "primary_mandatory": true,
+  "forbidden_is_veto": true,
+  "primary": {"points": 4, "name": "...", "text": "...", "conditions": []},
+  "secondary": {"points": 2, "name": "...", "text": "...", "conditions": []},
+  "collapse": {"points": 2, "name": "...", "text": "...", "conditions": []},
+  "forbidden": {"points": 0, "name": "...", "text": "...", "conditions": []}
+}
+```
+
+Conditions within a section use AND semantics. On collapse, after the triggering
+effect finishes, the backend evaluates all four sections. Primary is mandatory,
+Forbidden is a veto, and at least six points are required. Eligible players are
+ranked by Agenda score, then by cards remaining in hand plus Scheme Slots; a
+remaining tie is shared. Results are exposed in `agenda_results` and winners in
+`winner_player_ids`.

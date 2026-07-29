@@ -51,6 +51,22 @@ DYNAMIC_CATALOG_KINDS: tuple[CatalogKind, ...] = tuple(
 )
 STATIC_CATALOG_ROOT = Path(__file__).resolve().parents[2] / "catalog" / "ingredients"
 HEX_COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
+AGENDA_CONDITION_TYPES = {
+    "tag_count",
+    "tag_compare",
+    "tag_sum_compare",
+    "production",
+    "capacity",
+    "collapsed_pillar",
+    "not_collapsed_pillar",
+    "highest_surviving_pillar",
+    "token_count",
+    "tag_plus_token_count",
+    "no_city_has_plague_exceeding_sanitary",
+    "distinct_tags_at_least",
+    "all_tags_at_most",
+    "tag_is_highest",
+}
 
 
 def normalize_catalog_id(value: str) -> str:
@@ -343,6 +359,9 @@ def _validate_catalog_data(
         _validate_event_effects(data.get("main_effects"))
         _validate_event_effects(data.get("alternative_effects"))
         return
+    if kind == "agendas":
+        _validate_agenda(data)
+        return
     if kind == "effect-icons":
         effect_type = str(data.get("effect_type") or "")
         valid_effects = static_effect_types()
@@ -431,6 +450,109 @@ def _validate_count_map(value: Any, field: str) -> None:
         raise ValueError(f"Card {field} must be an object of item counts.")
     if any(not str(item_id) or int(count) < 1 for item_id, count in value.items()):
         raise ValueError(f"Card {field} counts must be positive integers.")
+
+
+def _validate_agenda(data: dict[str, Any]) -> None:
+    if int(data.get("max_points") or 0) <= 0:
+        raise ValueError("Agenda max_points must be positive.")
+    win_threshold = int(data.get("win_threshold") or 0)
+    if win_threshold <= 0 or win_threshold > int(data["max_points"]):
+        raise ValueError("Agenda win_threshold must be between 1 and max_points.")
+    if data.get("primary_mandatory") is not True:
+        raise ValueError("Agenda Primary Legacy must be mandatory.")
+    if data.get("forbidden_is_veto") is not True:
+        raise ValueError("Agenda Forbidden Future must be a veto.")
+    ingredients = load_static_catalog_entries()
+    permanent_tag_ids = {
+        str(entry["id"])
+        for entry in ingredients
+        if entry["kind"] == "tags" and (entry.get("data") or {}).get("resource_type") == "permanent"
+    }
+    resource_ids = {
+        str(entry["id"])
+        for entry in ingredients
+        if entry["kind"] == "tags" and (entry.get("data") or {}).get("resource_type") == "volatile"
+    }
+    pillar_ids = {str(entry["id"]) for entry in ingredients if entry["kind"] == "pillars"}
+    expected_points = {"primary": 4, "secondary": 2, "collapse": 2, "forbidden": 0}
+    for section_name, points in expected_points.items():
+        section = data.get(section_name)
+        if not isinstance(section, dict):
+            raise ValueError(f"Agenda {section_name} section is required.")
+        if not str(section.get("name") or "").strip():
+            raise ValueError(f"Agenda {section_name} name is required.")
+        if int(section.get("points") or 0) != points:
+            raise ValueError(f"Agenda {section_name} must be worth {points} points.")
+        conditions = section.get("conditions")
+        if not isinstance(conditions, list) or not conditions:
+            raise ValueError(f"Agenda {section_name} requires at least one condition.")
+        for condition in conditions:
+            _validate_agenda_condition(
+                condition,
+                permanent_tag_ids=permanent_tag_ids,
+                resource_ids=resource_ids,
+                pillar_ids=pillar_ids,
+            )
+
+
+def _validate_agenda_condition(
+    condition: Any,
+    *,
+    permanent_tag_ids: set[str],
+    resource_ids: set[str],
+    pillar_ids: set[str],
+) -> None:
+    if not isinstance(condition, dict):
+        raise ValueError("Agenda conditions must be objects.")
+    condition_type = str(condition.get("type") or "")
+    if condition_type not in AGENDA_CONDITION_TYPES:
+        raise ValueError(f"Unsupported Agenda condition type: {condition_type or 'missing'}.")
+    comparison_types = {
+        "tag_count",
+        "tag_compare",
+        "tag_sum_compare",
+        "production",
+        "capacity",
+        "token_count",
+        "tag_plus_token_count",
+    }
+    if condition_type in comparison_types and condition.get("operator") not in {"gt", "gte", "lt", "lte", "eq"}:
+        raise ValueError(f"Agenda {condition_type} requires a valid comparison.")
+    if condition_type in {"tag_count", "tag_is_highest", "tag_plus_token_count"}:
+        if str(condition.get("tag") or "") not in permanent_tag_ids:
+            raise ValueError(f"Agenda {condition_type} must reference an existing permanent tag.")
+    if condition_type == "tag_compare" and (
+        str(condition.get("left") or "") not in permanent_tag_ids
+        or str(condition.get("right") or "") not in permanent_tag_ids
+    ):
+        raise ValueError("Agenda tag_compare must reference existing permanent tags.")
+    if condition_type == "tag_sum_compare" and (
+        not condition.get("left_tags") or not condition.get("right_tags")
+    ):
+        raise ValueError("Agenda tag_sum_compare requires left_tags and right_tags.")
+    if condition_type == "tag_sum_compare" and any(
+        str(tag_id) not in permanent_tag_ids
+        for tag_id in [*condition.get("left_tags", []), *condition.get("right_tags", [])]
+    ):
+        raise ValueError("Agenda tag_sum_compare must reference existing permanent tags.")
+    if condition_type in {"production", "capacity"} and str(condition.get("resource") or "") not in resource_ids:
+        raise ValueError(f"Agenda {condition_type} must reference an existing volatile resource.")
+    if (
+        condition_type in {"collapsed_pillar", "not_collapsed_pillar", "highest_surviving_pillar"}
+        and str(condition.get("pillar") or "") not in pillar_ids
+    ):
+        raise ValueError(f"Agenda {condition_type} must reference an existing Pillar.")
+    if condition_type in {"token_count", "tag_plus_token_count"}:
+        if str(condition.get("token") or "") not in {"plague", "global_unrest", "fortified"}:
+            raise ValueError(f"Agenda {condition_type} requires a supported token.")
+        if str(condition.get("scope") or "") != "empire":
+            raise ValueError(f"Agenda {condition_type} scope must be empire.")
+    if condition_type in {"distinct_tags_at_least", "all_tags_at_most"}:
+        tags = condition.get("tags")
+        if not isinstance(tags, list) or not tags:
+            raise ValueError(f"Agenda {condition_type} requires tags.")
+        if any(str(tag_id) not in permanent_tag_ids for tag_id in tags):
+            raise ValueError(f"Agenda {condition_type} must reference existing permanent tags.")
 
 
 def _validate_card_effects(value: Any, *, trigger: str) -> None:

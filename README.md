@@ -5,11 +5,11 @@ an empire whose collapse is inevitable. The current application provides the
 authenticated web shell, lobby, social systems, realtime chat, room lifecycle,
 and an admin console for preparing the game catalog.
 
-The first game-specific layer is a read-only Chronicle catalog exposed through
-admin subpages for tags, cards, minister roles, hidden agendas, and events.
-Those catalog endpoints are intentionally separated from the account and
-realtime services so persistence and creation workflows can be added next
-without mixing game rules into generic infrastructure.
+The admin console manages cards, Edicts, Crises, Hidden Agendas, decks, and
+Levels. Fixed game ingredients such as tags, resources, Ministries, Pillars,
+tokens, and effect icons are versioned in the repository and shown read-only.
+Goldfishing runs the Anonymous Council rules in the backend and exposes only
+legal actions to the React client.
 
 ## Stack
 
@@ -55,3 +55,11 @@ without mixing game rules into generic infrastructure.
 python -m pytest -q
 cd frontend && npm install && npm run build
 ```
+
+## Catalog Data
+
+- [`catalog/README.md`](catalog/README.md) explains fixed ingredients and the
+  curated starter content.
+- [`documentation/catalog_data_storage.md`](documentation/catalog_data_storage.md)
+  distinguishes repository JSON from live PostgreSQL and Redis data.
+- [`game_rules.md`](game_rules.md) is the current prototype rulebook.

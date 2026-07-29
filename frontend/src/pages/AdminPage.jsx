@@ -63,6 +63,37 @@ const emptyCatalogForm = {
   dataText: "{}",
 };
 
+const defaultAgendaData = {
+  max_points: 8,
+  win_threshold: 6,
+  primary_mandatory: true,
+  forbidden_is_veto: true,
+  primary: {
+    name: "Primary Legacy",
+    points: 4,
+    text: "",
+    conditions: [{ type: "tag_count", tag: "", operator: "gte", amount: 1 }],
+  },
+  secondary: {
+    name: "Secondary Legacy",
+    points: 2,
+    text: "",
+    conditions: [{ type: "tag_count", tag: "", operator: "gte", amount: 1 }],
+  },
+  collapse: {
+    name: "Collapse Preference",
+    points: 2,
+    text: "",
+    conditions: [{ type: "collapsed_pillar", pillar: "" }],
+  },
+  forbidden: {
+    name: "Forbidden Future",
+    points: 0,
+    text: "",
+    conditions: [{ type: "tag_is_highest", tag: "" }],
+  },
+};
+
 const parseDataText = (dataText) => {
   const parsed = JSON.parse(dataText || "{}");
   if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") {
@@ -1061,81 +1092,223 @@ const NumberField = ({ label, value, onChange }) => (
   </label>
 );
 
+const TextField = ({ label, value, onChange }) => (
+  <label className="block">
+    <span className="text-sm font-medium text-slate-300">{label}</span>
+    <input
+      type="text"
+      value={value || ""}
+      onChange={(event) => onChange(event.target.value)}
+      className="mt-2 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none focus:border-teal-400"
+    />
+  </label>
+);
+
+const agendaConditionOptions = [
+  ["tag_count", "Tag count"],
+  ["tag_compare", "Compare two tags"],
+  ["tag_sum_compare", "Compare tag groups"],
+  ["production", "Resource production"],
+  ["capacity", "Resource capacity"],
+  ["collapsed_pillar", "Collapsed Pillar"],
+  ["not_collapsed_pillar", "Pillar survives"],
+  ["highest_surviving_pillar", "Highest surviving Pillar"],
+  ["token_count", "Token count"],
+  ["tag_plus_token_count", "Tag plus token count"],
+  ["no_city_has_plague_exceeding_sanitary", "Plague does not exceed Sanitary"],
+  ["distinct_tags_at_least", "Distinct tags"],
+  ["all_tags_at_most", "All selected tags at most"],
+  ["tag_is_highest", "Tag is highest"],
+].map(([value, label]) => ({ value, label }));
+
+const comparisonOptions = [
+  { value: "gt", label: "More than" },
+  { value: "gte", label: "At least" },
+  { value: "lt", label: "Less than" },
+  { value: "lte", label: "At most" },
+  { value: "eq", label: "Exactly" },
+];
+
+const defaultAgendaCondition = (type) => {
+  const defaults = {
+    tag_count: { tag: "", operator: "gte", amount: 1 },
+    tag_compare: { left: "", operator: "gt", right: "" },
+    tag_sum_compare: { left_tags: [], operator: "gt", right_tags: [] },
+    production: { resource: "", operator: "gte", amount: 1 },
+    capacity: { resource: "", operator: "gte", amount: 1 },
+    collapsed_pillar: { pillar: "" },
+    not_collapsed_pillar: { pillar: "" },
+    highest_surviving_pillar: { pillar: "" },
+    token_count: { token: "plague", scope: "empire", operator: "gte", amount: 1 },
+    tag_plus_token_count: { tag: "", token: "fortified", scope: "empire", operator: "gte", amount: 1 },
+    no_city_has_plague_exceeding_sanitary: {},
+    distinct_tags_at_least: { tags: [], minimum_distinct: 4, minimum_each: 1 },
+    all_tags_at_most: { tags: [], amount: 3 },
+    tag_is_highest: { tag: "" },
+  };
+  return { type, ...(defaults[type] || {}) };
+};
+
+const AgendaConditionFields = ({ condition, onChange, onReplace, tagEntries, pillarEntries }) => {
+  const conditionType = condition.type || "tag_count";
+  const resources = volatileResourceTags(tagEntries);
+  const tags = permanentOnlyTags(tagEntries);
+  const tagOptions = [{ value: "", label: "Select tag" }, ...tags.map((tag) => ({ value: tag.id, label: tag.name }))];
+  const resourceOptions = [{ value: "", label: "Select resource" }, ...resources.map((tag) => ({ value: tag.id, label: tag.name }))];
+  const pillarOptions = [{ value: "", label: "Select Pillar" }, ...pillarEntries.map((pillar) => ({ value: pillar.id, label: pillar.name }))];
+  const tokenOptions = [
+    { value: "plague", label: "Plague" },
+    { value: "global_unrest", label: "Global Unrest" },
+    { value: "fortified", label: "Fortified" },
+  ];
+  const toggleTag = (field, tagId) => {
+    const current = Array.isArray(condition[field]) ? condition[field] : [];
+    onChange({
+      [field]: current.includes(tagId)
+        ? current.filter((item) => item !== tagId)
+        : [...current, tagId],
+    });
+  };
+  const comparisonAndAmount = (
+    <>
+      <SelectField label="Comparison" value={condition.operator || "gte"} options={comparisonOptions} onChange={(operator) => onChange({ operator })} />
+      <NumberField label="Amount" value={condition.amount ?? 1} onChange={(amount) => onChange({ amount })} />
+    </>
+  );
+
+  return (
+    <div className="grid gap-3 sm:grid-cols-2">
+      <SelectField
+        label="Condition"
+        value={conditionType}
+        options={agendaConditionOptions}
+        onChange={(type) => onReplace(defaultAgendaCondition(type))}
+      />
+      {conditionType === "tag_count" ? (
+        <>
+          <SelectField label="Tag" value={condition.tag || ""} options={tagOptions} onChange={(tag) => onChange({ tag })} />
+          {comparisonAndAmount}
+        </>
+      ) : conditionType === "tag_compare" ? (
+        <>
+          <SelectField label="Left Tag" value={condition.left || ""} options={tagOptions} onChange={(left) => onChange({ left })} />
+          <SelectField label="Comparison" value={condition.operator || "gt"} options={comparisonOptions} onChange={(operator) => onChange({ operator })} />
+          <SelectField label="Right Tag" value={condition.right || ""} options={tagOptions} onChange={(right) => onChange({ right })} />
+        </>
+      ) : conditionType === "tag_sum_compare" ? (
+        <div className="space-y-3 sm:col-span-2">
+          <TagToggleGroup label="Left Tags" tags={tags} selectedIds={condition.left_tags || []} onToggle={(tagId) => toggleTag("left_tags", tagId)} />
+          <SelectField label="Comparison" value={condition.operator || "gt"} options={comparisonOptions} onChange={(operator) => onChange({ operator })} />
+          <TagToggleGroup label="Right Tags" tags={tags} selectedIds={condition.right_tags || []} onToggle={(tagId) => toggleTag("right_tags", tagId)} />
+        </div>
+      ) : ["production", "capacity"].includes(conditionType) ? (
+        <>
+          <SelectField label="Resource" value={condition.resource || ""} options={resourceOptions} onChange={(resource) => onChange({ resource })} />
+          {comparisonAndAmount}
+        </>
+      ) : ["collapsed_pillar", "not_collapsed_pillar", "highest_surviving_pillar"].includes(conditionType) ? (
+        <SelectField label="Pillar" value={condition.pillar || ""} options={pillarOptions} onChange={(pillar) => onChange({ pillar })} />
+      ) : conditionType === "token_count" ? (
+        <>
+          <SelectField label="Token" value={condition.token || "plague"} options={tokenOptions} onChange={(token) => onChange({ token, scope: "empire" })} />
+          {comparisonAndAmount}
+        </>
+      ) : conditionType === "tag_plus_token_count" ? (
+        <>
+          <SelectField label="Tag" value={condition.tag || ""} options={tagOptions} onChange={(tag) => onChange({ tag })} />
+          <SelectField label="Token" value={condition.token || "fortified"} options={tokenOptions} onChange={(token) => onChange({ token, scope: "empire" })} />
+          {comparisonAndAmount}
+        </>
+      ) : conditionType === "distinct_tags_at_least" ? (
+        <div className="space-y-3 sm:col-span-2">
+          <TagToggleGroup label="Eligible Tags" tags={tags} selectedIds={condition.tags || []} onToggle={(tagId) => toggleTag("tags", tagId)} />
+          <div className="grid gap-3 sm:grid-cols-2">
+            <NumberField label="Minimum Distinct" value={condition.minimum_distinct ?? 4} onChange={(minimum_distinct) => onChange({ minimum_distinct })} />
+            <NumberField label="Minimum Each" value={condition.minimum_each ?? 1} onChange={(minimum_each) => onChange({ minimum_each })} />
+          </div>
+        </div>
+      ) : conditionType === "all_tags_at_most" ? (
+        <div className="space-y-3 sm:col-span-2">
+          <TagToggleGroup label="Tags" tags={tags} selectedIds={condition.tags || []} onToggle={(tagId) => toggleTag("tags", tagId)} />
+          <NumberField label="Maximum Each" value={condition.amount ?? 3} onChange={(amount) => onChange({ amount })} />
+        </div>
+      ) : conditionType === "tag_is_highest" ? (
+        <SelectField label="Tag" value={condition.tag || ""} options={tagOptions} onChange={(tag) => onChange({ tag })} />
+      ) : null}
+    </div>
+  );
+};
+
 const AgendaGuidedFields = ({ data, setField, tagEntries, pillarEntries }) => {
-  const conditions = Array.isArray(data.conditions) ? data.conditions : [];
-  const resourceTags = volatileResourceTags(tagEntries);
-  const permanentTags = permanentOnlyTags(tagEntries);
-  const updateCondition = (index, patch) => {
-    const next = [...conditions];
-    next[index] = { ...next[index], ...patch };
-    setField("conditions", next);
+  const sectionDefinitions = [
+    ["primary", "Primary Legacy", 4],
+    ["secondary", "Secondary Legacy", 2],
+    ["collapse", "Collapse Preference", 2],
+    ["forbidden", "Forbidden Future", 0],
+  ];
+  const updateSection = (sectionKey, patch) => {
+    setField(sectionKey, { ...(data[sectionKey] || {}), ...patch });
   };
   return (
     <>
-      <SelectField
-        label="Condition Mode"
-        value={data.condition_mode || "all"}
-        options={[
-          { value: "all", label: "All conditions" },
-          { value: "any", label: "Any condition" },
-        ]}
-        onChange={(value) => setField("condition_mode", value)}
-      />
-      <div className="space-y-3">
-        <div className="flex items-center justify-between gap-3">
-          <h4 className="text-sm font-semibold text-slate-300">Victory Conditions</h4>
-          <button
-            className="rounded-md border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800"
-            onClick={() => setField("conditions", [...conditions, { source_type: "tag", source_id: "", operator: "gte", amount: 1 }])}
-            type="button"
-          >
-            Add condition
-          </button>
-        </div>
-        {conditions.map((condition, index) => {
-          const options = condition.source_type === "resource"
-            ? resourceTags
-            : condition.source_type === "pillar"
-              ? pillarEntries
-              : permanentTags;
-          return (
-            <div key={index} className="grid gap-2 rounded-md border border-slate-800 bg-slate-950 p-3 sm:grid-cols-[9rem_1fr_9rem_7rem_auto]">
-              <SelectField
-                label="Measure"
-                value={condition.source_type || "tag"}
-                options={[
-                  { value: "tag", label: "Empire tag" },
-                  { value: "resource", label: "Resource" },
-                  { value: "pillar", label: "Pillar" },
-                ]}
-                onChange={(sourceType) => updateCondition(index, { source_type: sourceType, source_id: "" })}
-              />
-              <SelectField
-                label="Item"
-                value={condition.source_id || ""}
-                options={[{ value: "", label: "Select item" }, ...options.map((entry) => ({ value: entry.id, label: entry.name }))]}
-                onChange={(sourceId) => updateCondition(index, { source_id: sourceId })}
-              />
-              <SelectField
-                label="Comparison"
-                value={condition.operator || "gte"}
-                options={[
-                  { value: "gt", label: "More than" },
-                  { value: "gte", label: "At least" },
-                  { value: "lt", label: "Less than" },
-                  { value: "lte", label: "At most" },
-                  { value: "eq", label: "Exactly" },
-                ]}
-                onChange={(operator) => updateCondition(index, { operator })}
-              />
-              <NumberField label="Value" value={condition.amount ?? 1} onChange={(amount) => updateCondition(index, { amount })} />
-              <button className="mt-7 text-xs font-semibold text-rose-300 hover:text-rose-200" onClick={() => setField("conditions", conditions.filter((_, itemIndex) => itemIndex !== index))} type="button">
-                Remove
+      <div className="grid gap-3 sm:grid-cols-2">
+        <NumberField label="Maximum Points" value={data.max_points ?? 8} onChange={(value) => setField("max_points", Math.max(1, value))} />
+        <NumberField label="Win Threshold" value={data.win_threshold ?? 6} onChange={(value) => setField("win_threshold", Math.max(1, value))} />
+      </div>
+      {sectionDefinitions.map(([sectionKey, label, points]) => {
+        const section = data[sectionKey] || { name: "", text: "", points, conditions: [] };
+        const conditions = Array.isArray(section.conditions) ? section.conditions : [];
+        return (
+          <section key={sectionKey} className="space-y-3 rounded-md border border-slate-800 bg-slate-950 p-3">
+            <div className="flex items-center justify-between gap-3">
+              <h4 className="text-sm font-semibold text-slate-200">{label} · {points} points</h4>
+              <button
+                className="rounded-md border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800"
+                onClick={() => updateSection(sectionKey, {
+                  points,
+                  conditions: [...conditions, defaultAgendaCondition("tag_count")],
+                })}
+                type="button"
+              >
+                Add condition
               </button>
             </div>
-          );
-        })}
-      </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <TextField label="Objective Name" value={section.name || ""} onChange={(name) => updateSection(sectionKey, { name, points })} />
+              <TextField label="Card Text" value={section.text || ""} onChange={(text) => updateSection(sectionKey, { text, points })} />
+            </div>
+            {conditions.map((condition, index) => (
+              <div key={index} className="rounded-md border border-slate-800 bg-slate-900 p-3">
+                <AgendaConditionFields
+                  condition={condition}
+                  tagEntries={tagEntries}
+                  pillarEntries={pillarEntries}
+                  onChange={(patch) => {
+                    const next = [...conditions];
+                    next[index] = { ...next[index], ...patch };
+                    updateSection(sectionKey, { points, conditions: next });
+                  }}
+                  onReplace={(replacement) => {
+                    const next = [...conditions];
+                    next[index] = replacement;
+                    updateSection(sectionKey, { points, conditions: next });
+                  }}
+                />
+                <button
+                  className="mt-3 text-xs font-semibold text-rose-300 hover:text-rose-200"
+                  onClick={() => updateSection(sectionKey, {
+                    points,
+                    conditions: conditions.filter((_, conditionIndex) => conditionIndex !== index),
+                  })}
+                  type="button"
+                >
+                  Remove condition
+                </button>
+              </div>
+            ))}
+          </section>
+        );
+      })}
     </>
   );
 };
@@ -2427,6 +2600,8 @@ const AdminPage = () => {
               ? "deck"
             : activeCatalogKind === "levels"
               ? "level"
+            : activeCatalogKind === "agendas"
+              ? "hidden_agenda"
             : activeCatalogKind === "events"
               ? "event"
             : activeCatalogKind === "pillars"
@@ -2462,6 +2637,8 @@ const AdminPage = () => {
               ? stringifyData({
                   infrastructure_resources: [],
                 })
+              : activeCatalogKind === "agendas"
+                ? stringifyData(defaultAgendaData)
               : activeCatalogKind === "events"
                 ? stringifyData({ subtype: activeEventSubtype, requirements: [], main_effects: [], alternative_effects: [] })
               : activeCatalogKind === "pillars"

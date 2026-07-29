@@ -1,625 +1,10 @@
 {
   "version": 1,
-  "kind": "all",
+  "kind": "agendas",
   "catalog_kinds": [
-    "cards",
-    "events",
-    "agendas",
-    "decks",
-    "levels"
+    "agendas"
   ],
   "entries": [
-    {
-      "id": "peasant-village-culture",
-      "name": "Peasant Village",
-      "kind": "cards",
-      "category": "structure",
-      "summary": "",
-      "color": null,
-      "data": {
-        "required_tags": {},
-        "cost": {
-          "labor": 2,
-          "food": 2,
-          "material": 1
-        },
-        "tags": {},
-        "production": {
-          "labor": 2
-        },
-        "on_build_effects": [],
-        "persistent_effects": []
-      }
-    },
-    {
-      "id": "barracks-unrest",
-      "name": "Barracks",
-      "kind": "cards",
-      "category": "structure",
-      "summary": "",
-      "color": null,
-      "data": {
-        "required_tags": {},
-        "cost": {
-          "labor": 1,
-          "food": 1,
-          "material": 1
-        },
-        "tags": {
-          "military": 1
-        },
-        "production": {},
-        "on_build_effects": [],
-        "persistent_effects": []
-      }
-    },
-    {
-      "id": "capital",
-      "name": "Capital",
-      "kind": "cards",
-      "category": "city",
-      "summary": "Capital of the Empire. This can be the starting City.",
-      "color": null,
-      "data": {
-        "required_tags": {},
-        "cost": {},
-        "tags": {},
-        "production": {
-          "labor": 2
-        },
-        "on_build_effects": [],
-        "persistent_effects": [],
-        "building_slots": 7
-      }
-    },
-    {
-      "id": "farm-industry",
-      "name": "Farm",
-      "kind": "cards",
-      "category": "structure",
-      "summary": "Basic project that adds Food.",
-      "color": null,
-      "data": {
-        "required_tags": {},
-        "cost": {
-          "labor": 1
-        },
-        "tags": {},
-        "production": {
-          "food": 1
-        },
-        "on_build_effects": [],
-        "persistent_effects": []
-      }
-    },
-    {
-      "id": "farm-unrest",
-      "name": "Farm",
-      "kind": "cards",
-      "category": "structure",
-      "summary": "",
-      "color": null,
-      "data": {
-        "required_tags": {},
-        "cost": {
-          "labor": 1
-        },
-        "tags": {},
-        "production": {
-          "food": 1
-        },
-        "on_build_effects": [],
-        "persistent_effects": []
-      }
-    },
-    {
-      "id": "fortified-manor-military",
-      "name": "Fortified Manor",
-      "kind": "cards",
-      "category": "structure",
-      "summary": "",
-      "color": null,
-      "data": {
-        "required_tags": {},
-        "cost": {
-          "labor": 3,
-          "food": 2,
-          "material": 2
-        },
-        "tags": {
-          "military": 1
-        },
-        "production": {
-          "wealth": 1
-        },
-        "on_build_effects": [],
-        "persistent_effects": []
-      }
-    },
-    {
-      "id": "grand-garrison-military",
-      "name": "Grand Garrison",
-      "kind": "cards",
-      "category": "structure",
-      "summary": "",
-      "color": null,
-      "data": {
-        "required_tags": {
-          "military": 1,
-          "industry": 1
-        },
-        "cost": {
-          "labor": 2,
-          "material": 3,
-          "food": 2
-        },
-        "tags": {
-          "military": 2
-        },
-        "production": {},
-        "on_build_effects": [],
-        "persistent_effects": []
-      }
-    },
-    {
-      "id": "manor-unrest",
-      "name": "Manor",
-      "kind": "cards",
-      "category": "structure",
-      "summary": "",
-      "color": null,
-      "data": {
-        "required_tags": {},
-        "cost": {
-          "labor": 2,
-          "material": 1,
-          "food": 2
-        },
-        "tags": {},
-        "production": {
-          "wealth": 1
-        },
-        "on_build_effects": [],
-        "persistent_effects": []
-      }
-    },
-    {
-      "id": "market-hall-culture",
-      "name": "Market Hall",
-      "kind": "cards",
-      "category": "structure",
-      "summary": "",
-      "color": null,
-      "data": {
-        "required_tags": {},
-        "cost": {
-          "labor": 2,
-          "food": 4,
-          "material": 1
-        },
-        "tags": {},
-        "production": {
-          "food": 1,
-          "wealth": 1
-        },
-        "on_build_effects": [],
-        "persistent_effects": []
-      }
-    },
-    {
-      "id": "monastery-culture",
-      "name": "Monastery",
-      "kind": "cards",
-      "category": "structure",
-      "summary": "",
-      "color": null,
-      "data": {
-        "required_tags": {
-          "faith": 1
-        },
-        "cost": {
-          "material": 1,
-          "labor": 2,
-          "wealth": 3,
-          "food": 2
-        },
-        "tags": {
-          "faith": 1,
-          "culture": 1
-        },
-        "production": {
-          "labor": 1,
-          "favor": 1,
-          "food": 1
-        },
-        "on_build_effects": [],
-        "persistent_effects": []
-      }
-    },
-    {
-      "id": "mountain-village",
-      "name": "Mountain Village",
-      "kind": "cards",
-      "category": "city",
-      "summary": "Small remote Village in the mountains.",
-      "color": null,
-      "data": {
-        "required_tags": {},
-        "cost": {
-          "labor": 2,
-          "material": 2,
-          "influence": 1
-        },
-        "tags": {},
-        "production": {
-          "food": 1
-        },
-        "on_build_effects": [],
-        "persistent_effects": [],
-        "building_slots": 4
-      }
-    },
-    {
-      "id": "peasant-home-military",
-      "name": "Peasant Home",
-      "kind": "cards",
-      "category": "structure",
-      "summary": "",
-      "color": null,
-      "data": {
-        "required_tags": {},
-        "cost": {
-          "labor": 1
-        },
-        "tags": {},
-        "production": {
-          "labor": 1
-        },
-        "on_build_effects": [],
-        "persistent_effects": []
-      }
-    },
-    {
-      "id": "peasant-home-unrest",
-      "name": "Peasant Home",
-      "kind": "cards",
-      "category": "structure",
-      "summary": "",
-      "color": null,
-      "data": {
-        "required_tags": {},
-        "cost": {
-          "labor": 1
-        },
-        "tags": {},
-        "production": {
-          "labor": 1
-        },
-        "on_build_effects": [],
-        "persistent_effects": []
-      }
-    },
-    {
-      "id": "scriptorium",
-      "name": "Scriptorium",
-      "kind": "cards",
-      "category": "structure",
-      "summary": "",
-      "color": null,
-      "data": {
-        "required_tags": {
-          "faith": 1
-        },
-        "cost": {
-          "favor": 1,
-          "labor": 1,
-          "wealth": 2,
-          "material": 1
-        },
-        "tags": {
-          "science": 1
-        },
-        "production": {
-          "knowledge": 1
-        },
-        "on_build_effects": [],
-        "persistent_effects": []
-      }
-    },
-    {
-      "id": "stone-quarry-industry",
-      "name": "Stone Quarry",
-      "kind": "cards",
-      "category": "structure",
-      "summary": "",
-      "color": null,
-      "data": {
-        "required_tags": {},
-        "cost": {
-          "labor": 2,
-          "food": 1
-        },
-        "tags": {
-          "industry": 1
-        },
-        "production": {
-          "material": 1
-        },
-        "on_build_effects": [],
-        "persistent_effects": []
-      }
-    },
-    {
-      "id": "temple-culture",
-      "name": "Temple",
-      "kind": "cards",
-      "category": "structure",
-      "summary": "",
-      "color": null,
-      "data": {
-        "required_tags": {
-          "faith": 1
-        },
-        "cost": {
-          "labor": 2,
-          "material": 1,
-          "food": 2,
-          "wealth": 3
-        },
-        "tags": {
-          "culture": 1,
-          "faith": 1
-        },
-        "production": {
-          "favor": 1,
-          "wealth": 1
-        },
-        "on_build_effects": [],
-        "persistent_effects": []
-      }
-    },
-    {
-      "id": "votive-chapel-faith",
-      "name": "Votive Chapel",
-      "kind": "cards",
-      "category": "structure",
-      "summary": "",
-      "color": null,
-      "data": {
-        "required_tags": {},
-        "cost": {
-          "material": 1,
-          "labor": 2,
-          "wealth": 1,
-          "food": 1
-        },
-        "tags": {
-          "faith": 1
-        },
-        "production": {},
-        "on_build_effects": [],
-        "persistent_effects": []
-      }
-    },
-    {
-      "id": "woodcutter-industry",
-      "name": "Woodcutter",
-      "kind": "cards",
-      "category": "structure",
-      "summary": "",
-      "color": null,
-      "data": {
-        "required_tags": {},
-        "cost": {
-          "food": 2,
-          "labor": 1
-        },
-        "tags": {
-          "industry": 1
-        },
-        "production": {
-          "material": 1
-        },
-        "on_build_effects": [],
-        "persistent_effects": []
-      }
-    },
-    {
-      "id": "earthquake",
-      "name": "Earthquake",
-      "kind": "events",
-      "category": "event",
-      "summary": "A powerful earthquake afflicts the Empire",
-      "color": null,
-      "data": {
-        "subtype": "crisis",
-        "ministry_id": "minister-of-infrastructure",
-        "requirements": [
-          {
-            "type": "tag",
-            "item_id": "industry",
-            "amount": 4
-          }
-        ],
-        "main_effects": [],
-        "alternative_effects": [
-          {
-            "effect_type": "destroy_building",
-            "payload": {
-              "amount": 1
-            }
-          },
-          {
-            "effect_type": "modify_pillar",
-            "payload": {
-              "pillar_id": "pillar-of-stability",
-              "amount": -1
-            },
-            "condition": {
-              "source_type": "tag",
-              "source_id": "unrest",
-              "operator": "gte",
-              "amount": 2
-            }
-          }
-        ]
-      }
-    },
-    {
-      "id": "barbarian-horde",
-      "name": "The Barbarian Horde",
-      "kind": "events",
-      "category": "event",
-      "summary": "A military invasion tests the Empire's permanent defenses.",
-      "color": null,
-      "data": {
-        "subtype": "crisis",
-        "ministry_id": "minister-of-war",
-        "requirements": [
-          {
-            "type": "tag",
-            "item_id": "military",
-            "amount": 4
-          }
-        ],
-        "main_effects": [],
-        "alternative_effects": [
-          {
-            "effect_type": "modify_pillar",
-            "payload": {
-              "pillar_id": "pillar-of-stability",
-              "amount": -1
-            }
-          },
-          {
-            "effect_type": "destroy_building",
-            "payload": {
-              "amount": 1,
-              "tag_id": "faith"
-            }
-          },
-          {
-            "effect_type": "modify_pillar",
-            "payload": {
-              "pillar_id": "pillar-of-morale",
-              "amount": -2
-            },
-            "condition": {
-              "source_type": "tag",
-              "source_id": "unrest",
-              "operator": "gte",
-              "amount": 3
-            }
-          }
-        ]
-      }
-    },
-    {
-      "id": "crimson-plague",
-      "name": "The Crimson Plague",
-      "kind": "events",
-      "category": "event",
-      "summary": "Disease punishes weak public health and low food reserves.",
-      "color": null,
-      "data": {
-        "subtype": "crisis",
-        "ministry_id": "minister-of-health-and-harvest",
-        "requirements": [
-          {
-            "type": "tag",
-            "item_id": "sanitary",
-            "amount": 3
-          }
-        ],
-        "main_effects": [
-          {
-            "effect_type": "modify_pillar",
-            "payload": {
-              "pillar_id": "pillar-of-stability",
-              "amount": 1
-            }
-          }
-        ],
-        "alternative_effects": [
-          {
-            "effect_type": "modify_pillar",
-            "payload": {
-              "pillar_id": "pillar-of-stability",
-              "amount": -1
-            }
-          },
-          {
-            "effect_type": "discard_cards",
-            "payload": {
-              "amount": 1
-            }
-          },
-          {
-            "effect_type": "modify_pillar",
-            "payload": {
-              "pillar_id": "pillar-of-morale",
-              "amount": -1
-            },
-            "condition": {
-              "source_type": "tag",
-              "source_id": "unrest",
-              "operator": "gte",
-              "amount": 2
-            }
-          }
-        ]
-      }
-    },
-    {
-      "id": "trade-embargo",
-      "name": "Trade Embargo",
-      "kind": "events",
-      "category": "event",
-      "summary": "Diplomatic isolation freezes commercial production.",
-      "color": null,
-      "data": {
-        "subtype": "crisis",
-        "ministry_id": "minister-of-state",
-        "requirements": [
-          {
-            "type": "tag",
-            "item_id": "diplomacy",
-            "amount": 2
-          }
-        ],
-        "main_effects": [
-          {
-            "effect_type": "modify_pillar",
-            "payload": {
-              "pillar_id": "pillar-of-treasury",
-              "amount": 1
-            }
-          }
-        ],
-        "alternative_effects": [
-          {
-            "effect_type": "modify_pillar",
-            "payload": {
-              "pillar_id": "pillar-of-treasury",
-              "amount": -1
-            }
-          },
-          {
-            "effect_type": "modify_pillar",
-            "payload": {
-              "pillar_id": "pillar-of-treasury",
-              "amount": -1
-            },
-            "condition": {
-              "source_type": "tag",
-              "source_id": "unrest",
-              "operator": "gte",
-              "amount": 2
-            }
-          }
-        ]
-      }
-    },
     {
       "id": "iron-regency",
       "name": "The Iron Regency",
@@ -635,7 +20,7 @@
         "primary": {
           "name": "Martial Legacy",
           "points": 4,
-          "text": "Military tags plus Fortified tokens \u2265 4.",
+          "text": "Military tags plus Fortified tokens ≥ 4.",
           "conditions": [
             {
               "type": "tag_plus_token_count",
@@ -650,7 +35,7 @@
         "secondary": {
           "name": "Industrial Base",
           "points": 2,
-          "text": "Industry \u2265 2.",
+          "text": "Industry ≥ 2.",
           "conditions": [
             {
               "type": "tag_count",
@@ -702,7 +87,7 @@
         "primary": {
           "name": "Martial Legacy",
           "points": 4,
-          "text": "Military tags plus Fortified tokens \u2265 4.",
+          "text": "Military tags plus Fortified tokens ≥ 4.",
           "conditions": [
             {
               "type": "tag_plus_token_count",
@@ -770,7 +155,7 @@
         "primary": {
           "name": "Industrial Legacy",
           "points": 4,
-          "text": "Industry \u2265 3 and Material production \u2265 2.",
+          "text": "Industry ≥ 3 and Material production ≥ 2.",
           "conditions": [
             {
               "type": "tag_count",
@@ -789,7 +174,7 @@
         "secondary": {
           "name": "Armed Order",
           "points": 2,
-          "text": "Military \u2265 2.",
+          "text": "Military ≥ 2.",
           "conditions": [
             {
               "type": "tag_count",
@@ -839,7 +224,7 @@
         "primary": {
           "name": "Diplomatic Legacy",
           "points": 4,
-          "text": "Diplomacy \u2265 2 and Influence production \u2265 1.",
+          "text": "Diplomacy ≥ 2 and Influence production ≥ 1.",
           "conditions": [
             {
               "type": "tag_count",
@@ -858,7 +243,7 @@
         "secondary": {
           "name": "Commercial Surplus",
           "points": 2,
-          "text": "Wealth production \u2265 2.",
+          "text": "Wealth production ≥ 2.",
           "conditions": [
             {
               "type": "production",
@@ -908,7 +293,7 @@
         "primary": {
           "name": "Diplomatic Legacy",
           "points": 4,
-          "text": "Diplomacy \u2265 2 and Influence production \u2265 1.",
+          "text": "Diplomacy ≥ 2 and Influence production ≥ 1.",
           "conditions": [
             {
               "type": "tag_count",
@@ -927,7 +312,7 @@
         "secondary": {
           "name": "Cultural Memory",
           "points": 2,
-          "text": "Culture \u2265 2.",
+          "text": "Culture ≥ 2.",
           "conditions": [
             {
               "type": "tag_count",
@@ -977,7 +362,7 @@
         "primary": {
           "name": "Scholarly Legacy",
           "points": 4,
-          "text": "Science \u2265 2 and Knowledge capacity \u2265 1.",
+          "text": "Science ≥ 2 and Knowledge capacity ≥ 1.",
           "conditions": [
             {
               "type": "tag_count",
@@ -996,7 +381,7 @@
         "secondary": {
           "name": "Cultural Memory",
           "points": 2,
-          "text": "Culture \u2265 2.",
+          "text": "Culture ≥ 2.",
           "conditions": [
             {
               "type": "tag_count",
@@ -1048,7 +433,7 @@
         "primary": {
           "name": "Scholarly Legacy",
           "points": 4,
-          "text": "Science \u2265 2 and Knowledge capacity \u2265 1.",
+          "text": "Science ≥ 2 and Knowledge capacity ≥ 1.",
           "conditions": [
             {
               "type": "tag_count",
@@ -1067,7 +452,7 @@
         "secondary": {
           "name": "Foreign Channels",
           "points": 2,
-          "text": "Diplomacy \u2265 1.",
+          "text": "Diplomacy ≥ 1.",
           "conditions": [
             {
               "type": "tag_count",
@@ -1119,7 +504,7 @@
         "primary": {
           "name": "Sacred Legacy",
           "points": 4,
-          "text": "Faith \u2265 3 and Favor production \u2265 2.",
+          "text": "Faith ≥ 3 and Favor production ≥ 2.",
           "conditions": [
             {
               "type": "tag_count",
@@ -1138,7 +523,7 @@
         "secondary": {
           "name": "Public Health",
           "points": 2,
-          "text": "Sanitary \u2265 2.",
+          "text": "Sanitary ≥ 2.",
           "conditions": [
             {
               "type": "tag_count",
@@ -1190,7 +575,7 @@
         "primary": {
           "name": "Sacred Legacy",
           "points": 4,
-          "text": "Faith \u2265 3 and Favor production \u2265 2.",
+          "text": "Faith ≥ 3 and Favor production ≥ 2.",
           "conditions": [
             {
               "type": "tag_count",
@@ -1209,7 +594,7 @@
         "secondary": {
           "name": "Commercial Surplus",
           "points": 2,
-          "text": "Wealth production \u2265 2.",
+          "text": "Wealth production ≥ 2.",
           "conditions": [
             {
               "type": "production",
@@ -1261,7 +646,7 @@
         "primary": {
           "name": "Sanitary Legacy",
           "points": 4,
-          "text": "Sanitary \u2265 3 and no City has Plague greater than Sanitary.",
+          "text": "Sanitary ≥ 3 and no City has Plague greater than Sanitary.",
           "conditions": [
             {
               "type": "tag_count",
@@ -1277,7 +662,7 @@
         "secondary": {
           "name": "Public Faith",
           "points": 2,
-          "text": "Faith \u2265 2.",
+          "text": "Faith ≥ 2.",
           "conditions": [
             {
               "type": "tag_count",
@@ -1330,7 +715,7 @@
         "primary": {
           "name": "Sanitary Legacy",
           "points": 4,
-          "text": "Sanitary \u2265 3 and no City has Plague greater than Sanitary.",
+          "text": "Sanitary ≥ 3 and no City has Plague greater than Sanitary.",
           "conditions": [
             {
               "type": "tag_count",
@@ -1346,7 +731,7 @@
         "secondary": {
           "name": "Cultural Memory",
           "points": 2,
-          "text": "Culture \u2265 2.",
+          "text": "Culture ≥ 2.",
           "conditions": [
             {
               "type": "tag_count",
@@ -1404,7 +789,7 @@
         "primary": {
           "name": "Civic Legacy",
           "points": 4,
-          "text": "Culture \u2265 3.",
+          "text": "Culture ≥ 3.",
           "conditions": [
             {
               "type": "tag_count",
@@ -1417,7 +802,7 @@
         "secondary": {
           "name": "Foreign Channels",
           "points": 2,
-          "text": "Diplomacy \u2265 1.",
+          "text": "Diplomacy ≥ 1.",
           "conditions": [
             {
               "type": "tag_count",
@@ -1470,7 +855,7 @@
         "primary": {
           "name": "Civic Legacy",
           "points": 4,
-          "text": "Culture \u2265 3.",
+          "text": "Culture ≥ 3.",
           "conditions": [
             {
               "type": "tag_count",
@@ -1483,7 +868,7 @@
         "secondary": {
           "name": "Public Faith",
           "points": 2,
-          "text": "Faith \u2265 2.",
+          "text": "Faith ≥ 2.",
           "conditions": [
             {
               "type": "tag_count",
@@ -1533,7 +918,7 @@
         "primary": {
           "name": "Industrial Legacy",
           "points": 4,
-          "text": "Industry \u2265 3 and Material production \u2265 2.",
+          "text": "Industry ≥ 3 and Material production ≥ 2.",
           "conditions": [
             {
               "type": "tag_count",
@@ -1552,7 +937,7 @@
         "secondary": {
           "name": "Protected Inquiry",
           "points": 2,
-          "text": "Science \u2265 1.",
+          "text": "Science ≥ 1.",
           "conditions": [
             {
               "type": "tag_count",
@@ -1610,7 +995,7 @@
         "primary": {
           "name": "Industrial Legacy",
           "points": 4,
-          "text": "Industry \u2265 3 and Material production \u2265 2.",
+          "text": "Industry ≥ 3 and Material production ≥ 2.",
           "conditions": [
             {
               "type": "tag_count",
@@ -1629,7 +1014,7 @@
         "secondary": {
           "name": "Commercial Surplus",
           "points": 2,
-          "text": "Wealth production \u2265 2.",
+          "text": "Wealth production ≥ 2.",
           "conditions": [
             {
               "type": "production",
@@ -1679,7 +1064,7 @@
         "primary": {
           "name": "Martial Legacy",
           "points": 4,
-          "text": "Military tags plus Fortified tokens \u2265 4.",
+          "text": "Military tags plus Fortified tokens ≥ 4.",
           "conditions": [
             {
               "type": "tag_plus_token_count",
@@ -1694,7 +1079,7 @@
         "secondary": {
           "name": "Political Reach",
           "points": 2,
-          "text": "Influence production \u2265 1.",
+          "text": "Influence production ≥ 1.",
           "conditions": [
             {
               "type": "production",
@@ -1744,7 +1129,7 @@
         "primary": {
           "name": "Diplomatic Legacy",
           "points": 4,
-          "text": "Diplomacy \u2265 2 and Influence production \u2265 1.",
+          "text": "Diplomacy ≥ 2 and Influence production ≥ 1.",
           "conditions": [
             {
               "type": "tag_count",
@@ -1763,7 +1148,7 @@
         "secondary": {
           "name": "Political Reach",
           "points": 2,
-          "text": "Influence production \u2265 1.",
+          "text": "Influence production ≥ 1.",
           "conditions": [
             {
               "type": "production",
@@ -1813,7 +1198,7 @@
         "primary": {
           "name": "Sanitary Legacy",
           "points": 4,
-          "text": "Sanitary \u2265 3 and no City has Plague greater than Sanitary.",
+          "text": "Sanitary ≥ 3 and no City has Plague greater than Sanitary.",
           "conditions": [
             {
               "type": "tag_count",
@@ -1829,7 +1214,7 @@
         "secondary": {
           "name": "Protected Inquiry",
           "points": 2,
-          "text": "Science \u2265 1.",
+          "text": "Science ≥ 1.",
           "conditions": [
             {
               "type": "tag_count",
@@ -1881,7 +1266,7 @@
         "primary": {
           "name": "Scholarly Legacy",
           "points": 4,
-          "text": "Science \u2265 2 and Knowledge capacity \u2265 1.",
+          "text": "Science ≥ 2 and Knowledge capacity ≥ 1.",
           "conditions": [
             {
               "type": "tag_count",
@@ -1900,7 +1285,7 @@
         "secondary": {
           "name": "Preserved Knowledge",
           "points": 2,
-          "text": "Knowledge capacity \u2265 1.",
+          "text": "Knowledge capacity ≥ 1.",
           "conditions": [
             {
               "type": "capacity",
@@ -1950,7 +1335,7 @@
         "primary": {
           "name": "Civic Legacy",
           "points": 4,
-          "text": "Culture \u2265 3.",
+          "text": "Culture ≥ 3.",
           "conditions": [
             {
               "type": "tag_count",
@@ -1963,7 +1348,7 @@
         "secondary": {
           "name": "Public Health",
           "points": 2,
-          "text": "Sanitary \u2265 2.",
+          "text": "Sanitary ≥ 2.",
           "conditions": [
             {
               "type": "tag_count",
@@ -2021,7 +1406,7 @@
         "primary": {
           "name": "Sacred Legacy",
           "points": 4,
-          "text": "Faith \u2265 3 and Favor production \u2265 2.",
+          "text": "Faith ≥ 3 and Favor production ≥ 2.",
           "conditions": [
             {
               "type": "tag_count",
@@ -2040,7 +1425,7 @@
         "secondary": {
           "name": "Ritual Supply",
           "points": 2,
-          "text": "Favor production \u2265 2.",
+          "text": "Favor production ≥ 2.",
           "conditions": [
             {
               "type": "production",
@@ -2092,7 +1477,7 @@
         "primary": {
           "name": "Diplomatic Legacy",
           "points": 4,
-          "text": "Diplomacy \u2265 2 and Influence production \u2265 1.",
+          "text": "Diplomacy ≥ 2 and Influence production ≥ 1.",
           "conditions": [
             {
               "type": "tag_count",
@@ -2111,7 +1496,7 @@
         "secondary": {
           "name": "Protected Inquiry",
           "points": 2,
-          "text": "Science \u2265 1.",
+          "text": "Science ≥ 1.",
           "conditions": [
             {
               "type": "tag_count",
@@ -2169,7 +1554,7 @@
         "primary": {
           "name": "Sanitary Legacy",
           "points": 4,
-          "text": "Sanitary \u2265 3 and no City has Plague greater than Sanitary.",
+          "text": "Sanitary ≥ 3 and no City has Plague greater than Sanitary.",
           "conditions": [
             {
               "type": "tag_count",
@@ -2329,7 +1714,7 @@
         "primary": {
           "name": "Civic Legacy",
           "points": 4,
-          "text": "Culture \u2265 3.",
+          "text": "Culture ≥ 3.",
           "conditions": [
             {
               "type": "tag_count",
@@ -2342,7 +1727,7 @@
         "secondary": {
           "name": "Preserved Knowledge",
           "points": 2,
-          "text": "Knowledge capacity \u2265 1.",
+          "text": "Knowledge capacity ≥ 1.",
           "conditions": [
             {
               "type": "capacity",
@@ -2394,7 +1779,7 @@
         "primary": {
           "name": "Industrial Legacy",
           "points": 4,
-          "text": "Industry \u2265 3 and Material production \u2265 2.",
+          "text": "Industry ≥ 3 and Material production ≥ 2.",
           "conditions": [
             {
               "type": "tag_count",
@@ -2464,7 +1849,7 @@
         "primary": {
           "name": "Sacred Legacy",
           "points": 4,
-          "text": "Faith \u2265 3 and Favor production \u2265 2.",
+          "text": "Faith ≥ 3 and Favor production ≥ 2.",
           "conditions": [
             {
               "type": "tag_count",
@@ -2536,7 +1921,7 @@
         "primary": {
           "name": "Sanitary Legacy",
           "points": 4,
-          "text": "Sanitary \u2265 3 and no City has Plague greater than Sanitary.",
+          "text": "Sanitary ≥ 3 and no City has Plague greater than Sanitary.",
           "conditions": [
             {
               "type": "tag_count",
@@ -2552,7 +1937,7 @@
         "secondary": {
           "name": "Foreign Channels",
           "points": 2,
-          "text": "Diplomacy \u2265 1.",
+          "text": "Diplomacy ≥ 1.",
           "conditions": [
             {
               "type": "tag_count",
@@ -2602,7 +1987,7 @@
         "primary": {
           "name": "Scholarly Legacy",
           "points": 4,
-          "text": "Science \u2265 2 and Knowledge capacity \u2265 1.",
+          "text": "Science ≥ 2 and Knowledge capacity ≥ 1.",
           "conditions": [
             {
               "type": "tag_count",
@@ -2621,7 +2006,7 @@
         "secondary": {
           "name": "Material Surplus",
           "points": 2,
-          "text": "Material production \u2265 2.",
+          "text": "Material production ≥ 2.",
           "conditions": [
             {
               "type": "production",
@@ -2673,7 +2058,7 @@
         "primary": {
           "name": "Civic Legacy",
           "points": 4,
-          "text": "Culture \u2265 3.",
+          "text": "Culture ≥ 3.",
           "conditions": [
             {
               "type": "tag_count",
@@ -2686,7 +2071,7 @@
         "secondary": {
           "name": "Ritual Supply",
           "points": 2,
-          "text": "Favor production \u2265 2.",
+          "text": "Favor production ≥ 2.",
           "conditions": [
             {
               "type": "production",
@@ -2721,86 +2106,6 @@
           ]
         },
         "tie_breaker": "Highest Agenda score; if still tied, use the rulebook's remaining hand plus Scheme Slot tie-breaker; if still tied, share victory."
-      }
-    },
-    {
-      "id": "chronicle-default-empire-deck",
-      "name": "Chronicle Default Empire Deck",
-      "kind": "decks",
-      "category": "deck",
-      "summary": "Default Development and Edict deck template.",
-      "color": null,
-      "data": {
-        "deck_type": "empire",
-        "item_ids": [
-          "peasant-village-culture",
-          "barracks-unrest",
-          "capital",
-          "farm-industry",
-          "farm-unrest",
-          "fortified-manor-military",
-          "grand-garrison-military",
-          "manor-unrest",
-          "market-hall-culture",
-          "monastery-culture",
-          "mountain-village",
-          "peasant-home-military",
-          "peasant-home-unrest",
-          "scriptorium",
-          "stone-quarry-industry",
-          "temple-culture",
-          "votive-chapel-faith",
-          "woodcutter-industry"
-        ],
-        "initial_setup": {
-          "3": [
-            "peasant-village-culture",
-            "barracks-unrest",
-            "farm-industry",
-            "farm-unrest",
-            "fortified-manor-military",
-            "grand-garrison-military"
-          ],
-          "4": [
-            "manor-unrest",
-            "market-hall-culture"
-          ],
-          "5": [
-            "monastery-culture",
-            "mountain-village"
-          ]
-        }
-      }
-    },
-    {
-      "id": "chronicle-default-crisis-deck",
-      "name": "Chronicle Default Crisis Deck",
-      "kind": "decks",
-      "category": "deck",
-      "summary": "Default Crisis deck template.",
-      "color": null,
-      "data": {
-        "deck_type": "crisis",
-        "item_ids": [
-          "earthquake",
-          "barbarian-horde",
-          "crimson-plague",
-          "trade-embargo"
-        ],
-        "initial_setup": {}
-      }
-    },
-    {
-      "id": "chronicle-default-level",
-      "name": "Chronicle Default Level",
-      "kind": "levels",
-      "category": "level",
-      "summary": "Default level template using the Capital and Chronicle decks.",
-      "color": null,
-      "data": {
-        "initial_city_card_id": "capital",
-        "empire_deck_id": "chronicle-default-empire-deck",
-        "crisis_deck_id": "chronicle-default-crisis-deck"
       }
     }
   ]

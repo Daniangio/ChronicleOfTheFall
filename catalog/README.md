@@ -1,6 +1,8 @@
 # Catalogs
 
-Catalog ownership is split between repository ingredients and database content.
+Catalog ownership is split between repository ingredients, curated import
+templates, and live database content. Repository JSON files are never implicit
+exports of the development database.
 
 ## Repository Ingredients
 
@@ -21,26 +23,31 @@ To change an ingredient, edit its JSON file in Git. Do not use an admin import.
 Raster assets live under `frontend/public/game-assets/`; naming and replacement
 instructions are in `frontend/public/game-assets/README.md`.
 
-## Dynamic Content
+## Curated Dynamic Content
 
-`catalog/content/` contains optional import templates for content that remains
+`catalog/content/` contains the versioned starter set for content that remains
 admin-authored:
 
-- cards
-- Events
-- Empire and Crisis decks
-- Levels
+- `cards.json`
+- `events.json`
+- `agendas.json`
+- `decks.json`
+- `levels.json`
 
 Import the files in dependency order:
 
 1. `cards.json`
 2. `events.json`
-3. `decks.json`
-4. `levels.json`
+3. `agendas.json`
+4. `decks.json`
+5. `levels.json`
 
 `chronicle-catalog-all.json` is the same dynamic template as a single convenience
-import. It intentionally excludes repository ingredients and agendas
-when no defaults for those kinds exist.
+import. Rebuild it after changing a content file:
+
+```bash
+python scripts/build_catalog_bundle.py
+```
 
 All files use this envelope:
 
@@ -52,5 +59,10 @@ All files use this envelope:
 }
 ```
 
-An admin `Export All` contains only dynamic content. Static ingredients remain
-portable because they are versioned with the application.
+Importing copies these entries into PostgreSQL. Subsequent admin changes modify
+PostgreSQL only; they do not rewrite these files. `Export All` downloads the
+current dynamic database content and can be reviewed before replacing the
+curated starter set.
+
+See [catalog_data_storage.md](../documentation/catalog_data_storage.md) for the
+complete repository, PostgreSQL, Redis, Docker volume, and reset model.

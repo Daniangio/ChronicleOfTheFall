@@ -14,8 +14,10 @@ NORMAL_REFILL_SIZE = 3
 STATE_REFILL_SIZE = 4
 SCHEME_SLOTS = 2
 MINISTRY_ROTATION_ORDER = ("cities", "state", "war", "health")
+AGENDA_SCORING_TAGS = ("culture", "diplomacy", "faith", "industry", "military", "sanitary", "science")
 
 PHASES = (
+    "agenda_selection",
     "suspicion",
     "production",
     "plotting",
@@ -141,6 +143,8 @@ def build_goldfishing_state(
     players: list[dict[str, Any]] = []
     agenda_deck = Deck([entry["id"] for entry in agendas])
     agenda_deck.shuffle(f"{room_id}:agendas")
+    if agendas and len(agendas) < PLAYER_COUNT * 2:
+        raise ValueError("The Hidden Agenda pool requires at least two cards per player.")
     for index in range(PLAYER_COUNT):
         base_cards = base_deck.draw(BASE_HAND_SIZE, seed=f"{room_id}:base:{index}")
         empire_cards = empire_deck.draw(EMPIRE_HAND_SIZE, seed=f"{room_id}:empire:{index}")
@@ -149,6 +153,7 @@ def build_goldfishing_state(
                 empire_deck.draw(BASE_HAND_SIZE - len(base_cards), seed=f"{room_id}:base-fallback:{index}")
             )
         starting_crisis = crisis_deck.draw(1)
+        agenda_options = agenda_deck.draw(2)
         players.append(
             {
                 "id": f"player-{index + 1}",
@@ -159,7 +164,8 @@ def build_goldfishing_state(
                 "suspicion": 0,
                 "committed": False,
                 "pending_draws": 0,
-                "hidden_agenda_id": (agenda_deck.draw(1) or [""])[0],
+                "hidden_agenda_id": "",
+                "agenda_options": agenda_options,
             }
         )
 
@@ -204,6 +210,8 @@ def build_goldfishing_state(
         "war_power_used": False,
         "refill_completed": [],
         "agendas_revealed": False,
+        "agenda_results": {},
+        "sealed_agenda_count": 0,
         "winner_player_ids": [],
         "cities": [
             {
@@ -241,10 +249,11 @@ def build_goldfishing_state(
             f"{EMPIRE_HAND_SIZE} Empire cards."
         ],
     }
-    _assign_ministries(state, rotate=False)
+    _assign_ministries(state, rotate=False, begin_phase=False)
     state_holder = _ministry_holder(state, "state")
     if state_holder:
         _player(state, state_holder)["hand"].extend(_draw_empire(state, 1))
+    _begin_agenda_selection(state)
     return _prepare_state(state)
 
 
@@ -257,6 +266,7 @@ def perform_action(state: dict[str, Any], action: str, payload: dict[str, Any] |
         "commit_card": _commit_card,
         "commit_none": _commit_none,
         "plotting_scheme": _plotting_scheme,
+        "choose_agenda": _choose_agenda,
         "move_docket_card": _move_docket_card,
         "confirm_docket_order": _confirm_docket_order,
         "choose_event_resource": _choose_event_resource,
@@ -586,7 +596,7 @@ def _refill_hand(state: dict[str, Any], payload: dict[str, Any]) -> None:
     _advance_ordered_player(state, completed_ids=set(state["refill_completed"]))
 
 
-def _assign_ministries(state: dict[str, Any], *, rotate: bool) -> None:
+def _assign_ministries(state: dict[str, Any], *, rotate: bool, begin_phase: bool = True) -> None:
     players = state["players"]
     current_index = _player_index(state, state.get("minister_of_empire_player_id"))
     if rotate:
@@ -626,7 +636,35 @@ def _assign_ministries(state: dict[str, Any], *, rotate: bool) -> None:
     state["log"].append(
         f"Era {state['era']}: {_player(state, empire_player_id)['name']} is Minister of the Empire."
     )
-    _begin_suspicion(state)
+    if begin_phase:
+        _begin_suspicion(state)
+
+
+def _begin_agenda_selection(state: dict[str, Any]) -> None:
+    if not any(player.get("agenda_options") for player in state["players"]):
+        _begin_suspicion(state)
+        return
+    state["phase"] = "agenda_selection"
+    state["active_player_id"] = ""
+    state["log"].append("Players received their Hidden Agenda options.")
+
+
+def _choose_agenda(state: dict[str, Any], payload: dict[str, Any]) -> None:
+    _require_phase(state, "agenda_selection")
+    player_id = str(payload.get("player_id") or "")
+    agenda_id = str(payload.get("agenda_id") or "")
+    player = _player(state, player_id)
+    options = list(player.get("agenda_options") or [])
+    if player.get("hidden_agenda_id"):
+        raise ValueError("This player already chose a Hidden Agenda.")
+    if agenda_id not in options:
+        raise ValueError("Hidden Agenda option not found.")
+    player["hidden_agenda_id"] = agenda_id
+    player["agenda_options"] = []
+    state["sealed_agenda_count"] = int(state.get("sealed_agenda_count", 0)) + max(0, len(options) - 1)
+    state["log"].append(f"{player['name']} chose a Hidden Agenda.")
+    if all(player.get("hidden_agenda_id") or not player.get("agenda_options") for player in state["players"]):
+        _begin_suspicion(state)
 
 
 def _begin_suspicion(state: dict[str, Any]) -> None:
@@ -811,6 +849,13 @@ def _possible_actions(state: dict[str, Any]) -> list[dict[str, Any]]:
     active = state.get("active_player_id")
     if phase == "game_over":
         return []
+    if phase == "agenda_selection":
+        return [
+            {"type": "choose_agenda", "player_id": player["id"], "agenda_id": agenda_id}
+            for player in state["players"]
+            if not player.get("hidden_agenda_id")
+            for agenda_id in player.get("agenda_options", [])
+        ]
     if phase == "suspicion":
         protected_player_id = state.get("minister_of_empire_player_id")
         return [
@@ -1019,10 +1064,7 @@ def _prepare_state(state: dict[str, Any]) -> dict[str, Any]:
         state["phase"] = "game_over"
         state["active_player_id"] = ""
         state["agendas_revealed"] = True
-        state["winner_player_ids"] = [
-            player["id"] for player in state.get("players", [])
-            if _agenda_satisfied(state, player.get("hidden_agenda_id", ""))
-        ]
+        _score_hidden_agendas(state)
         state["log"].append("The Empire collapsed.")
     state["possible_actions"] = _possible_actions(state)
     return state
@@ -1744,20 +1786,184 @@ def _effect_condition_met(state: dict[str, Any], condition: dict[str, Any] | Non
     return comparisons.get(operator, False)
 
 
-def _agenda_satisfied(state: dict[str, Any], agenda_id: str) -> bool:
+def _compare_agenda_values(left: int, operator: str, right: int) -> bool:
+    return {
+        "gt": left > right,
+        "gte": left >= right,
+        "lt": left < right,
+        "lte": left <= right,
+        "eq": left == right,
+    }.get(str(operator or "gte"), False)
+
+
+def _empire_production_counts(state: dict[str, Any]) -> dict[str, int]:
+    production: Counter = Counter()
+    for city in state.get("cities", []):
+        for card_id in [city.get("city_card_id"), *city.get("cards", [])]:
+            if card_id:
+                production.update(_production_for_card(card_by_id(state, card_id)))
+    return _positive_counts(production)
+
+
+def _agenda_pillar_value(state: dict[str, Any], pillar_name: str) -> int | None:
+    normalized = str(pillar_name or "").lower()
+    short_name = normalized.removeprefix("pillar-of-")
+    for pillar_id, value in state.get("pillars", {}).items():
+        entry = next(
+            (pillar for pillar in state.get("catalog", {}).get("pillars", []) if pillar.get("id") == pillar_id),
+            {},
+        )
+        identity = f"{pillar_id} {entry.get('name', '')}".lower()
+        if (
+            normalized == str(pillar_id).lower()
+            or normalized in identity
+            or short_name == str(pillar_id).lower()
+            or short_name in identity
+        ):
+            return int(value)
+    return None
+
+
+def _agenda_token_count(state: dict[str, Any], token_name: str, scope: str) -> int:
+    normalized = str(token_name or "").lower().replace("_", "-")
+    if normalized == "global-unrest":
+        return int(_counts(state.get("condition_tokens")).get("unrest-token", 0))
+    token_id = normalized if normalized.endswith("-token") else f"{normalized}-token"
+    total = int(_counts(state.get("condition_tokens")).get(token_id, 0))
+    if scope == "empire":
+        total += sum(
+            int(_counts(city.get("condition_tokens")).get(token_id, 0))
+            for city in state.get("cities", [])
+        )
+    return total
+
+
+def _agenda_condition_met(state: dict[str, Any], condition: dict[str, Any]) -> bool:
+    condition_type = str(condition.get("type") or "")
+    tags = _empire_tag_counts(state)
+    production = _empire_production_counts(state)
+    operator = str(condition.get("operator") or "gte")
+    amount = int(condition.get("amount") or 0)
+    if condition_type == "tag_count":
+        return _compare_agenda_values(int(tags.get(str(condition.get("tag") or ""), 0)), operator, amount)
+    if condition_type == "tag_compare":
+        return _compare_agenda_values(
+            int(tags.get(str(condition.get("left") or ""), 0)),
+            operator,
+            int(tags.get(str(condition.get("right") or ""), 0)),
+        )
+    if condition_type == "tag_sum_compare":
+        left = sum(int(tags.get(str(tag_id), 0)) for tag_id in condition.get("left_tags", []))
+        right = sum(int(tags.get(str(tag_id), 0)) for tag_id in condition.get("right_tags", []))
+        return _compare_agenda_values(left, operator, right)
+    if condition_type == "production":
+        return _compare_agenda_values(
+            int(production.get(str(condition.get("resource") or ""), 0)),
+            operator,
+            amount,
+        )
+    if condition_type == "capacity":
+        resource_id = str(condition.get("resource") or "")
+        capacity = int(production.get(resource_id, 0)) + int(_counts(state.get("stored_resources")).get(resource_id, 0))
+        return _compare_agenda_values(capacity, operator, amount)
+    if condition_type in {"collapsed_pillar", "not_collapsed_pillar"}:
+        value = _agenda_pillar_value(state, str(condition.get("pillar") or ""))
+        collapsed = value is not None and value <= 0
+        return collapsed if condition_type == "collapsed_pillar" else not collapsed
+    if condition_type == "highest_surviving_pillar":
+        value = _agenda_pillar_value(state, str(condition.get("pillar") or ""))
+        surviving = [int(item) for item in state.get("pillars", {}).values() if int(item) > 0]
+        return value is not None and value > 0 and bool(surviving) and value == max(surviving)
+    if condition_type == "token_count":
+        current = _agenda_token_count(state, str(condition.get("token") or ""), str(condition.get("scope") or "empire"))
+        return _compare_agenda_values(current, operator, amount)
+    if condition_type == "tag_plus_token_count":
+        current = int(tags.get(str(condition.get("tag") or ""), 0)) + _agenda_token_count(
+            state,
+            str(condition.get("token") or ""),
+            str(condition.get("scope") or "empire"),
+        )
+        return _compare_agenda_values(current, operator, amount)
+    if condition_type == "no_city_has_plague_exceeding_sanitary":
+        return all(
+            int(_counts(city.get("condition_tokens")).get("plague-token", 0))
+            <= int(_city_tag_counts(state, city).get("sanitary", 0))
+            for city in state.get("cities", [])
+        )
+    if condition_type == "distinct_tags_at_least":
+        minimum_each = int(condition.get("minimum_each") or 1)
+        distinct = sum(
+            int(tags.get(str(tag_id), 0)) >= minimum_each
+            for tag_id in condition.get("tags", [])
+        )
+        return distinct >= int(condition.get("minimum_distinct") or 0)
+    if condition_type == "all_tags_at_most":
+        return all(
+            int(tags.get(str(tag_id), 0)) <= amount
+            for tag_id in condition.get("tags", [])
+        )
+    if condition_type == "tag_is_highest":
+        values = [int(tags.get(tag_id, 0)) for tag_id in AGENDA_SCORING_TAGS]
+        return bool(values) and max(values) > 0 and int(tags.get(str(condition.get("tag") or ""), 0)) == max(values)
+    return False
+
+
+def _agenda_evaluation(state: dict[str, Any], agenda_id: str) -> dict[str, Any]:
     agenda = next(
         (entry for entry in state.get("catalog", {}).get("agendas", []) if entry.get("id") == agenda_id),
         None,
     )
     if not agenda:
-        return False
+        return {"agenda_id": agenda_id, "eligible": False, "score": 0, "sections": {}}
     data = agenda.get("data") or {}
-    conditions = data.get("conditions") or ([data["condition"]] if data.get("condition") else [])
-    if not conditions:
-        return False
-    mode = str(data.get("condition_mode") or "all").lower()
-    results = [_effect_condition_met(state, condition) for condition in conditions]
-    return any(results) if mode == "any" else all(results)
+    sections: dict[str, bool] = {}
+    score = 0
+    for section_name in ("primary", "secondary", "collapse", "forbidden"):
+        section = data.get(section_name) or {}
+        conditions = section.get("conditions") or []
+        met = bool(conditions) and all(_agenda_condition_met(state, condition) for condition in conditions)
+        sections[section_name] = met
+        if section_name != "forbidden" and met:
+            score += int(section.get("points") or 0)
+    eligible = (
+        sections.get("primary", False)
+        and not sections.get("forbidden", False)
+        and score >= int(data.get("win_threshold") or 6)
+    )
+    return {
+        "agenda_id": agenda_id,
+        "eligible": eligible,
+        "score": score,
+        "sections": sections,
+    }
+
+
+def _score_hidden_agendas(state: dict[str, Any]) -> None:
+    results = {
+        player["id"]: _agenda_evaluation(state, player.get("hidden_agenda_id", ""))
+        for player in state.get("players", [])
+    }
+    state["agenda_results"] = results
+    eligible = [
+        player
+        for player in state.get("players", [])
+        if results[player["id"]]["eligible"]
+    ]
+    if not eligible:
+        state["winner_player_ids"] = []
+        return
+    highest_score = max(results[player["id"]]["score"] for player in eligible)
+    finalists = [player for player in eligible if results[player["id"]]["score"] == highest_score]
+    highest_cards = max(
+        len(player.get("hand", [])) + sum(bool(card_id) for card_id in player.get("scheme_slots", []))
+        for player in finalists
+    )
+    state["winner_player_ids"] = [
+        player["id"]
+        for player in finalists
+        if len(player.get("hand", [])) + sum(bool(card_id) for card_id in player.get("scheme_slots", []))
+        == highest_cards
+    ]
 
 
 def _eligible_buildings(state: dict[str, Any], tag_id: str) -> list[dict[str, str]]:
