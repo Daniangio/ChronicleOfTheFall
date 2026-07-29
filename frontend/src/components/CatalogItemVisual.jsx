@@ -580,7 +580,7 @@ const EventCardVisual = ({ entry, eventMinistry, ministryLookup, effectIconLooku
   const alternativeEffects = Array.isArray(data.alternative_effects) ? data.alternative_effects : [];
   const compact = size === "hand";
   return (
-    <article className={`flex aspect-[5/7] ${compact ? "w-[clamp(9rem,13vw,11rem)] p-2" : "w-[clamp(12rem,16vw,15rem)] p-3"} shrink-0 overflow-hidden flex-col rounded-lg border border-amber-900/70 bg-stone-950 shadow-xl`}>
+    <article className={`flex aspect-[5/7] ${compact ? "w-[clamp(9rem,13vw,11rem)] p-2" : "w-[clamp(12rem,16vw,15rem)] p-3"} shrink-0 overflow-visible flex-col rounded-lg border border-amber-900/70 bg-stone-950 shadow-xl`}>
       <div className={`grid ${compact ? "grid-cols-[2.25rem_minmax(0,1fr)] gap-1" : "grid-cols-[3rem_minmax(0,1fr)] gap-2"}`}>
         <div className="flex flex-col items-center gap-1">
           {eventMinistry ? (

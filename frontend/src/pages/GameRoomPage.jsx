@@ -5,12 +5,14 @@ import {
   Castle,
   Check,
   Crown,
+  Hand,
   ListOrdered,
   LogOut,
   Minus,
   Plus,
   ScrollText,
   Shield,
+  Trash2,
   Users,
   X,
 } from "lucide-react";
@@ -132,7 +134,14 @@ const GameRoomPage = () => {
   const [storageSelection, setStorageSelection] = useState({});
   const [boardZoom, setBoardZoom] = useState(0.82);
   const [agendaOverlayPlayerId, setAgendaOverlayPlayerId] = useState("");
+  const [ministryOverlayId, setMinistryOverlayId] = useState("");
+  const [selectedHandCardIndex, setSelectedHandCardIndex] = useState(null);
+  const [selectedHandCardAnchor, setSelectedHandCardAnchor] = useState(null);
+  const [selectedSchemeSlotIndex, setSelectedSchemeSlotIndex] = useState(null);
+  const [selectedSchemeCardAnchor, setSelectedSchemeCardAnchor] = useState(null);
+  const [schemeSourceIndex, setSchemeSourceIndex] = useState(null);
   const [docketOpen, setDocketOpen] = useState(false);
+  const [discardOpen, setDiscardOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [ending, setEnding] = useState(false);
   const [error, setError] = useState("");
@@ -165,6 +174,14 @@ const GameRoomPage = () => {
   useEffect(() => {
     setStorageSelection({});
   }, [gameState?.phase, gameState?.era]);
+
+  useEffect(() => {
+    setSelectedHandCardIndex(null);
+    setSelectedHandCardAnchor(null);
+    setSelectedSchemeSlotIndex(null);
+    setSelectedSchemeCardAnchor(null);
+    setSchemeSourceIndex(null);
+  }, [focusedPlayerId, gameState?.phase]);
 
   useEffect(() => {
     if (gameState?.phase === "docket_ordering") setDocketOpen(true);
@@ -209,9 +226,15 @@ const GameRoomPage = () => {
   const agendaOverlayEntry = agendaOverlayPlayer?.hidden_agenda_id
     ? agendaLookup[normalize(agendaOverlayPlayer.hidden_agenda_id)]
     : null;
+  const focusedMinistries = Object.entries(gameState?.ministry_assignments || {})
+    .filter(([, playerId]) => playerId === focusedPlayer?.id)
+    .map(([ministryId]) => ministryLookup[normalize(ministryId)])
+    .filter(Boolean);
+  const ministryOverlayEntry = ministryLookup[normalize(ministryOverlayId)];
   const confirmPlottingAction = actions.find(
     (entry) => entry.type === "confirm_plotting" && entry.player_id === focusedPlayer?.id
   );
+  const discardCount = (gameState?.empire_discard?.length || 0) + (gameState?.crisis_discard?.length || 0);
 
   const perform = async (action, payload = {}) => {
     if (!token || busy) return null;
@@ -268,10 +291,6 @@ const GameRoomPage = () => {
     return <main className="imperial-theme flex min-h-screen items-center justify-center bg-slate-950 text-slate-400">{error || "Loading game..."}</main>;
   }
 
-  const ministryNamesFor = (playerId) =>
-    Object.entries(gameState.ministry_assignments || {})
-      .filter(([, holder]) => holder === playerId)
-      .map(([ministryId]) => ministryLookup[normalize(ministryId)]?.name || ministryId);
   const currentReveal = gameState.current_reveal;
   const storageAction = actions.find((entry) => entry.type === "store_resources");
   const resourcePool = gameState.global_resource_pool || {};
@@ -489,8 +508,8 @@ const GameRoomPage = () => {
 
   return (
     <main className="imperial-theme min-h-screen bg-slate-950 text-slate-100 lg:h-screen lg:overflow-hidden">
-      <div className="grid min-h-screen grid-cols-1 lg:h-screen lg:grid-cols-[14rem_minmax(0,1fr)]">
-        <aside className="border-b border-slate-800 bg-slate-900/75 p-3 lg:h-screen lg:overflow-y-auto lg:border-b-0 lg:border-r">
+      <div className="grid min-h-screen grid-cols-1 lg:h-screen lg:grid-cols-[12rem_minmax(0,1fr)]">
+        <aside className="border-b border-slate-800 bg-slate-900/75 p-2 lg:h-[60vh] lg:overflow-y-auto lg:border-b-0 lg:border-r">
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-xs uppercase text-amber-700">Anonymous Council</p>
@@ -499,40 +518,62 @@ const GameRoomPage = () => {
             </div>
             <button className="inline-flex h-8 w-8 items-center justify-center border border-slate-700 text-slate-300 hover:bg-slate-800 disabled:opacity-50" disabled={ending} onClick={endGame} title="End game" type="button"><LogOut className="h-4 w-4" /></button>
           </div>
-          <div className="mt-5 space-y-2">
+          <div className="mt-3 space-y-1.5">
             {players.map((player) => {
               const focused = player.id === focusedPlayer?.id;
               const active = player.id === activePlayer?.id;
               const awaitingPlot = phase === "plotting" && !player.committed;
               const choosingAgenda = phase === "agenda_selection" && !(player.agenda_selected ?? Boolean(player.hidden_agenda_id));
-              const ministries = ministryNamesFor(player.id);
+              const ministries = Object.entries(gameState.ministry_assignments || {})
+                .filter(([, holder]) => holder === player.id)
+                .map(([ministryId]) => ministryLookup[normalize(ministryId)])
+                .filter(Boolean);
               const inspectable = !isBotMode || player.controller !== "bot" || player.hand_revealed || gameState.agendas_revealed;
               return (
-                <button key={player.id} className={`w-full border p-3 text-left ${focused ? "border-amber-500 bg-amber-950/25" : "border-slate-800 bg-slate-950 hover:border-slate-600"} disabled:cursor-default`} disabled={!inspectable} onClick={() => setFocusedPlayerId(player.id)} type="button">
-                  <span className="flex items-center justify-between gap-2">
-                    <span className="font-semibold text-white">{player.name}</span>
-                    {player.controller === "bot" ? <span className="border border-slate-700 px-1.5 py-0.5 text-[0.6rem] font-bold text-slate-400">BOT</span> : null}
-                    {active ? <span className="bg-amber-300 px-1.5 py-0.5 text-[0.6rem] font-bold text-stone-950">DECIDING</span> : null}
-                    {awaitingPlot ? <span className="bg-teal-300 px-1.5 py-0.5 text-[0.6rem] font-bold text-stone-950">PLOTTING</span> : null}
-                    {choosingAgenda ? <span className="bg-sky-300 px-1.5 py-0.5 text-[0.6rem] font-bold text-stone-950">AGENDA</span> : null}
+                <button key={player.id} className={`w-full border px-2 py-1.5 text-left ${focused ? "border-amber-500 bg-amber-950/25" : "border-slate-800 bg-slate-950 hover:border-slate-600"} disabled:cursor-default`} disabled={!inspectable} onClick={() => setFocusedPlayerId(player.id)} type="button">
+                  <span className="flex min-w-0 items-center gap-1.5">
+                    <span className="min-w-0 flex-1 truncate text-xs font-semibold text-white" title={player.name}>{player.name}</span>
+                    {player.controller === "bot" ? <span className="text-[0.55rem] font-bold text-slate-500">BOT</span> : null}
+                    <span className="inline-flex shrink-0 items-center gap-0.5 text-[0.65rem] text-slate-400" title={`${player.hand_count ?? player.hand?.length ?? 0} cards in hand`}>
+                      <Hand className="h-3.5 w-3.5" aria-hidden="true" />
+                      {player.hand_count ?? player.hand?.length ?? 0}
+                    </span>
                   </span>
-                  <span className="mt-2 block text-xs text-slate-500">Hand {player.hand_count ?? player.hand?.length ?? 0} · Suspicion {player.suspicion || 0}</span>
-                  <span className="mt-1 block text-[0.65rem] leading-4 text-amber-700">{ministries.join(" · ") || "No ministry"}</span>
+                  <span className="mt-1 flex min-h-6 items-center gap-1">
+                    {ministries.map((ministry) => {
+                      const iconSrc = buildAssetUrl(
+                        ministry.data?.icon
+                        || imageLookup[normalize(ministry.data?.icon_image_id)]?.data?.src
+                        || ""
+                      );
+                      return iconSrc ? (
+                        <img key={ministry.id} alt="" className="h-5 w-5 object-contain" src={iconSrc} title={ministry.name} />
+                      ) : (
+                        <Crown key={ministry.id} className="h-4 w-4 text-amber-500" aria-label={ministry.name} />
+                      );
+                    })}
+                    {!ministries.length ? <span className="text-[0.6rem] text-slate-600">No ministry</span> : null}
+                    <span className="ml-auto flex items-center gap-1">
+                      {active ? <span className="h-2 w-2 bg-amber-300" title="Deciding" /> : null}
+                      {awaitingPlot ? <span className="h-2 w-2 bg-teal-300" title="Plotting" /> : null}
+                      {choosingAgenda ? <span className="h-2 w-2 bg-sky-300" title="Choosing Agenda" /> : null}
+                    </span>
+                  </span>
                 </button>
               );
             })}
           </div>
         </aside>
 
-        <section className="min-w-0 lg:flex lg:h-screen lg:min-h-0 lg:flex-col lg:overflow-hidden">
-          {error ? <p className="m-4 border border-rose-900 bg-rose-950/70 px-3 py-2 text-sm text-rose-200">{error}</p> : null}
+        <section className="relative min-w-0 lg:grid lg:h-screen lg:min-h-0 lg:grid-rows-[15vh_45vh_40vh] lg:overflow-hidden">
+          {error ? <p className="absolute left-4 right-4 top-2 z-40 border border-rose-900 bg-rose-950/95 px-3 py-2 text-sm text-rose-200">{error}</p> : null}
 
-          <header className="m-3 shrink-0 border border-amber-900/60 bg-stone-950/80 px-3 py-2">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              <div>
-                <p className="text-xs font-semibold uppercase text-amber-700">Current Phase</p>
-                <h2 className="mt-0.5 text-lg font-bold text-amber-50">{titleCase(phase)}</h2>
-                <p className="mt-1 text-xs text-slate-500">
+          <header className="m-2 shrink-0 border border-amber-900/60 bg-stone-950/80 px-3 py-1.5">
+            <div className="flex min-h-9 items-center justify-between gap-4">
+              <div className="flex min-w-0 items-baseline gap-3">
+                <span className="shrink-0 text-xs font-bold uppercase text-amber-700">Era {gameState.era}</span>
+                <h2 className="shrink-0 text-sm font-bold text-amber-50">{titleCase(phase)}</h2>
+                <p className="truncate text-xs text-slate-500">
                   {phase === "agenda_selection"
                     ? `${players.filter((player) => !(player.agenda_selected ?? Boolean(player.hidden_agenda_id))).length} players choosing Agendas`
                     : phase === "plotting"
@@ -544,11 +585,11 @@ const GameRoomPage = () => {
                       : "The Empire has fallen"}
                 </p>
               </div>
-              <div className="max-w-3xl">{renderPhaseControls()}</div>
+              <div className="shrink-0">{renderPhaseControls()}</div>
             </div>
           </header>
 
-          <div className="grid gap-3 px-3 pb-3 lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(0,1fr)_17rem] lg:overflow-hidden xl:grid-cols-[minmax(0,1fr)_18rem]">
+          <div className="grid h-[45vh] gap-3 px-3 pb-3 lg:h-full lg:min-h-0 lg:grid-cols-[minmax(0,1fr)_17rem] lg:overflow-hidden xl:grid-cols-[minmax(0,1fr)_18rem]">
             <div className="min-w-0 lg:min-h-0">
               <section className="relative border border-slate-800 bg-slate-900 lg:flex lg:h-full lg:min-h-0 lg:flex-col">
                 <div className="absolute right-3 top-3 z-30 flex items-center gap-2 border border-slate-700 bg-slate-950/95 p-1 shadow-lg">
@@ -556,7 +597,7 @@ const GameRoomPage = () => {
                   <span className="w-11 text-center text-xs text-slate-400">{Math.round(boardZoom * 100)}%</span>
                   <button className="h-8 w-8 border border-slate-700 hover:bg-slate-800" onClick={() => setBoardZoom((value) => Math.min(1.2, value + 0.1))} title="Zoom in" type="button"><Plus className="mx-auto h-4 w-4" /></button>
                 </div>
-                <div className="h-[30rem] overflow-auto bg-stone-950/60 p-5 lg:h-auto lg:min-h-0 lg:flex-1">
+                <div className="h-full overflow-auto bg-stone-950/60 p-5 lg:min-h-0 lg:flex-1">
                   <div className="relative" style={{ width: boardWidth * boardZoom, height: 760 * boardZoom }}>
                     <div className="absolute left-0 top-0 flex origin-top-left gap-8" style={{ width: boardWidth, height: 760, transform: `scale(${boardZoom})` }}>
                       {(gameState.cities || []).map((city) => <CityZone key={city.id} city={city} cardLookup={cardLookup} tagLookup={tagLookup} pillarLookup={pillarLookup} tokenLookup={tokenLookup} storageIconSrc={storageIconSrc} />)}
@@ -570,9 +611,34 @@ const GameRoomPage = () => {
               <section className="border border-slate-800 bg-slate-900 p-3">
                 <div className="flex items-center gap-2 text-slate-400"><Crown className="h-4 w-4 text-amber-400" /><h2 className="text-xs font-bold uppercase">Imperial Status</h2></div>
                 <div className="mt-2 flex flex-wrap gap-1.5">
-                  {Object.entries(gameState.pillars || {}).map(([pillarId, value]) => (
-                    <span key={pillarId} className="border border-amber-900/60 bg-stone-950 px-2 py-1 text-xs text-amber-100" title={pillarLookup[normalize(pillarId)]?.name || pillarId}>{pillarLookup[normalize(pillarId)]?.name || titleCase(pillarId)} <strong>{value}</strong></span>
-                  ))}
+                  {Object.entries(gameState.pillars || {}).map(([pillarId, value]) => {
+                    const pillar = pillarLookup[normalize(pillarId)];
+                    const iconSrc = buildAssetUrl(
+                      pillar?.data?.icon
+                      || imageLookup[normalize(pillar?.data?.icon_image_id)]?.data?.src
+                      || ""
+                    );
+                    const label = pillar?.name || titleCase(pillarId);
+                    return (
+                      <span
+                        key={pillarId}
+                        className="group relative inline-flex h-10 w-10 items-center justify-center bg-stone-950"
+                        title={`${label}: ${value}`}
+                      >
+                        {iconSrc ? (
+                          <img alt="" className="h-9 w-9 object-contain" src={iconSrc} />
+                        ) : (
+                          <Shield className="h-7 w-7 text-amber-500" aria-hidden="true" />
+                        )}
+                        <strong className="absolute -right-1 -top-1 min-w-4 border border-amber-800 bg-amber-950 px-0.5 text-center text-[0.6rem] leading-4 text-amber-50">
+                          {value}
+                        </strong>
+                        <span className="pointer-events-none absolute left-1/2 top-full z-50 mt-1 hidden -translate-x-1/2 whitespace-nowrap border border-amber-900/70 bg-stone-950 px-2 py-1 text-[0.65rem] font-semibold text-amber-100 shadow-xl group-hover:block">
+                          {label}
+                        </span>
+                      </span>
+                    );
+                  })}
                 </div>
                 <div className="mt-3 border-t border-slate-800 pt-2">
                   <div className="mb-1.5 flex items-center gap-1.5 text-[0.65rem] font-bold uppercase text-slate-500"><Archive className="h-3.5 w-3.5 text-teal-400" />Resources</div>
@@ -609,101 +675,115 @@ const GameRoomPage = () => {
                   {currentReveal.face_up ? <p className="mt-2 text-xs text-amber-700">Committed by {players.find((player) => player.id === currentReveal.owner_player_id)?.name}</p> : null}
                 </section>
               ) : null}
-              <section className="border border-slate-800 bg-slate-900 p-3">
-                <h2 className="text-sm font-bold text-white">Face-up Discards</h2>
-                <div className="mt-3 space-y-4">
-                  <div>
-                    <p className="mb-2 text-[0.65rem] font-bold uppercase text-slate-500">Empire</p>
-                    <div className="flex flex-wrap gap-2">
-                      {(gameState.empire_discard || []).map((itemId, index) => (
-                        <ItemVisual key={`${itemId}-${index}`} item={itemLookup[normalize(itemId)]} catalogs={catalogs} tagLookup={tagLookup} storageIconSrc={storageIconSrc} />
-                      ))}
-                      {!gameState.empire_discard?.length ? <p className="text-xs text-slate-600">Empty.</p> : null}
-                    </div>
-                  </div>
-                  <div>
-                    <p className="mb-2 text-[0.65rem] font-bold uppercase text-slate-500">Crisis</p>
-                    <div className="flex flex-wrap gap-2">
-                      {(gameState.crisis_discard || []).map((itemId, index) => (
-                        <ItemVisual key={`${itemId}-${index}`} item={itemLookup[normalize(itemId)]} catalogs={catalogs} tagLookup={tagLookup} storageIconSrc={storageIconSrc} />
-                      ))}
-                      {!gameState.crisis_discard?.length ? <p className="text-xs text-slate-600">Empty.</p> : null}
-                    </div>
-                  </div>
-                </div>
-              </section>
+              <button
+                className="flex w-full items-center justify-between gap-3 border border-slate-800 bg-slate-900 p-3 text-left hover:border-amber-900/70 hover:bg-amber-950/20"
+                onClick={() => setDiscardOpen(true)}
+                type="button"
+              >
+                <span className="flex items-center gap-2 text-sm font-bold text-white">
+                  <Trash2 className="h-4 w-4 text-rose-400" aria-hidden="true" />
+                  Face-up Discards
+                </span>
+                <span className="border border-slate-700 px-2 py-1 text-xs text-slate-400">{discardCount}</span>
+              </button>
             </aside>
           </div>
 
-          <section className={`shrink-0 border-t border-slate-800 bg-slate-900 p-3 ${
-            phase === "agenda_selection"
-              ? "lg:max-h-[45vh] lg:overflow-y-auto"
-              : "lg:max-h-[20rem] lg:overflow-hidden"
-          }`}>
-            <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1 text-right text-xs text-slate-500">
-              <span>{ministryNamesFor(focusedPlayer?.id).join(" · ") || "No ministry"}</span>
-              <span>Suspicion {focusedPlayer?.suspicion || 0}</span>
-              {focusedPlayer?.hand_revealed ? (
-                <span className="font-semibold text-rose-300">Hand and Schemes revealed</span>
-              ) : null}
-              {focusedPlayer?.hidden_agenda_id ? (
-                <span className="text-amber-700">
-                  Agenda: {agendaLookup[normalize(focusedPlayer.hidden_agenda_id)]?.name || focusedPlayer.hidden_agenda_id}
-                  {gameState.agendas_revealed
-                    ? ` · ${gameState.agenda_results?.[focusedPlayer.id]?.score || 0} points${gameState.winner_player_ids?.includes(focusedPlayer.id) ? " · Winner" : ""}`
-                    : ""}
-                </span>
-              ) : null}
-              <span>Refill 3 · State 4 · Schemes 2</span>
-              {phase === "plotting" && confirmPlottingAction ? (
-                <button
-                  className="inline-flex items-center gap-2 bg-amber-300 px-3 py-2 text-xs font-bold text-stone-950 hover:bg-amber-200 disabled:opacity-50"
-                  disabled={busy}
-                  onClick={() => performAction(confirmPlottingAction)}
-                  type="button"
-                >
-                  <Check className="h-4 w-4" aria-hidden="true" />
-                  {confirmPlottingAction.has_selection ? "Confirm Plot" : "Confirm no card"}
-                </button>
-              ) : null}
-              {focusedPlayer?.hidden_agenda_id ? (
-                <button
-                  className="inline-flex h-8 w-8 items-center justify-center border border-amber-900/70 text-amber-300 hover:bg-amber-950/60"
-                  onClick={() => setAgendaOverlayPlayerId(focusedPlayer.id)}
-                  title="Open secret Agenda"
-                  type="button"
-                >
-                  <ScrollText className="h-4 w-4" aria-hidden="true" />
-                </button>
-              ) : null}
-            </div>
-            <div className={phase === "agenda_selection"
-              ? "mt-3 min-w-0"
-              : "mt-3 grid gap-4 lg:grid-cols-[minmax(0,1fr)_18rem] xl:grid-cols-[minmax(0,1fr)_20rem]"}>
-              <div className="min-w-0">
+          <section className="min-h-0 border-t border-slate-800 bg-slate-900 p-1 lg:fixed lg:inset-x-0 lg:bottom-0 lg:z-50 lg:h-[40vh] lg:overflow-hidden">
+            <div className="grid h-full min-h-0 gap-3 lg:grid-cols-[minmax(0,1fr)_22.5rem_5.5rem]">
+              <div className="min-w-0 overflow-hidden">
                 <h3 className="mb-2 text-xs font-bold uppercase text-slate-500">{phase === "agenda_selection" ? "Choose Hidden Agenda" : "Hand"}</h3>
-                <div className="flex flex-nowrap gap-2 overflow-x-auto pb-2">
+                <div
+                  className="flex h-[calc(100%_-_1.5rem)] w-full min-w-0 flex-nowrap items-start gap-2 overflow-x-auto overflow-y-hidden px-1 pb-2"
+                  onScroll={() => {
+                    setSelectedHandCardIndex(null);
+                    setSelectedHandCardAnchor(null);
+                    setSchemeSourceIndex(null);
+                  }}
+                >
                   {phase === "agenda_selection" ? null : (focusedPlayer?.hand || []).map((itemId, index) => {
                     const plottingAction = actions.find((entry) => entry.type === "select_commit_card" && entry.source === "hand" && entry.index === index && entry.player_id === focusedPlayer.id);
                     const schemeActions = actions.filter((entry) => entry.type === "plotting_scheme" && entry.hand_index === index && entry.player_id === focusedPlayer.id);
+                    const choosingSchemeSlot = schemeSourceIndex === index;
+                    const selected = selectedHandCardIndex === index;
+                    const selectable = Boolean(plottingAction || schemeActions.length);
+                    const selectCard = (event) => {
+                      if (!selectable || busy) return;
+                      if (selected) {
+                        setSelectedHandCardIndex(null);
+                        setSelectedHandCardAnchor(null);
+                        setSchemeSourceIndex(null);
+                      } else {
+                        const bounds = event.currentTarget.getBoundingClientRect();
+                        setSelectedHandCardIndex(index);
+                        setSelectedHandCardAnchor({
+                          left: bounds.left + bounds.width / 2,
+                          top: bounds.top,
+                        });
+                        setSelectedSchemeSlotIndex(null);
+                        setSelectedSchemeCardAnchor(null);
+                        if (schemeSourceIndex !== index) setSchemeSourceIndex(null);
+                      }
+                    };
                     return (
-                      <div key={`${itemId}-${index}`} className={`space-y-2 ${plottingAction?.selected ? "bg-amber-950/40 p-1 ring-2 ring-amber-400" : ""}`}>
+                      <div
+                        key={`${itemId}-${index}`}
+                        className={`relative shrink-0 ${selectable ? "cursor-pointer" : ""} ${
+                          selected || plottingAction?.selected ? "ring-2 ring-amber-400" : ""
+                        } ${choosingSchemeSlot ? "ring-2 ring-teal-300" : ""}`}
+                        onClick={selectCard}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            selectCard();
+                          }
+                        }}
+                        role={selectable ? "button" : undefined}
+                        tabIndex={selectable ? 0 : undefined}
+                      >
                         <ItemVisual
                           item={itemLookup[normalize(itemId)]}
                           catalogs={catalogs}
                           tagLookup={tagLookup}
                           storageIconSrc={storageIconSrc}
-                          actionLabel={plottingAction ? (plottingAction.selected ? "Selected" : plottingAction.face_up ? "Select face up" : "Select anonymously") : ""}
-                          onAction={() => performAction(plottingAction)}
-                          disabled={busy || !plottingAction || plottingAction.selected}
                         />
-                        {schemeActions.length ? (
-                          <div className="grid grid-cols-2 gap-1">
-                            {schemeActions.map((entry) => (
-                              <button key={`${entry.mode}-${entry.slot_index}`} className="border border-slate-700 px-2 py-1 text-[0.65rem] text-slate-300 hover:bg-slate-800 disabled:opacity-50" disabled={busy} onClick={() => performAction(entry)} type="button">
-                                {entry.mode === "swap" ? "Swap with" : "Scheme in"} slot {entry.slot_index + 1}
-                              </button>
-                            ))}
+                        {selected && selectedHandCardAnchor && (plottingAction || schemeActions.length) ? (
+                          <div
+                            className="fixed z-[1400] flex items-center gap-2 border border-amber-900/70 bg-slate-950 p-1.5 shadow-xl"
+                            style={{
+                              left: selectedHandCardAnchor.left,
+                              top: selectedHandCardAnchor.top,
+                              transform: "translate(-50%, calc(-100% - 0.5rem))",
+                            }}
+                          >
+                              {plottingAction ? (
+                                <button
+                                  className="whitespace-nowrap border border-amber-400 bg-amber-300 px-3 py-1.5 text-xs font-bold text-stone-950 hover:bg-amber-200 disabled:opacity-60"
+                                  disabled={busy || plottingAction.selected}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    setSchemeSourceIndex(null);
+                                    void performAction(plottingAction);
+                                  }}
+                                  title={plottingAction.face_up ? "Commit face up" : "Commit anonymously"}
+                                  type="button"
+                                >
+                                  {plottingAction.selected ? "Committed" : "Commit"}
+                                </button>
+                              ) : null}
+                              {schemeActions.length ? (
+                                <button
+                                  className="whitespace-nowrap border border-teal-400 bg-teal-950/90 px-3 py-1.5 text-xs font-bold text-teal-100 hover:bg-teal-900"
+                                  disabled={busy}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    setSchemeSourceIndex(choosingSchemeSlot ? null : index);
+                                  }}
+                                  type="button"
+                                >
+                                  {choosingSchemeSlot ? "Cancel Scheme" : "Scheme"}
+                                </button>
+                              ) : null}
                           </div>
                         ) : null}
                       </div>
@@ -718,21 +798,200 @@ const GameRoomPage = () => {
                   {phase !== "agenda_selection" && !focusedPlayer?.hand?.length && !focusedPrivateBot ? <p className="border border-dashed border-slate-800 p-5 text-sm text-slate-600">Hand is empty.</p> : null}
                 </div>
               </div>
-              {phase !== "agenda_selection" && !focusedPrivateBot ? <div>
-                <h3 className="mb-2 text-xs font-bold uppercase text-slate-500">Scheme Slots</h3>
-                <div className="grid grid-cols-2 gap-2">
+              {phase !== "agenda_selection" && !focusedPrivateBot ? <div className="min-w-0 overflow-visible">
+                <h3 className="mb-1 text-xs font-bold uppercase text-slate-500">Scheme Slots</h3>
+                <div className="flex items-start gap-2">
                   {(focusedPlayer?.scheme_slots || [null, null]).map((itemId, index) => {
                     const plottingAction = actions.find((entry) => entry.type === "select_commit_card" && entry.source === "scheme" && entry.index === index && entry.player_id === focusedPlayer.id);
                     const returnAction = actions.find((entry) => entry.type === "plotting_scheme" && entry.mode === "to_hand" && entry.slot_index === index && entry.player_id === focusedPlayer.id);
+                    const placementAction = schemeSourceIndex === null
+                      ? null
+                      : actions.find(
+                        (entry) => entry.type === "plotting_scheme"
+                          && entry.player_id === focusedPlayer.id
+                          && entry.hand_index === schemeSourceIndex
+                          && entry.slot_index === index
+                          && ["to_scheme", "swap"].includes(entry.mode)
+                      );
+                    const choosePlacement = async () => {
+                      if (!placementAction) return;
+                      const nextState = await performAction(placementAction);
+                      if (nextState) {
+                        setSelectedHandCardIndex(null);
+                        setSelectedHandCardAnchor(null);
+                        setSelectedSchemeSlotIndex(null);
+                        setSelectedSchemeCardAnchor(null);
+                        setSchemeSourceIndex(null);
+                      }
+                    };
+                    const schemeCardSelected = selectedSchemeSlotIndex === index;
+                    const schemeCardSelectable = Boolean(plottingAction || returnAction);
+                    const selectSchemeCard = (event) => {
+                      if (!schemeCardSelectable || placementAction || busy) return;
+                      if (schemeCardSelected) {
+                        setSelectedSchemeSlotIndex(null);
+                        setSelectedSchemeCardAnchor(null);
+                      } else {
+                        const bounds = event.currentTarget.getBoundingClientRect();
+                        setSelectedSchemeSlotIndex(index);
+                        setSelectedSchemeCardAnchor({
+                          left: bounds.left + bounds.width / 2,
+                          top: bounds.top,
+                        });
+                        setSelectedHandCardIndex(null);
+                        setSelectedHandCardAnchor(null);
+                        setSchemeSourceIndex(null);
+                      }
+                    };
                     return itemId ? (
-                      <div key={`${itemId}-${index}`} className={`space-y-2 ${plottingAction?.selected ? "bg-amber-950/40 p-1 ring-2 ring-amber-400" : ""}`}>
-                        <ItemVisual item={itemLookup[normalize(itemId)]} catalogs={catalogs} tagLookup={tagLookup} storageIconSrc={storageIconSrc} actionLabel={plottingAction ? plottingAction.selected ? "Selected" : plottingAction.face_up ? "Select face up" : "Select anonymously" : ""} onAction={() => performAction(plottingAction)} disabled={busy || !plottingAction || plottingAction.selected} />
-                        {returnAction ? <button className="w-full border border-slate-700 px-2 py-1 text-[0.65rem] text-slate-300 hover:bg-slate-800 disabled:opacity-50" disabled={busy} onClick={() => performAction(returnAction)} type="button">Return to hand</button> : null}
+                      <div
+                        key={`${itemId}-${index}`}
+                        className={`relative shrink-0 ${schemeCardSelectable ? "cursor-pointer" : ""} ${
+                          schemeCardSelected || plottingAction?.selected ? "ring-2 ring-amber-400" : ""
+                        } ${placementAction ? "ring-2 ring-teal-300" : ""}`}
+                        onClick={selectSchemeCard}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            selectSchemeCard(event);
+                          }
+                        }}
+                        role={schemeCardSelectable ? "button" : undefined}
+                        tabIndex={schemeCardSelectable ? 0 : undefined}
+                      >
+                        <ItemVisual item={itemLookup[normalize(itemId)]} catalogs={catalogs} tagLookup={tagLookup} storageIconSrc={storageIconSrc} />
+                        {placementAction ? (
+                          <button
+                            className="absolute inset-0 z-30 flex items-center justify-center bg-teal-950/75 p-2 text-xs font-bold text-teal-50 hover:bg-teal-900/85 disabled:opacity-50"
+                            disabled={busy}
+                            onClick={() => void choosePlacement()}
+                            type="button"
+                          >
+                            Swap into slot {index + 1}
+                          </button>
+                        ) : schemeCardSelected && selectedSchemeCardAnchor && (plottingAction || returnAction) ? (
+                          <div
+                            className="fixed z-[1400] flex items-center gap-2 border border-amber-900/70 bg-slate-950 p-1.5 shadow-xl"
+                            style={{
+                              left: selectedSchemeCardAnchor.left,
+                              top: selectedSchemeCardAnchor.top,
+                              transform: "translate(-50%, calc(-100% - 0.5rem))",
+                            }}
+                          >
+                              {plottingAction ? (
+                                <button
+                                  className="whitespace-nowrap border border-amber-400 bg-amber-300 px-3 py-1.5 text-xs font-bold text-stone-950 hover:bg-amber-200 disabled:opacity-60"
+                                  disabled={busy || plottingAction.selected}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    void performAction(plottingAction);
+                                  }}
+                                  type="button"
+                                >
+                                  {plottingAction.selected ? "Committed" : "Commit"}
+                                </button>
+                              ) : null}
+                              {returnAction ? (
+                                <button
+                                  className="whitespace-nowrap border border-slate-600 bg-slate-900 px-3 py-1.5 text-xs font-bold text-slate-200 hover:bg-slate-800 disabled:opacity-50"
+                                  disabled={busy}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    void performAction(returnAction);
+                                  }}
+                                  type="button"
+                                >
+                                  Return to hand
+                                </button>
+                              ) : null}
+                          </div>
+                        ) : null}
                       </div>
-                    ) : <div key={index} className="flex aspect-[5/7] items-center justify-center border border-dashed border-slate-700 text-xs text-slate-600">Empty slot {index + 1}</div>;
+                    ) : (
+                      <button
+                        key={index}
+                        className={`flex aspect-[5/7] w-[clamp(9rem,13vw,11rem)] shrink-0 items-center justify-center border border-dashed text-xs ${
+                          placementAction
+                            ? "border-teal-300 bg-teal-950/60 font-bold text-teal-100 hover:bg-teal-900/70"
+                            : "border-slate-700 text-slate-600"
+                        }`}
+                        disabled={!placementAction || busy}
+                        onClick={() => void choosePlacement()}
+                        type="button"
+                      >
+                        {placementAction ? `Place in slot ${index + 1}` : `Empty slot ${index + 1}`}
+                      </button>
+                    );
                   })}
                 </div>
               </div> : null}
+              <aside className="flex min-w-0 flex-col items-center gap-2 border-l border-slate-800 pl-3 lg:col-start-3">
+                <div className="grid grid-cols-2 gap-2">
+                  {focusedMinistries.map((ministry) => {
+                    const iconSrc = buildAssetUrl(
+                      ministry.data?.icon
+                      || imageLookup[normalize(ministry.data?.icon_image_id)]?.data?.src
+                      || ""
+                    );
+                    return (
+                      <button
+                        key={ministry.id}
+                        aria-label={`Open ${ministry.name}`}
+                        className="inline-flex h-9 w-9 items-center justify-center border border-amber-900/70 bg-stone-950 text-amber-300 hover:bg-amber-950/60"
+                        onClick={() => setMinistryOverlayId(ministry.id)}
+                        title={ministry.name}
+                        type="button"
+                      >
+                        {iconSrc ? (
+                          <img alt="" className="h-7 w-7 object-contain" src={iconSrc} />
+                        ) : (
+                          <Crown className="h-5 w-5" aria-hidden="true" />
+                        )}
+                      </button>
+                    );
+                  })}
+                  <span
+                    aria-label={`Suspicion ${focusedPlayer?.suspicion || 0}`}
+                    className="relative inline-flex h-9 w-9 items-center justify-center border border-rose-900/70 bg-stone-950 text-rose-300"
+                    title={`Suspicion ${focusedPlayer?.suspicion || 0}`}
+                  >
+                    <Shield className="h-5 w-5" aria-hidden="true" />
+                    <strong className="absolute -right-1 -top-1 min-w-4 border border-rose-800 bg-rose-950 px-0.5 text-center text-[0.6rem] leading-4 text-rose-100">
+                      {focusedPlayer?.suspicion || 0}
+                    </strong>
+                  </span>
+                  {focusedPlayer?.hidden_agenda_id ? (
+                    <button
+                      aria-label="Open secret Agenda"
+                      className="relative inline-flex h-9 w-9 items-center justify-center border border-amber-900/70 bg-stone-950 text-amber-300 hover:bg-amber-950/60"
+                      onClick={() => setAgendaOverlayPlayerId(focusedPlayer.id)}
+                      title={`Agenda: ${agendaLookup[normalize(focusedPlayer.hidden_agenda_id)]?.name || focusedPlayer.hidden_agenda_id}`}
+                      type="button"
+                    >
+                      <ScrollText className="h-5 w-5" aria-hidden="true" />
+                      {gameState.agendas_revealed ? (
+                        <strong className="absolute -right-1 -top-1 min-w-4 border border-amber-800 bg-amber-950 px-0.5 text-center text-[0.6rem] leading-4 text-amber-100">
+                          {gameState.agenda_results?.[focusedPlayer.id]?.score || 0}
+                        </strong>
+                      ) : null}
+                    </button>
+                  ) : null}
+                </div>
+                <div className="mt-auto flex items-center justify-center">
+                  {phase === "plotting" && confirmPlottingAction ? (
+                    <button
+                      aria-label={confirmPlottingAction.has_selection ? "Confirm Plot" : "Confirm no card"}
+                      className="inline-flex h-9 w-9 items-center justify-center bg-amber-300 text-stone-950 hover:bg-amber-200 disabled:opacity-50"
+                      disabled={busy}
+                      onClick={() => performAction(confirmPlottingAction)}
+                      title={confirmPlottingAction.has_selection ? "Confirm Plot" : "Confirm no card"}
+                      type="button"
+                    >
+                      <Check className="h-5 w-5" aria-hidden="true" />
+                    </button>
+                  ) : null}
+                </div>
+              </aside>
             </div>
           </section>
         </section>
@@ -871,6 +1130,52 @@ const GameRoomPage = () => {
         </div>
       ) : null}
 
+      {discardOpen ? (
+        <div
+          className="fixed inset-0 z-[1250] flex items-center justify-center overflow-y-auto bg-slate-950/90 p-6"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setDiscardOpen(false);
+          }}
+        >
+          <section className="max-h-[90vh] w-full max-w-7xl overflow-y-auto border border-amber-900/70 bg-slate-900 p-5 shadow-2xl">
+            <div className="mb-5 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-bold uppercase text-amber-600">Public Information</p>
+                <h2 className="mt-1 text-lg font-bold text-amber-50">Face-up Discards · {discardCount}</h2>
+              </div>
+              <button
+                className="inline-flex h-8 w-8 items-center justify-center border border-slate-700 text-slate-300 hover:bg-slate-800"
+                onClick={() => setDiscardOpen(false)}
+                title="Close discards"
+                type="button"
+              >
+                <X className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </div>
+            <div className="space-y-6">
+              <section>
+                <h3 className="mb-1 text-xs font-bold uppercase text-slate-500">Empire · {gameState.empire_discard?.length || 0}</h3>
+                <div className="flex flex-wrap items-start gap-3">
+                  {(gameState.empire_discard || []).map((itemId, index) => (
+                    <ItemVisual key={`${itemId}-${index}`} item={itemLookup[normalize(itemId)]} catalogs={catalogs} tagLookup={tagLookup} storageIconSrc={storageIconSrc} />
+                  ))}
+                  {!gameState.empire_discard?.length ? <p className="text-sm text-slate-600">Empty.</p> : null}
+                </div>
+              </section>
+              <section>
+                <h3 className="mb-1 text-xs font-bold uppercase text-slate-500">Crisis · {gameState.crisis_discard?.length || 0}</h3>
+                <div className="flex flex-wrap items-start gap-3">
+                  {(gameState.crisis_discard || []).map((itemId, index) => (
+                    <ItemVisual key={`${itemId}-${index}`} item={itemLookup[normalize(itemId)]} catalogs={catalogs} tagLookup={tagLookup} storageIconSrc={storageIconSrc} />
+                  ))}
+                  {!gameState.crisis_discard?.length ? <p className="text-sm text-slate-600">Empty.</p> : null}
+                </div>
+              </section>
+            </div>
+          </section>
+        </div>
+      ) : null}
+
       {agendaOverlayEntry ? (
         <div
           className="fixed inset-0 z-[1300] flex items-center justify-center overflow-y-auto bg-slate-950/90 p-6"
@@ -892,6 +1197,39 @@ const GameRoomPage = () => {
             </div>
             <CatalogItemVisual
               entry={agendaOverlayEntry}
+              tags={catalogs.tags}
+              cards={catalogs.cards}
+              ministries={catalogs.ministries}
+              images={catalogs.images}
+              pillars={catalogs.pillars}
+              tokens={catalogs.tokens}
+              effectIcons={catalogs.effect_icons}
+            />
+          </section>
+        </div>
+      ) : null}
+
+      {ministryOverlayEntry ? (
+        <div
+          className="fixed inset-0 z-[1300] flex items-center justify-center overflow-y-auto bg-slate-950/90 p-6"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setMinistryOverlayId("");
+          }}
+        >
+          <section className="w-full max-w-[28rem] border border-amber-900/70 bg-slate-900 p-4 shadow-2xl">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <h2 className="text-sm font-bold uppercase text-amber-100">Ministry</h2>
+              <button
+                className="inline-flex h-8 w-8 items-center justify-center border border-slate-700 text-slate-300 hover:bg-slate-800"
+                onClick={() => setMinistryOverlayId("")}
+                title="Close Ministry"
+                type="button"
+              >
+                <X className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </div>
+            <CatalogItemVisual
+              entry={ministryOverlayEntry}
               tags={catalogs.tags}
               cards={catalogs.cards}
               ministries={catalogs.ministries}
