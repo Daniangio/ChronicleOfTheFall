@@ -29,7 +29,7 @@ and submits one through `POST /api/game/rooms/{room_id}/actions`:
 
 ```json
 {
-  "action": "commit_card",
+  "action": "select_commit_card",
   "payload": {
     "player_id": "player-2",
     "source": "hand",
@@ -37,6 +37,12 @@ and submits one through `POST /api/game/rooms/{room_id}/actions`:
   }
 }
 ```
+
+Selecting a Plotting card does not commit it. The backend records
+`selected_commitment` for that player and exposes `confirm_plotting`. Scheme
+rearrangement clears the pending selection so a stale hand or Scheme index cannot
+be confirmed. Only `confirm_plotting` removes the selected card and completes
+that player's Plotting Phase.
 
 The engine supports Agenda selection, Ministry assignment, Suspicion placement,
 Production, parallel anonymous commitments, Docket ordering, reveal and

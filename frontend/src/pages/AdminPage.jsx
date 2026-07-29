@@ -3396,7 +3396,9 @@ const AdminPage = () => {
                     {category}
                   </h2>
                 ) : null}
-                <div className="grid gap-4 md:grid-cols-5 xl:grid-cols-6">
+                <div className={activeCatalogKind === "agendas"
+                  ? "grid gap-6 lg:grid-cols-2 min-[1400px]:grid-cols-3"
+                  : "grid gap-4 md:grid-cols-5 xl:grid-cols-6"}>
                   {entries.map((entry) => {
                     const actionButtons = isReadOnlyCatalogSection ? null : (
                       <>
@@ -3419,7 +3421,12 @@ const AdminPage = () => {
                       </>
                     );
                     return (
-                      <div key={entry.id} className="space-y-3">
+                      <div
+                        key={entry.id}
+                        className={activeCatalogKind === "agendas"
+                          ? "w-full max-w-[30rem] justify-self-center space-y-3"
+                          : "space-y-3"}
+                      >
                         <CatalogItemVisual
                           entry={entry}
                           tags={tagEntries}

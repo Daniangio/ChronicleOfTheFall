@@ -624,23 +624,23 @@ const AgendaCardVisual = ({ entry, actions, size = "table" }) => {
     ["forbidden", "Forbidden", "text-rose-200"],
   ];
   return (
-    <article className={`flex aspect-[5/7] ${compact ? "w-[clamp(9rem,13vw,11rem)] p-2" : "w-[clamp(12rem,16vw,15rem)] p-3"} shrink-0 flex-col overflow-hidden rounded-lg border border-amber-900/70 bg-stone-950 shadow-xl`}>
+    <article className={`flex aspect-[8/5] ${compact ? "w-[clamp(20rem,26vw,22rem)] p-2" : "w-full max-w-[30rem] p-3"} shrink-0 flex-col overflow-hidden rounded-lg border border-amber-900/70 bg-stone-950 shadow-xl`}>
       <div className="border-b border-amber-900/50 pb-2 text-right">
         <p className="text-[0.5rem] font-bold uppercase text-amber-600">Hidden Agenda</p>
         <h3 className={`${compact ? "text-[0.72rem]" : "text-[0.82rem]"} line-clamp-2 font-bold leading-tight text-amber-50`}>{entry.name}</h3>
       </div>
-      {entry.summary ? <p className="my-2 line-clamp-2 text-center text-[0.58rem] leading-4 text-stone-400">{entry.summary}</p> : null}
-      <div className="grid flex-1 content-start gap-1.5 overflow-hidden">
+      {!compact && entry.summary ? <p className="my-2 line-clamp-2 text-center text-[0.58rem] leading-4 text-stone-400">{entry.summary}</p> : null}
+      <div className="grid min-h-0 flex-1 grid-cols-2 grid-rows-2 gap-1.5 overflow-hidden pt-1.5">
         {sections.map(([sectionKey, label, tone]) => {
           const section = data[sectionKey] || {};
           return (
-            <div key={sectionKey} className="border border-slate-800 bg-slate-900/70 px-2 py-1">
+            <div key={sectionKey} className="min-h-0 overflow-hidden border border-slate-800 bg-slate-900/70 px-2 py-1">
               <div className="flex items-center justify-between gap-2">
                 <span className={`text-[0.52rem] font-bold uppercase ${tone}`}>{label}</span>
                 {sectionKey !== "forbidden" ? <span className="text-[0.52rem] font-bold text-slate-400">{section.points || 0}</span> : null}
               </div>
               <p className="truncate text-[0.6rem] font-semibold text-stone-200">{section.name || "Undefined"}</p>
-              {!compact && section.text ? <p className="line-clamp-2 text-[0.52rem] leading-3 text-slate-500">{section.text}</p> : null}
+              {section.text ? <p className="line-clamp-3 text-[0.52rem] leading-3 text-slate-500">{section.text}</p> : null}
             </div>
           );
         })}

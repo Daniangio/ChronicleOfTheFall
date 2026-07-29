@@ -586,7 +586,7 @@ non-Crisis card.
 
 The Minister of the Empire cannot receive Suspicion and cannot be blocked or otherwise prevented from holding this office.
 
-An effect that would block that player may still prevent them from holding another Ministry, but it cannot remove or skip their position as Minister of the Empire.
+The Minister of the Empire never holds another Ministry during the same Era.
 
 At the beginning of each new Era after the first, pass the office clockwise.
 
@@ -613,19 +613,27 @@ The Minister of State and Minister of War may never be held by the same player i
 
 ### 3 Players
 
-Assign all four Ministries in their fixed order around the players. One player holds two Ministries.
+Starting clockwise from the Minister of the Empire:
 
-The shared pair must never be State and War.
+1. the next player is Minister of War and Minister of Cities;
+2. the third player is Minister of State and Minister of Health & Harvest.
 
 ### 4 Players
 
-Assign one Ministry to each player in the fixed order.
+Starting clockwise from the Minister of the Empire:
+
+1. the next player is Minister of War;
+2. the second player is Minister of State;
+3. the third player is Minister of Cities and Minister of Health & Harvest.
 
 ### 5 Players
 
-Assign the four Ministries in their fixed order. One player has no Ministry.
+Starting clockwise from the Minister of the Empire, assign War, State, Cities,
+and Health & Harvest to the four remaining players in that order.
 
-Advance all assignments in the same direction each Era.
+The Minister of the Empire never receives one of these assignments. Passing the
+Empire office clockwise advances every Ministry assignment and ensures that the
+previous Minister of State becomes Minister of War.
 
 ---
 

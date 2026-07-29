@@ -20,6 +20,7 @@ from .goldfishing_engine import (
     _is_ministry,
     _legal_placements,
     _ministry_holder,
+    _ministry_role_offset,
     _production_for_card,
     _storage_capacity,
     item_by_id,
@@ -159,21 +160,28 @@ def _choose_plotting_action(
     actions: list[dict[str, Any]],
 ) -> dict[str, Any]:
     player = _player(state, bot_id)
+    confirm_action = next(
+        (action for action in actions if action["type"] == "confirm_plotting"),
+        None,
+    )
+    if player.get("selected_commitment") and confirm_action:
+        return confirm_action
     already_adjusted = int(player.get("bot_scheme_adjusted_era", 0)) == int(state.get("era", 1))
-    commit_actions = [action for action in actions if action["type"] in {"commit_card", "commit_none"}]
+    select_actions = [action for action in actions if action["type"] == "select_commit_card"]
     if not already_adjusted:
         scheme_action = _choose_scheme_action(state, bot_id, actions)
         if scheme_action is not None:
             return scheme_action
     playable = [
         action
-        for action in commit_actions
-        if action["type"] == "commit_card"
-        and _item_playable_now(state, item_by_id(state, str(action.get("item_id") or "")))
+        for action in select_actions
+        if _item_playable_now(state, item_by_id(state, str(action.get("item_id") or "")))
     ]
-    candidates = playable or [action for action in commit_actions if action["type"] == "commit_card"]
+    candidates = playable or select_actions
     if not candidates:
-        return commit_actions[0]
+        if confirm_action:
+            return confirm_action
+        raise ValueError("Bot has no Plotting action.")
     return max(
         candidates,
         key=lambda action: (
@@ -190,7 +198,7 @@ def _choose_scheme_action(
     actions: list[dict[str, Any]],
 ) -> dict[str, Any] | None:
     player = _player(state, bot_id)
-    legal_commit_count = sum(action["type"] == "commit_card" for action in actions)
+    legal_commit_count = sum(action["type"] == "select_commit_card" for action in actions)
     if legal_commit_count < 2:
         return None
     hand_candidates: list[tuple[float, int, str, int]] = []
@@ -752,18 +760,23 @@ def _forecast_role_holder(state: dict[str, Any], role: str, eras_ahead: int) -> 
             0,
         )
         return players[(current + eras_ahead) % len(players)]["id"]
-    ministries = [
-        ministry
-        for ordered_role in MINISTRY_ROTATION_ORDER
-        for ministry in state.get("catalog", {}).get("ministries", [])
-        if _is_ministry(ministry, ordered_role)
-    ]
-    ministry = next((entry for entry in ministries if _is_ministry(entry, role)), None)
+    ministry = next(
+        (
+            entry
+            for entry in state.get("catalog", {}).get("ministries", [])
+            if _is_ministry(entry, role)
+        ),
+        None,
+    )
     if ministry is None:
         return _forecast_role_holder(state, "empire", eras_ahead)
-    ministry_index = ministries.index(ministry)
-    future_era = int(state.get("era", 1)) + eras_ahead
-    return players[(ministry_index - (future_era - 1)) % len(players)]["id"]
+    future_empire = _forecast_role_holder(state, "empire", eras_ahead)
+    empire_index = next(
+        index for index, player in enumerate(players) if player["id"] == future_empire
+    )
+    return players[
+        (empire_index + _ministry_role_offset(len(players), role)) % len(players)
+    ]["id"]
 
 
 def _ministry_role(ministry: dict[str, Any] | None) -> str:

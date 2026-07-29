@@ -120,11 +120,20 @@ class TestBotPolicy(unittest.TestCase):
             action
             for action in state["possible_actions"]
             if action.get("player_id") == "player-1"
-            and action["type"] == "commit_card"
+            and action["type"] == "select_commit_card"
         )
 
         state = advance_bot_players(
             perform_action(state, human_commit["type"], human_commit)
+        )
+        human_confirm = next(
+            action
+            for action in state["possible_actions"]
+            if action.get("player_id") == "player-1"
+            and action["type"] == "confirm_plotting"
+        )
+        state = advance_bot_players(
+            perform_action(state, human_confirm["type"], human_confirm)
         )
 
         self.assertEqual(state["phase"], "docket_ordering")
@@ -153,7 +162,7 @@ class TestBotPolicy(unittest.TestCase):
 
         action = choose_next_bot_action(state)
 
-        self.assertEqual(action["type"], "commit_card")
+        self.assertEqual(action["type"], "select_commit_card")
         self.assertEqual(action["item_id"], "garrison")
 
     def test_bot_schemes_valuable_card_expected_within_three_eras(self):

@@ -342,10 +342,20 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
         action = next(
             entry
             for entry in state["possible_actions"]
-            if entry["type"] == "commit_card" and entry["player_id"] == player_id
+            if entry["type"] == "select_commit_card" and entry["player_id"] == player_id
         )
 
         state = perform_action(state, action["type"], action)
+
+        player = next(player for player in state["players"] if player["id"] == player_id)
+        self.assertFalse(player["committed"])
+        self.assertEqual(player["selected_commitment"]["item_id"], action["item_id"])
+        confirm = next(
+            entry
+            for entry in state["possible_actions"]
+            if entry["type"] == "confirm_plotting" and entry["player_id"] == player_id
+        )
+        state = perform_action(state, confirm["type"], confirm)
 
         self.assertTrue(next(player for player in state["players"] if player["id"] == player_id)["committed"])
         self.assertEqual(state["phase"], "plotting")
@@ -367,7 +377,7 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
         )
         self.assertNotEqual(state_holder, war_holder)
         self.assertEqual(len(state["ministry_assignments"]), 5)
-        self.assertEqual(len(state["players"][0]["ministry_ids"]), 2)
+        self.assertEqual(state["players"][0]["ministry_ids"], ["minister-of-the-empire"])
 
         state["era"] = 2
         _assign_ministries(state, rotate=True)
@@ -393,7 +403,40 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
         war_holder = next(holder for ministry_id, holder in non_empire_assignments.items() if "war" in ministry_id)
         self.assertEqual(len(non_empire_assignments), 4)
         self.assertNotEqual(state_holder, war_holder)
-        self.assertEqual(len(set(non_empire_assignments.values())), 3)
+        self.assertEqual(set(non_empire_assignments.values()), {"player-2", "player-3"})
+        self.assertEqual(
+            {
+                ministry_id
+                for ministry_id, holder in non_empire_assignments.items()
+                if holder == "player-2"
+            },
+            {"minister-of-cities", "minister-of-war"},
+        )
+        self.assertEqual(
+            {
+                ministry_id
+                for ministry_id, holder in non_empire_assignments.items()
+                if holder == "player-3"
+            },
+            {"minister-of-state", "minister-of-health-harvest"},
+        )
+        empire_player = next(player for player in state["players"] if player["id"] == "player-1")
+        self.assertEqual(empire_player["ministry_ids"], ["minister-of-the-empire"])
+
+    def test_five_players_keep_empire_separate_and_assign_one_ministry_each(self):
+        state = build_state(player_count=5)
+
+        self.assertEqual(
+            state["ministry_assignments"],
+            {
+                "minister-of-the-empire": "player-1",
+                "minister-of-cities": "player-4",
+                "minister-of-state": "player-3",
+                "minister-of-war": "player-2",
+                "minister-of-health-harvest": "player-5",
+            },
+        )
+        self.assertEqual(state["players"][0]["ministry_ids"], ["minister-of-the-empire"])
 
     def test_two_suspicion_deposes_and_blocks_events_with_three_players(self):
         state = build_state()
@@ -415,7 +458,7 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
         player_two["hand"] = ["tax-riots"]
         state["phase"] = "plotting"
         state["active_player_id"] = "player-2"
-        state = perform_action(state, "commit_none", {"player_id": "player-2"})
+        state = perform_action(state, "confirm_plotting", {"player_id": "player-2"})
         player_two = next(player for player in state["players"] if player["id"] == "player-2")
         self.assertTrue(player_two["committed"])
         self.assertTrue(player_two["hand_revealed"])
@@ -435,7 +478,12 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
         player_two["hand"] = ["tax-riots", "farm"]
         state["active_player_id"] = "player-2"
         state["possible_actions"] = []
-        state = perform_action(state, "commit_card", {"player_id": "player-2", "source": "hand", "index": 1})
+        state = perform_action(
+            state,
+            "select_commit_card",
+            {"player_id": "player-2", "source": "hand", "index": 1},
+        )
+        state = perform_action(state, "confirm_plotting", {"player_id": "player-2"})
         commitment = state["commitments"][-1]
         self.assertTrue(commitment["face_up"])
         self.assertEqual(commitment["item_id"], "farm")
@@ -643,8 +691,13 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
 
         state = perform_action(
             state,
-            "commit_card",
+            "select_commit_card",
             {"player_id": "player-4", "source": "hand", "index": 0},
+        )
+        state = perform_action(
+            state,
+            "confirm_plotting",
+            {"player_id": "player-4"},
         )
 
         self.assertEqual(state["phase"], "hand_reset")
@@ -1497,7 +1550,7 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
 
         self.assertEqual(state["phase"], "game_over")
         self.assertTrue(state["agendas_revealed"])
-        self.assertEqual(state["winner_player_ids"], ["player-2"])
+        self.assertEqual(state["winner_player_ids"], ["player-3"])
         self.assertTrue(all(result["eligible"] for result in state["agenda_results"].values()))
         self.assertTrue(all(result["score"] == 8 for result in state["agenda_results"].values()))
 

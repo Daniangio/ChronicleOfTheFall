@@ -5,11 +5,14 @@ import {
   Castle,
   Check,
   Crown,
+  ListOrdered,
   LogOut,
   Minus,
   Plus,
+  ScrollText,
   Shield,
   Users,
+  X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
@@ -128,6 +131,8 @@ const GameRoomPage = () => {
   const [focusedPlayerId, setFocusedPlayerId] = useState("");
   const [storageSelection, setStorageSelection] = useState({});
   const [boardZoom, setBoardZoom] = useState(0.82);
+  const [agendaOverlayPlayerId, setAgendaOverlayPlayerId] = useState("");
+  const [docketOpen, setDocketOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [ending, setEnding] = useState(false);
   const [error, setError] = useState("");
@@ -161,6 +166,10 @@ const GameRoomPage = () => {
     setStorageSelection({});
   }, [gameState?.phase, gameState?.era]);
 
+  useEffect(() => {
+    if (gameState?.phase === "docket_ordering") setDocketOpen(true);
+  }, [gameState?.phase]);
+
   const catalogs = {
     cards: gameState?.catalog?.cards || [],
     tags: gameState?.catalog?.tags || [],
@@ -193,6 +202,16 @@ const GameRoomPage = () => {
   const phase = gameState?.phase || "suspicion";
   const isBotMode = gameState?.mode === "solo_bots";
   const focusedPrivateBot = isBotMode && focusedPlayer?.controller === "bot" && !focusedPlayer?.hand_revealed;
+  const agendaSelectionActions = phase === "agenda_selection"
+    ? actions.filter((entry) => entry.type === "choose_agenda" && entry.player_id === focusedPlayer?.id)
+    : [];
+  const agendaOverlayPlayer = players.find((player) => player.id === agendaOverlayPlayerId);
+  const agendaOverlayEntry = agendaOverlayPlayer?.hidden_agenda_id
+    ? agendaLookup[normalize(agendaOverlayPlayer.hidden_agenda_id)]
+    : null;
+  const confirmPlottingAction = actions.find(
+    (entry) => entry.type === "confirm_plotting" && entry.player_id === focusedPlayer?.id
+  );
 
   const perform = async (action, payload = {}) => {
     if (!token || busy) return null;
@@ -401,16 +420,14 @@ const GameRoomPage = () => {
       );
     }
     if (phase === "docket_ordering") {
-      const confirmAction = actions.find((entry) => entry.type === "confirm_docket_order");
       return (
         <button
-          className="inline-flex items-center gap-2 rounded-md bg-amber-300 px-4 py-2 text-sm font-bold text-stone-950 hover:bg-amber-200 disabled:opacity-50"
-          disabled={busy || !confirmAction}
-          onClick={() => performAction(confirmAction)}
+          className="inline-flex items-center gap-2 border border-amber-900/70 px-4 py-2 text-sm font-bold text-amber-100 hover:bg-amber-950/50"
+          onClick={() => setDocketOpen(true)}
           type="button"
         >
-          <Check className="h-4 w-4" aria-hidden="true" />
-          Confirm Docket order
+          <ListOrdered className="h-4 w-4" aria-hidden="true" />
+          Open Council Docket
         </button>
       );
     }
@@ -533,17 +550,11 @@ const GameRoomPage = () => {
 
           <div className="grid gap-3 px-3 pb-3 lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(0,1fr)_17rem] lg:overflow-hidden xl:grid-cols-[minmax(0,1fr)_18rem]">
             <div className="min-w-0 lg:min-h-0">
-              <section className="border border-slate-800 bg-slate-900 lg:flex lg:h-full lg:min-h-0 lg:flex-col">
-                <div className="flex items-center justify-between gap-3 border-b border-slate-800 p-4">
-                  <div>
-                    <h2 className="font-bold text-white">Empire Map</h2>
-                    <p className="text-xs text-slate-500">Cities and their building slots</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button className="h-8 w-8 border border-slate-700 hover:bg-slate-800" onClick={() => setBoardZoom((value) => Math.max(0.55, value - 0.1))} title="Zoom out" type="button"><Minus className="mx-auto h-4 w-4" /></button>
-                    <span className="w-11 text-center text-xs text-slate-400">{Math.round(boardZoom * 100)}%</span>
-                    <button className="h-8 w-8 border border-slate-700 hover:bg-slate-800" onClick={() => setBoardZoom((value) => Math.min(1.2, value + 0.1))} title="Zoom in" type="button"><Plus className="mx-auto h-4 w-4" /></button>
-                  </div>
+              <section className="relative border border-slate-800 bg-slate-900 lg:flex lg:h-full lg:min-h-0 lg:flex-col">
+                <div className="absolute right-3 top-3 z-30 flex items-center gap-2 border border-slate-700 bg-slate-950/95 p-1 shadow-lg">
+                  <button className="h-8 w-8 border border-slate-700 hover:bg-slate-800" onClick={() => setBoardZoom((value) => Math.max(0.55, value - 0.1))} title="Zoom out" type="button"><Minus className="mx-auto h-4 w-4" /></button>
+                  <span className="w-11 text-center text-xs text-slate-400">{Math.round(boardZoom * 100)}%</span>
+                  <button className="h-8 w-8 border border-slate-700 hover:bg-slate-800" onClick={() => setBoardZoom((value) => Math.min(1.2, value + 0.1))} title="Zoom in" type="button"><Plus className="mx-auto h-4 w-4" /></button>
                 </div>
                 <div className="h-[30rem] overflow-auto bg-stone-950/60 p-5 lg:h-auto lg:min-h-0 lg:flex-1">
                   <div className="relative" style={{ width: boardWidth * boardZoom, height: 760 * boardZoom }}>
@@ -578,62 +589,19 @@ const GameRoomPage = () => {
                   </div>
                 </div>
               </section>
-              <section className="border border-slate-800 bg-slate-900 p-3">
-                <h2 className="text-sm font-bold text-white">Council Docket</h2>
-                <p className="mt-1 text-xs text-slate-500">
-                  {phase === "docket_ordering"
-                    ? "The Minister of the Empire decides the resolution order."
-                    : `${gameState.council_stack?.length || 0} cards remain`}
-                </p>
-                <div className="mt-3 flex max-h-[22rem] flex-wrap gap-2 overflow-auto">
-                  {(gameState.council_stack || []).map((commitment, index) => {
-                    const moveLeft = actions.find((entry) =>
-                      entry.type === "move_docket_card"
-                      && entry.commitment_id === commitment.id
-                      && entry.direction === -1
-                    );
-                    const moveRight = actions.find((entry) =>
-                      entry.type === "move_docket_card"
-                      && entry.commitment_id === commitment.id
-                      && entry.direction === 1
-                    );
-                    return (
-                      <div key={commitment.id} className="space-y-2">
-                        <div className="flex items-center justify-between text-xs text-slate-500">
-                          <span>Order {index + 1}</span>
-                          {commitment.face_up ? (
-                            <span>{players.find((player) => player.id === commitment.owner_player_id)?.name}</span>
-                          ) : <span>Anonymous</span>}
-                        </div>
-                        <ItemVisual item={itemLookup[normalize(commitment.item_id)]} catalogs={catalogs} tagLookup={tagLookup} storageIconSrc={storageIconSrc} />
-                        {phase === "docket_ordering" ? (
-                          <div className="flex justify-center gap-2">
-                            <button
-                              className="h-8 w-8 border border-slate-700 text-slate-300 hover:bg-slate-800 disabled:opacity-30"
-                              disabled={busy || !moveLeft}
-                              onClick={() => performAction(moveLeft)}
-                              title="Resolve earlier"
-                              type="button"
-                            >
-                              <ArrowLeft className="mx-auto h-4 w-4" aria-hidden="true" />
-                            </button>
-                            <button
-                              className="h-8 w-8 border border-slate-700 text-slate-300 hover:bg-slate-800 disabled:opacity-30"
-                              disabled={busy || !moveRight}
-                              onClick={() => performAction(moveRight)}
-                              title="Resolve later"
-                              type="button"
-                            >
-                              <ArrowRight className="mx-auto h-4 w-4" aria-hidden="true" />
-                            </button>
-                          </div>
-                        ) : null}
-                      </div>
-                    );
-                  })}
-                  {!gameState.council_stack?.length ? <p className="text-xs text-slate-600">No committed cards.</p> : null}
-                </div>
-              </section>
+              <button
+                className="flex w-full items-center justify-between gap-3 border border-slate-800 bg-slate-900 p-3 text-left hover:border-amber-900/70 hover:bg-amber-950/20"
+                onClick={() => setDocketOpen(true)}
+                type="button"
+              >
+                <span className="flex items-center gap-2 text-sm font-bold text-white">
+                  <ListOrdered className="h-4 w-4 text-amber-400" aria-hidden="true" />
+                  Council Docket
+                </span>
+                <span className="border border-slate-700 px-2 py-1 text-xs text-slate-400">
+                  {gameState.council_stack?.length || 0}
+                </span>
+              </button>
               {currentReveal ? (
                 <section className="border border-amber-900/60 bg-stone-950 p-3">
                   <h2 className="mb-2 text-sm font-bold text-amber-100">Current Reveal · {titleCase(currentReveal.status)}</h2>
@@ -667,57 +635,67 @@ const GameRoomPage = () => {
             </aside>
           </div>
 
-          <section className="shrink-0 border-t border-slate-800 bg-slate-900 p-3 lg:max-h-[20rem] lg:overflow-hidden">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h2 className="text-lg font-bold text-white">{focusedPlayer?.name || "Player"}</h2>
-                <p className="text-xs text-slate-500">{ministryNamesFor(focusedPlayer?.id).join(" · ") || "No ministry"} · Suspicion {focusedPlayer?.suspicion || 0}</p>
-                {focusedPlayer?.hand_revealed ? (
-                  <p className="mt-1 text-xs font-semibold text-rose-300">Hand and Schemes revealed by Suspicion</p>
-                ) : null}
-                {focusedPlayer?.hidden_agenda_id ? (
-                  <p className="mt-1 text-xs text-amber-700">
-                    Hidden Agenda: {agendaLookup[normalize(focusedPlayer.hidden_agenda_id)]?.name || focusedPlayer.hidden_agenda_id}
-                    {gameState.agendas_revealed
-                      ? ` · ${gameState.agenda_results?.[focusedPlayer.id]?.score || 0} points${gameState.winner_player_ids?.includes(focusedPlayer.id) ? " · Winner" : ""}`
-                      : ""}
-                  </p>
-                ) : null}
-              </div>
-              <p className="text-xs text-slate-500">Refill 3 · State refill 4 · Scheme slots 2</p>
+          <section className={`shrink-0 border-t border-slate-800 bg-slate-900 p-3 ${
+            phase === "agenda_selection"
+              ? "lg:max-h-[45vh] lg:overflow-y-auto"
+              : "lg:max-h-[20rem] lg:overflow-hidden"
+          }`}>
+            <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1 text-right text-xs text-slate-500">
+              <span>{ministryNamesFor(focusedPlayer?.id).join(" · ") || "No ministry"}</span>
+              <span>Suspicion {focusedPlayer?.suspicion || 0}</span>
+              {focusedPlayer?.hand_revealed ? (
+                <span className="font-semibold text-rose-300">Hand and Schemes revealed</span>
+              ) : null}
+              {focusedPlayer?.hidden_agenda_id ? (
+                <span className="text-amber-700">
+                  Agenda: {agendaLookup[normalize(focusedPlayer.hidden_agenda_id)]?.name || focusedPlayer.hidden_agenda_id}
+                  {gameState.agendas_revealed
+                    ? ` · ${gameState.agenda_results?.[focusedPlayer.id]?.score || 0} points${gameState.winner_player_ids?.includes(focusedPlayer.id) ? " · Winner" : ""}`
+                    : ""}
+                </span>
+              ) : null}
+              <span>Refill 3 · State 4 · Schemes 2</span>
+              {phase === "plotting" && confirmPlottingAction ? (
+                <button
+                  className="inline-flex items-center gap-2 bg-amber-300 px-3 py-2 text-xs font-bold text-stone-950 hover:bg-amber-200 disabled:opacity-50"
+                  disabled={busy}
+                  onClick={() => performAction(confirmPlottingAction)}
+                  type="button"
+                >
+                  <Check className="h-4 w-4" aria-hidden="true" />
+                  {confirmPlottingAction.has_selection ? "Confirm Plot" : "Confirm no card"}
+                </button>
+              ) : null}
+              {focusedPlayer?.hidden_agenda_id ? (
+                <button
+                  className="inline-flex h-8 w-8 items-center justify-center border border-amber-900/70 text-amber-300 hover:bg-amber-950/60"
+                  onClick={() => setAgendaOverlayPlayerId(focusedPlayer.id)}
+                  title="Open secret Agenda"
+                  type="button"
+                >
+                  <ScrollText className="h-4 w-4" aria-hidden="true" />
+                </button>
+              ) : null}
             </div>
-            <div className="mt-3 grid gap-4 lg:grid-cols-[minmax(0,1fr)_18rem] xl:grid-cols-[minmax(0,1fr)_20rem]">
+            <div className={phase === "agenda_selection"
+              ? "mt-3 min-w-0"
+              : "mt-3 grid gap-4 lg:grid-cols-[minmax(0,1fr)_18rem] xl:grid-cols-[minmax(0,1fr)_20rem]"}>
               <div className="min-w-0">
                 <h3 className="mb-2 text-xs font-bold uppercase text-slate-500">{phase === "agenda_selection" ? "Choose Hidden Agenda" : "Hand"}</h3>
                 <div className="flex flex-nowrap gap-2 overflow-x-auto pb-2">
-                  {phase === "agenda_selection" ? (
-                    actions
-                      .filter((entry) => entry.type === "choose_agenda" && entry.player_id === focusedPlayer?.id)
-                      .map((entry) => (
-                        <ItemVisual
-                          key={entry.agenda_id}
-                          item={agendaLookup[normalize(entry.agenda_id)]}
-                          catalogs={catalogs}
-                          tagLookup={tagLookup}
-                          storageIconSrc={storageIconSrc}
-                          actionLabel="Keep this Agenda"
-                          onAction={() => performAction(entry)}
-                          disabled={busy}
-                        />
-                      ))
-                  ) : (focusedPlayer?.hand || []).map((itemId, index) => {
-                    const plottingAction = actions.find((entry) => entry.type === "commit_card" && entry.source === "hand" && entry.index === index && entry.player_id === focusedPlayer.id);
+                  {phase === "agenda_selection" ? null : (focusedPlayer?.hand || []).map((itemId, index) => {
+                    const plottingAction = actions.find((entry) => entry.type === "select_commit_card" && entry.source === "hand" && entry.index === index && entry.player_id === focusedPlayer.id);
                     const schemeActions = actions.filter((entry) => entry.type === "plotting_scheme" && entry.hand_index === index && entry.player_id === focusedPlayer.id);
                     return (
-                      <div key={`${itemId}-${index}`} className="space-y-2">
+                      <div key={`${itemId}-${index}`} className={`space-y-2 ${plottingAction?.selected ? "bg-amber-950/40 p-1 ring-2 ring-amber-400" : ""}`}>
                         <ItemVisual
                           item={itemLookup[normalize(itemId)]}
                           catalogs={catalogs}
                           tagLookup={tagLookup}
                           storageIconSrc={storageIconSrc}
-                          actionLabel={plottingAction ? (plottingAction.face_up ? "Commit face up" : "Commit anonymously") : ""}
+                          actionLabel={plottingAction ? (plottingAction.selected ? "Selected" : plottingAction.face_up ? "Select face up" : "Select anonymously") : ""}
                           onAction={() => performAction(plottingAction)}
-                          disabled={busy || !plottingAction}
+                          disabled={busy || !plottingAction || plottingAction.selected}
                         />
                         {schemeActions.length ? (
                           <div className="grid grid-cols-2 gap-1">
@@ -744,11 +722,11 @@ const GameRoomPage = () => {
                 <h3 className="mb-2 text-xs font-bold uppercase text-slate-500">Scheme Slots</h3>
                 <div className="grid grid-cols-2 gap-2">
                   {(focusedPlayer?.scheme_slots || [null, null]).map((itemId, index) => {
-                    const plottingAction = actions.find((entry) => entry.type === "commit_card" && entry.source === "scheme" && entry.index === index && entry.player_id === focusedPlayer.id);
+                    const plottingAction = actions.find((entry) => entry.type === "select_commit_card" && entry.source === "scheme" && entry.index === index && entry.player_id === focusedPlayer.id);
                     const returnAction = actions.find((entry) => entry.type === "plotting_scheme" && entry.mode === "to_hand" && entry.slot_index === index && entry.player_id === focusedPlayer.id);
                     return itemId ? (
-                      <div key={`${itemId}-${index}`} className="space-y-2">
-                        <ItemVisual item={itemLookup[normalize(itemId)]} catalogs={catalogs} tagLookup={tagLookup} storageIconSrc={storageIconSrc} actionLabel={plottingAction ? plottingAction.face_up ? "Commit face up" : "Commit anonymously" : ""} onAction={() => performAction(plottingAction)} disabled={busy || !plottingAction} />
+                      <div key={`${itemId}-${index}`} className={`space-y-2 ${plottingAction?.selected ? "bg-amber-950/40 p-1 ring-2 ring-amber-400" : ""}`}>
+                        <ItemVisual item={itemLookup[normalize(itemId)]} catalogs={catalogs} tagLookup={tagLookup} storageIconSrc={storageIconSrc} actionLabel={plottingAction ? plottingAction.selected ? "Selected" : plottingAction.face_up ? "Select face up" : "Select anonymously" : ""} onAction={() => performAction(plottingAction)} disabled={busy || !plottingAction || plottingAction.selected} />
                         {returnAction ? <button className="w-full border border-slate-700 px-2 py-1 text-[0.65rem] text-slate-300 hover:bg-slate-800 disabled:opacity-50" disabled={busy} onClick={() => performAction(returnAction)} type="button">Return to hand</button> : null}
                       </div>
                     ) : <div key={index} className="flex aspect-[5/7] items-center justify-center border border-dashed border-slate-700 text-xs text-slate-600">Empty slot {index + 1}</div>;
@@ -759,6 +737,172 @@ const GameRoomPage = () => {
           </section>
         </section>
       </div>
+
+      {agendaSelectionActions.length ? (
+        <div className="fixed inset-0 z-[1300] flex items-center justify-center overflow-y-auto bg-slate-950/90 p-6">
+          <section className="w-full max-w-6xl border border-amber-900/70 bg-slate-900 p-5 shadow-2xl">
+            <div className="mb-5 text-center">
+              <p className="text-xs font-bold uppercase text-amber-600">Secret Selection</p>
+              <h2 className="mt-1 text-lg font-bold text-amber-50">Choose an Agenda for {focusedPlayer?.name}</h2>
+            </div>
+            <div className="flex flex-wrap items-start justify-center gap-5">
+              {agendaSelectionActions.map((entry) => (
+                <div key={entry.agenda_id} className="w-full max-w-[30rem] space-y-3">
+                  <CatalogItemVisual
+                    entry={agendaLookup[normalize(entry.agenda_id)]}
+                    tags={catalogs.tags}
+                    cards={catalogs.cards}
+                    ministries={catalogs.ministries}
+                    images={catalogs.images}
+                    pillars={catalogs.pillars}
+                    tokens={catalogs.tokens}
+                    effectIcons={catalogs.effect_icons}
+                  />
+                  <button
+                    className="w-full bg-amber-300 px-4 py-2 text-sm font-bold text-stone-950 hover:bg-amber-200 disabled:opacity-50"
+                    disabled={busy}
+                    onClick={() => performAction(entry)}
+                    type="button"
+                  >
+                    Keep this Agenda
+                  </button>
+                </div>
+              ))}
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      {docketOpen ? (
+        <div
+          className="fixed inset-0 z-[1250] flex items-center justify-center overflow-y-auto bg-slate-950/90 p-6"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setDocketOpen(false);
+          }}
+        >
+          <section className="w-full max-w-7xl border border-amber-900/70 bg-slate-900 p-5 shadow-2xl">
+            <div className="mb-5 flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-bold uppercase text-amber-600">Resolution Queue</p>
+                <h2 className="mt-1 text-lg font-bold text-amber-50">Council Docket</h2>
+                <p className="mt-1 text-xs text-slate-500">
+                  {phase === "docket_ordering"
+                    ? "The Minister of the Empire decides the resolution order."
+                    : `${gameState.council_stack?.length || 0} cards remain`}
+                </p>
+              </div>
+              <button
+                className="inline-flex h-8 w-8 items-center justify-center border border-slate-700 text-slate-300 hover:bg-slate-800"
+                onClick={() => setDocketOpen(false)}
+                title="Close Council Docket"
+                type="button"
+              >
+                <X className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </div>
+            <div className="flex flex-wrap items-start justify-center gap-4">
+              {(gameState.council_stack || []).map((commitment, index) => {
+                const moveLeft = actions.find((entry) =>
+                  entry.type === "move_docket_card"
+                  && entry.commitment_id === commitment.id
+                  && entry.direction === -1
+                );
+                const moveRight = actions.find((entry) =>
+                  entry.type === "move_docket_card"
+                  && entry.commitment_id === commitment.id
+                  && entry.direction === 1
+                );
+                return (
+                  <div key={commitment.id} className="space-y-2">
+                    <div className="flex items-center justify-between text-xs text-slate-500">
+                      <span>Order {index + 1}</span>
+                      {commitment.face_up ? (
+                        <span>{players.find((player) => player.id === commitment.owner_player_id)?.name}</span>
+                      ) : <span>Anonymous</span>}
+                    </div>
+                    <ItemVisual item={itemLookup[normalize(commitment.item_id)]} catalogs={catalogs} tagLookup={tagLookup} storageIconSrc={storageIconSrc} />
+                    {phase === "docket_ordering" ? (
+                      <div className="flex justify-center gap-2">
+                        <button
+                          className="h-8 w-8 border border-slate-700 text-slate-300 hover:bg-slate-800 disabled:opacity-30"
+                          disabled={busy || !moveLeft}
+                          onClick={() => performAction(moveLeft)}
+                          title="Resolve earlier"
+                          type="button"
+                        >
+                          <ArrowLeft className="mx-auto h-4 w-4" aria-hidden="true" />
+                        </button>
+                        <button
+                          className="h-8 w-8 border border-slate-700 text-slate-300 hover:bg-slate-800 disabled:opacity-30"
+                          disabled={busy || !moveRight}
+                          onClick={() => performAction(moveRight)}
+                          title="Resolve later"
+                          type="button"
+                        >
+                          <ArrowRight className="mx-auto h-4 w-4" aria-hidden="true" />
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })}
+              {!gameState.council_stack?.length ? <p className="py-10 text-sm text-slate-500">No committed cards.</p> : null}
+            </div>
+            {phase === "docket_ordering" ? (
+              <div className="mt-5 flex justify-end border-t border-slate-800 pt-4">
+                <button
+                  className="inline-flex items-center gap-2 bg-amber-300 px-4 py-2 text-sm font-bold text-stone-950 hover:bg-amber-200 disabled:opacity-50"
+                  disabled={busy || !actions.some((entry) => entry.type === "confirm_docket_order")}
+                  onClick={async () => {
+                    const confirmAction = actions.find((entry) => entry.type === "confirm_docket_order");
+                    if (confirmAction) {
+                      await performAction(confirmAction);
+                      setDocketOpen(false);
+                    }
+                  }}
+                  type="button"
+                >
+                  <Check className="h-4 w-4" aria-hidden="true" />
+                  Confirm Docket order
+                </button>
+              </div>
+            ) : null}
+          </section>
+        </div>
+      ) : null}
+
+      {agendaOverlayEntry ? (
+        <div
+          className="fixed inset-0 z-[1300] flex items-center justify-center overflow-y-auto bg-slate-950/90 p-6"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setAgendaOverlayPlayerId("");
+          }}
+        >
+          <section className="w-full max-w-[32rem] border border-amber-900/70 bg-slate-900 p-4 shadow-2xl">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <h2 className="text-sm font-bold uppercase text-amber-100">Secret Agenda</h2>
+              <button
+                className="inline-flex h-8 w-8 items-center justify-center border border-slate-700 text-slate-300 hover:bg-slate-800"
+                onClick={() => setAgendaOverlayPlayerId("")}
+                title="Close Agenda"
+                type="button"
+              >
+                <X className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </div>
+            <CatalogItemVisual
+              entry={agendaOverlayEntry}
+              tags={catalogs.tags}
+              cards={catalogs.cards}
+              ministries={catalogs.ministries}
+              images={catalogs.images}
+              pillars={catalogs.pillars}
+              tokens={catalogs.tokens}
+              effectIcons={catalogs.effect_icons}
+            />
+          </section>
+        </div>
+      ) : null}
     </main>
   );
 };

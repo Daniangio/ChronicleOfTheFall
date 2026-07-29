@@ -175,6 +175,7 @@ def build_goldfishing_state(
                 "ministry_ids": [],
                 "suspicion": 0,
                 "committed": False,
+                "selected_commitment": None,
                 "pending_draws": 0,
                 "hidden_agenda_id": "",
                 "agenda_options": agenda_options,
@@ -277,8 +278,8 @@ def perform_action(state: dict[str, Any], action: str, payload: dict[str, Any] |
     handlers = {
         "place_suspicion": _place_suspicion,
         "continue_phase": _continue_phase,
-        "commit_card": _commit_card,
-        "commit_none": _commit_none,
+        "select_commit_card": _select_commit_card,
+        "confirm_plotting": _confirm_plotting,
         "plotting_scheme": _plotting_scheme,
         "choose_agenda": _choose_agenda,
         "move_docket_card": _move_docket_card,
@@ -397,7 +398,7 @@ def _continue_phase(state: dict[str, Any], _payload: dict[str, Any]) -> None:
         raise ValueError("The current phase cannot be advanced.")
 
 
-def _commit_card(state: dict[str, Any], payload: dict[str, Any]) -> None:
+def _select_commit_card(state: dict[str, Any], payload: dict[str, Any]) -> None:
     _require_phase(state, "plotting")
     player_id = _require_plotting_player(state, payload)
     player = _player(state, player_id)
@@ -410,11 +411,57 @@ def _commit_card(state: dict[str, Any], payload: dict[str, Any]) -> None:
     item = item_by_id(state, item_id)
     if _cannot_commit_events(state, player) and _is_event(item):
         raise ValueError("A deposed player cannot commit an Event.")
+    player["selected_commitment"] = {
+        "item_id": item_id,
+        "source": source,
+        "index": index,
+        "face_up": _must_commit_face_up(player),
+    }
+
+
+def _confirm_plotting(state: dict[str, Any], payload: dict[str, Any]) -> None:
+    _require_phase(state, "plotting")
+    player_id = _require_plotting_player(state, payload)
+    player = _player(state, player_id)
+    selected = player.get("selected_commitment")
+    if not selected:
+        if _legal_commit_options(state, player):
+            raise ValueError("Select a card before confirming Plotting.")
+        if _cannot_commit_events(state, player):
+            visible_cards = [
+                item_id
+                for item_id in [*player.get("hand", []), *player.get("scheme_slots", [])]
+                if item_id
+            ]
+            player["hand_revealed"] = bool(visible_cards) and all(
+                _is_event(item_by_id(state, item_id)) for item_id in visible_cards
+            )
+        player["committed"] = True
+        state["log"].append(f"{player['name']} could not commit a card.")
+        _advance_plotting(state)
+        return
+
+    source = str(selected.get("source") or "")
+    index = int(selected.get("index", -1))
+    cards = player["hand"] if source == "hand" else player["scheme_slots"] if source == "scheme" else None
+    if (
+        cards is None
+        or index < 0
+        or index >= len(cards)
+        or cards[index] != selected.get("item_id")
+    ):
+        player["selected_commitment"] = None
+        raise ValueError("The selected commitment is no longer available.")
+    item_id = str(cards[index])
+    item = item_by_id(state, item_id)
+    if _cannot_commit_events(state, player) and _is_event(item):
+        player["selected_commitment"] = None
+        raise ValueError("A deposed player cannot commit an Event.")
     if source == "hand":
         cards.pop(index)
     else:
         cards[index] = None
-    face_up = _must_commit_face_up(player)
+    face_up = bool(selected.get("face_up"))
     state["commitments"].append(
         {
             "id": f"commitment-{uuid.uuid4().hex[:10]}",
@@ -424,30 +471,11 @@ def _commit_card(state: dict[str, Any], payload: dict[str, Any]) -> None:
             "face_up": face_up,
         }
     )
+    player["selected_commitment"] = None
     player["committed"] = True
     state["log"].append(
         f"{player['name']} committed {item.get('name', item_id) if face_up else 'a face-down card'}."
     )
-    _advance_plotting(state)
-
-
-def _commit_none(state: dict[str, Any], payload: dict[str, Any]) -> None:
-    _require_phase(state, "plotting")
-    player_id = _require_plotting_player(state, payload)
-    if _legal_commit_options(state, _player(state, player_id)):
-        raise ValueError("This player has a legal card to commit.")
-    player = _player(state, player_id)
-    if _cannot_commit_events(state, player):
-        visible_cards = [
-            item_id
-            for item_id in [*player.get("hand", []), *player.get("scheme_slots", [])]
-            if item_id
-        ]
-        player["hand_revealed"] = bool(visible_cards) and all(
-            _is_event(item_by_id(state, item_id)) for item_id in visible_cards
-        )
-    player["committed"] = True
-    state["log"].append(f"{_player(state, player_id)['name']} could not commit a card.")
     _advance_plotting(state)
 
 
@@ -481,6 +509,7 @@ def _plotting_scheme(state: dict[str, Any], payload: dict[str, Any]) -> None:
             player["hand"].pop(hand_index)
     else:
         raise ValueError("Unknown Scheme action.")
+    player["selected_commitment"] = None
     state["log"].append(f"{player['name']} rearranged their Scheme Slots.")
 
 
@@ -639,9 +668,12 @@ def _assign_ministries(state: dict[str, Any], *, rotate: bool, begin_phase: bool
         for ministry in state["catalog"]["ministries"]
         if ministry is not empire_ministry and _is_ministry(ministry, role)
     ]
-    era_offset = int(state.get("era", 1)) - 1
-    for ministry_index, ministry in enumerate(ministries):
-        holder = players[(ministry_index - era_offset) % len(players)]["id"]
+    for ministry in ministries:
+        role = next(
+            role for role in MINISTRY_ROTATION_ORDER if _is_ministry(ministry, role)
+        )
+        holder_index = (current_index + _ministry_role_offset(len(players), role)) % len(players)
+        holder = players[holder_index]["id"]
         if holder in state["blocked_players"]:
             continue
         state["ministry_assignments"][ministry["id"]] = holder
@@ -723,6 +755,7 @@ def _begin_plotting(state: dict[str, Any]) -> None:
     state["council_stack"] = []
     for player in state["players"]:
         player["committed"] = False
+        player["selected_commitment"] = None
     state["active_player_id"] = ""
     state["log"].append("Plotting Phase began.")
 
@@ -847,6 +880,7 @@ def _end_era(state: dict[str, Any]) -> None:
     for player in state["players"]:
         player["suspicion"] = 0
         player["committed"] = False
+        player["selected_commitment"] = None
         player["hand_revealed"] = False
     state["era"] = int(state.get("era", 1)) + 1
     state["epoch"] = state["era"]
@@ -889,14 +923,19 @@ def _possible_actions(state: dict[str, Any]) -> list[dict[str, Any]]:
             if player.get("committed"):
                 continue
             player_id = player["id"]
-            commit_actions = [
+            select_actions = [
                 {
-                    "type": "commit_card",
+                    "type": "select_commit_card",
                     "player_id": player_id,
                     "item_id": item_id,
                     "source": source,
                     "index": index,
                     "face_up": _must_commit_face_up(player),
+                    "selected": (
+                        (player.get("selected_commitment") or {}).get("source") == source
+                        and (player.get("selected_commitment") or {}).get("index") == index
+                        and (player.get("selected_commitment") or {}).get("item_id") == item_id
+                    ),
                 }
                 for source, index, item_id in _legal_commit_options(state, player)
             ]
@@ -938,7 +977,15 @@ def _possible_actions(state: dict[str, Any]) -> list[dict[str, Any]]:
                     if slot_item
                 ],
             ]
-            actions.extend(commit_actions or [{"type": "commit_none", "player_id": player_id}])
+            actions.extend(select_actions)
+            if player.get("selected_commitment") or not select_actions:
+                actions.append(
+                    {
+                        "type": "confirm_plotting",
+                        "player_id": player_id,
+                        "has_selection": bool(player.get("selected_commitment")),
+                    }
+                )
             actions.extend(scheme_actions)
         return actions
     if phase == "docket_ordering":
@@ -2164,6 +2211,18 @@ def _is_ministry(entry: dict[str, Any], role: str) -> bool:
         "war": ("war",),
     }
     return any(alias in normalized for alias in aliases.get(role, (role,)))
+
+
+def _ministry_role_offset(player_count: int, role: str) -> int:
+    offsets = {
+        3: {"war": 1, "cities": 1, "state": 2, "health": 2},
+        4: {"war": 1, "state": 2, "cities": 3, "health": 3},
+        5: {"war": 1, "state": 2, "cities": 3, "health": 4},
+    }
+    try:
+        return offsets[player_count][role]
+    except KeyError as exc:
+        raise ValueError("Ministry assignments require three to five players.") from exc
 
 
 def _ministry_holder(state: dict[str, Any], role: str) -> str:
