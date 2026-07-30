@@ -143,6 +143,7 @@ const GameRoomPage = () => {
   const [selectedSchemeSlotIndex, setSelectedSchemeSlotIndex] = useState(null);
   const [selectedSchemeCardAnchor, setSelectedSchemeCardAnchor] = useState(null);
   const [schemeSourceIndex, setSchemeSourceIndex] = useState(null);
+  const [cityChartersOpen, setCityChartersOpen] = useState(false);
   const [docketOpen, setDocketOpen] = useState(false);
   const [resolutionOpen, setResolutionOpen] = useState(false);
   const [discardOpen, setDiscardOpen] = useState(false);
@@ -193,6 +194,10 @@ const GameRoomPage = () => {
   }, [gameState?.phase]);
 
   useEffect(() => {
+    setCityChartersOpen(gameState?.phase === "council_vote");
+  }, [gameState?.phase]);
+
+  useEffect(() => {
     if (gameState?.phase === "reveal" && gameState?.docket_resolution?.length) {
       setDocketOpen(false);
       setResolutionOpen(true);
@@ -232,7 +237,7 @@ const GameRoomPage = () => {
   const activePlayer = players.find((player) => player.id === gameState?.active_player_id);
   const focusedPlayer = players.find((player) => player.id === focusedPlayerId) || activePlayer || players[0];
   const actions = gameState?.possible_actions || [];
-  const phase = gameState?.phase || "suspicion";
+  const phase = gameState?.phase || "council_vote";
   const isBotMode = gameState?.mode === "solo_bots";
   const focusedPrivateBot = isBotMode && focusedPlayer?.controller === "bot" && !focusedPlayer?.hand_revealed;
   const agendaSelectionActions = phase === "agenda_selection"
@@ -250,7 +255,7 @@ const GameRoomPage = () => {
   const confirmPlottingAction = actions.find(
     (entry) => entry.type === "confirm_plotting" && entry.player_id === focusedPlayer?.id
   );
-  const discardCount = (gameState?.empire_discard?.length || 0) + (gameState?.crisis_discard?.length || 0);
+  const discardCount = (gameState?.foundation_discard?.length || 0) + (gameState?.crisis_discard?.length || 0);
 
   const perform = async (action, payload = {}) => {
     if (!token || busy) return null;
@@ -487,18 +492,16 @@ const GameRoomPage = () => {
         </div>
       );
     }
-    if (phase === "suspicion") {
+    if (phase === "council_vote") {
       return (
-        <div className="flex flex-wrap gap-2">
-          {actions.map((entry) => {
-            const target = players.find((player) => player.id === entry.target_player_id);
-            return (
-              <button key={entry.target_player_id || "none"} className="rounded-md border border-rose-900 px-3 py-2 text-sm text-rose-100 hover:bg-rose-950/50 disabled:opacity-50" disabled={busy} onClick={() => performAction(entry)} type="button">
-                {target ? `Suspect ${target.name}` : "Suspect no one"}
-              </button>
-            );
-          })}
-        </div>
+        <button
+          className="inline-flex items-center gap-2 border border-amber-900/70 px-4 py-2 text-sm font-bold text-amber-100 hover:bg-amber-950/50"
+          onClick={() => setCityChartersOpen(true)}
+          type="button"
+        >
+          <Castle className="h-4 w-4" aria-hidden="true" />
+          Open Council Vote
+        </button>
       );
     }
     if (phase === "docket_ordering") {
@@ -720,6 +723,19 @@ const GameRoomPage = () => {
               </section>
               <button
                 className="flex w-full items-center justify-between gap-3 border border-slate-800 bg-slate-900 p-3 text-left hover:border-amber-900/70 hover:bg-amber-950/20"
+                onClick={() => setCityChartersOpen(true)}
+                type="button"
+              >
+                <span className="flex items-center gap-2 text-sm font-bold text-white">
+                  <Castle className="h-4 w-4 text-amber-400" aria-hidden="true" />
+                  City Charters
+                </span>
+                <span className="border border-slate-700 px-2 py-1 text-xs text-slate-400">
+                  {gameState.available_city_card_ids?.length || 0}
+                </span>
+              </button>
+              <button
+                className="flex w-full items-center justify-between gap-3 border border-slate-800 bg-slate-900 p-3 text-left hover:border-amber-900/70 hover:bg-amber-950/20"
                 onClick={() => {
                   if (gameState.docket_resolution?.length && phase !== "docket_ordering") {
                     setResolutionOpen(true);
@@ -743,7 +759,11 @@ const GameRoomPage = () => {
                 <section className="border border-amber-900/60 bg-stone-950 p-3">
                   <h2 className="mb-2 text-sm font-bold text-amber-100">Current Reveal · {titleCase(currentReveal.status)}</h2>
                   <ItemVisual item={itemLookup[normalize(currentReveal.item_id)]} catalogs={catalogs} tagLookup={tagLookup} storageIconSrc={storageIconSrc} />
-                  {currentReveal.face_up ? <p className="mt-2 text-xs text-amber-700">Committed by {players.find((player) => player.id === currentReveal.owner_player_id)?.name}</p> : null}
+                  {currentReveal.priority_kind === "founding" ? (
+                    <p className="mt-2 text-xs text-amber-700">Supported for founding by the Council.</p>
+                  ) : currentReveal.face_up ? (
+                    <p className="mt-2 text-xs text-amber-700">Committed by {players.find((player) => player.id === currentReveal.owner_player_id)?.name}</p>
+                  ) : null}
                 </section>
               ) : null}
               <button
@@ -1146,6 +1166,113 @@ const GameRoomPage = () => {
         </div>
       ) : null}
 
+      {cityChartersOpen ? (
+        <div
+          className="fixed inset-0 z-[1240] flex items-center justify-center overflow-y-auto bg-slate-950/90 p-6"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setCityChartersOpen(false);
+          }}
+        >
+          <section className="w-full max-w-6xl border border-amber-900/70 bg-slate-900 p-5 shadow-2xl">
+            <div className="mb-5 flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-bold uppercase text-amber-600">Public Charters</p>
+                <h2 className="mt-1 text-lg font-bold text-amber-50">
+                  {phase === "council_vote" ? "Council Vote" : "Available Cities"}
+                </h2>
+                <p className="mt-1 text-xs text-slate-500">
+                  {phase === "council_vote"
+                    ? `${activePlayer?.name || "The active player"} supports a City or places Suspicion. Two votes queue a City first in the Docket.`
+                    : "These City cards remain available for a future Council vote."}
+                </p>
+              </div>
+              <button
+                className="inline-flex h-8 w-8 items-center justify-center border border-slate-700 text-slate-300 hover:bg-slate-800"
+                onClick={() => setCityChartersOpen(false)}
+                title="Close City Charters"
+                type="button"
+              >
+                <X className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </div>
+            {phase === "council_vote" ? (
+              <div className="mb-5 flex flex-wrap gap-2 border-b border-slate-800 pb-4">
+                {actions
+                  .filter((entry) => entry.type === "cast_council_vote" && entry.target_type === "player")
+                  .map((entry) => {
+                    const target = players.find((player) => player.id === entry.target_id);
+                    return (
+                      <button
+                        key={entry.target_id}
+                        className="border border-rose-900 px-3 py-2 text-sm text-rose-100 hover:bg-rose-950/50 disabled:opacity-50"
+                        disabled={busy}
+                        onClick={() => performAction(entry)}
+                        type="button"
+                      >
+                        Suspect {target?.name || entry.target_id}
+                      </button>
+                    );
+                  })}
+                {actions
+                  .filter((entry) => entry.type === "cast_council_vote" && entry.target_type === "abstain")
+                  .map((entry) => (
+                    <button
+                      key="abstain"
+                      className="border border-slate-700 px-3 py-2 text-sm text-slate-300 hover:bg-slate-800 disabled:opacity-50"
+                      disabled={busy}
+                      onClick={() => performAction(entry)}
+                      type="button"
+                    >
+                      Continue
+                    </button>
+                  ))}
+              </div>
+            ) : null}
+            <div className="flex flex-wrap items-start justify-center gap-5">
+              {(gameState.available_city_card_ids || []).map((cityCardId) => {
+                const voteAction = actions.find(
+                  (entry) => entry.type === "cast_council_vote"
+                    && entry.target_type === "city"
+                    && entry.target_id === cityCardId
+                );
+                const votes = Number(gameState.city_vote_counts?.[cityCardId] || 0);
+                return (
+                  <div key={cityCardId} className="space-y-2">
+                    <ItemVisual
+                      item={cardLookup[normalize(cityCardId)]}
+                      catalogs={catalogs}
+                      tagLookup={tagLookup}
+                      storageIconSrc={storageIconSrc}
+                    />
+                    <div className="flex items-center justify-between gap-2 text-xs text-slate-400">
+                      <span>{votes} / 2 support</span>
+                      {voteAction ? (
+                        <span className={voteAction.buildable ? "text-emerald-300" : "text-rose-300"}>
+                          {voteAction.buildable ? "Buildable" : "Not buildable"}
+                        </span>
+                      ) : null}
+                    </div>
+                    {voteAction ? (
+                      <button
+                        className="w-full bg-amber-300 px-3 py-2 text-xs font-bold text-stone-950 hover:bg-amber-200 disabled:opacity-50"
+                        disabled={busy}
+                        onClick={() => performAction(voteAction)}
+                        type="button"
+                      >
+                        Support this City
+                      </button>
+                    ) : null}
+                  </div>
+                );
+              })}
+              {!gameState.available_city_card_ids?.length ? (
+                <p className="py-10 text-sm text-slate-500">No City charters remain.</p>
+              ) : null}
+            </div>
+          </section>
+        </div>
+      ) : null}
+
       {docketOpen ? (
         <div
           className="fixed inset-0 z-[1250] flex items-center justify-center overflow-y-auto bg-slate-950/90 p-6"
@@ -1189,7 +1316,9 @@ const GameRoomPage = () => {
                   <div key={commitment.id} className="space-y-2">
                     <div className="flex items-center justify-between text-xs text-slate-500">
                       <span>Order {index + 1}</span>
-                      {commitment.face_up ? (
+                      {commitment.priority_kind === "founding" ? (
+                        <span>City founding</span>
+                      ) : commitment.face_up ? (
                         <span>{players.find((player) => player.id === commitment.owner_player_id)?.name}</span>
                       ) : <span>Anonymous</span>}
                     </div>
@@ -1389,12 +1518,12 @@ const GameRoomPage = () => {
             </div>
             <div className="space-y-6">
               <section>
-                <h3 className="mb-1 text-xs font-bold uppercase text-slate-500">Empire · {gameState.empire_discard?.length || 0}</h3>
+                <h3 className="mb-1 text-xs font-bold uppercase text-slate-500">Foundation · {gameState.foundation_discard?.length || 0}</h3>
                 <div className="flex flex-wrap items-start gap-3">
-                  {(gameState.empire_discard || []).map((itemId, index) => (
+                  {(gameState.foundation_discard || []).map((itemId, index) => (
                     <ItemVisual key={`${itemId}-${index}`} item={itemLookup[normalize(itemId)]} catalogs={catalogs} tagLookup={tagLookup} storageIconSrc={storageIconSrc} />
                   ))}
-                  {!gameState.empire_discard?.length ? <p className="text-sm text-slate-600">Empty.</p> : null}
+                  {!gameState.foundation_discard?.length ? <p className="text-sm text-slate-600">Empty.</p> : null}
                 </div>
               </section>
               <section>

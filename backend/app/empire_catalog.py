@@ -370,8 +370,8 @@ def _validate_catalog_data(
         return
     if kind == "decks":
         deck_type = str(data.get("deck_type") or "")
-        if deck_type not in {"empire", "crisis"}:
-            raise ValueError("Deck type must be empire or crisis.")
+        if deck_type not in {"foundation", "institution", "crisis"}:
+            raise ValueError("Deck type must be foundation, institution, or crisis.")
         item_ids = data.get("item_ids")
         if not isinstance(item_ids, list):
             raise ValueError("Deck item_ids must be a list.")
@@ -382,17 +382,20 @@ def _validate_catalog_data(
             item = db.get(GameCatalogEntryRecord, item_id)
             event_subtype = str((item.data or {}).get("subtype") or "") if item and item.kind == "events" else ""
             is_crisis = item is not None and item.kind == "events" and event_subtype == "crisis"
-            is_empire = item is not None and (
-                item.kind == "cards" or (item.kind == "events" and event_subtype == "edict")
+            is_development = item is not None and (
+                (item.kind == "cards" and item.category == "structure")
+                or (item.kind == "events" and event_subtype == "edict")
             )
             if deck_type == "crisis" and not is_crisis:
                 raise ValueError(f"Crisis deck item {item_id} is not a Crisis card.")
-            if deck_type == "empire" and not is_empire:
-                raise ValueError(f"Empire deck item {item_id} is not a Development or Edict card.")
-        if deck_type == "empire":
+            if deck_type in {"foundation", "institution"} and not is_development:
+                raise ValueError(
+                    f"{deck_type.title()} deck item {item_id} is not a Structure or Edict card."
+                )
+        if deck_type == "foundation":
             initial_setup = data.get("initial_setup")
             if not isinstance(initial_setup, dict):
-                raise ValueError("Empire deck initial_setup must contain 3+, 4+, and 5-player tiers.")
+                raise ValueError("Foundation deck initial_setup must contain 3+, 4+, and 5-player tiers.")
             expected_tier_sizes = {"3": 6, "4": 2, "5": 2}
             setup_ids: list[str] = []
             for player_count, expected_size in expected_tier_sizes.items():
@@ -407,18 +410,21 @@ def _validate_catalog_data(
             for item_id in setup_ids:
                 setup_counts[item_id] = setup_counts.get(item_id, 0) + 1
             if any(count > deck_counts.get(item_id, 0) for item_id, count in setup_counts.items()):
-                raise ValueError("Initial setup copies must also exist in the Empire deck.")
+                raise ValueError("Initial setup copies must also exist in the Foundation deck.")
         elif data.get("initial_setup") not in (None, {}):
-            raise ValueError("Crisis decks do not support an initial setup.")
+            raise ValueError("Only Foundation decks support an initial setup.")
         return
     if kind == "levels":
         city_id = str(data.get("initial_city_card_id") or "")
-        empire_deck_id = str(data.get("empire_deck_id") or "")
+        foundation_deck_id = str(data.get("foundation_deck_id") or "")
+        institution_deck_id = str(data.get("institution_deck_id") or "")
         crisis_deck_id = str(data.get("crisis_deck_id") or "")
         if not city_id:
             raise ValueError("A level requires an initial city card.")
-        if not empire_deck_id:
-            raise ValueError("A level requires an Empire deck.")
+        if not foundation_deck_id:
+            raise ValueError("A level requires a Foundation deck.")
+        if not institution_deck_id:
+            raise ValueError("A level requires an Institution deck.")
         if not crisis_deck_id:
             raise ValueError("A level requires a Crisis deck.")
         suspicion_start_era = int(data.get("suspicion_start_era") or 5)
@@ -427,13 +433,17 @@ def _validate_catalog_data(
         city = db.get(GameCatalogEntryRecord, city_id)
         if city is None or city.kind != "cards" or city.category != "city":
             raise ValueError("The initial City must reference a City card.")
-        empire_deck = db.get(GameCatalogEntryRecord, empire_deck_id)
-        if (
-            empire_deck is None
-            or empire_deck.kind != "decks"
-            or str((empire_deck.data or {}).get("deck_type") or "") != "empire"
+        for label, deck_id, expected_type in (
+            ("Foundation", foundation_deck_id, "foundation"),
+            ("Institution", institution_deck_id, "institution"),
         ):
-            raise ValueError("The level Empire deck must reference an Empire deck.")
+            deck = db.get(GameCatalogEntryRecord, deck_id)
+            if (
+                deck is None
+                or deck.kind != "decks"
+                or str((deck.data or {}).get("deck_type") or "") != expected_type
+            ):
+                raise ValueError(f"The level {label} deck must reference a {label} deck.")
         crisis_deck = db.get(GameCatalogEntryRecord, crisis_deck_id)
         if (
             crisis_deck is None
@@ -441,6 +451,19 @@ def _validate_catalog_data(
             or str((crisis_deck.data or {}).get("deck_type") or "") != "crisis"
         ):
             raise ValueError("The level Crisis deck must reference a Crisis deck.")
+        city_pool_ids = data.get("city_pool_card_ids")
+        if not isinstance(city_pool_ids, list):
+            raise ValueError("A level city_pool_card_ids value must be a list.")
+        unique_city_pool_ids = list(dict.fromkeys(str(item_id) for item_id in city_pool_ids))
+        if city_id in unique_city_pool_ids:
+            raise ValueError("The initial City cannot also be in the City Charter pool.")
+        for pool_city_id in unique_city_pool_ids:
+            pool_city = db.get(GameCatalogEntryRecord, pool_city_id)
+            if pool_city is None or pool_city.kind != "cards" or pool_city.category != "city":
+                raise ValueError(f"City Charter {pool_city_id} must reference a City card.")
+        available_city_count = int(data.get("available_city_count") or 0)
+        if available_city_count < 0 or available_city_count > len(unique_city_pool_ids):
+            raise ValueError("Available City count must fit within the City Charter pool.")
 
 
 def _validate_count_map(value: Any, field: str) -> None:

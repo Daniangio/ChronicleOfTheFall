@@ -3,31 +3,23 @@
   "kind": "decks",
   "entries": [
     {
-      "id": "chronicle-default-empire-deck",
-      "name": "Chronicle Default Empire Deck",
+      "id": "chronicle-default-foundation-deck",
+      "name": "Chronicle Default Foundation Deck",
       "kind": "decks",
       "category": "deck",
-      "summary": "Default Development and Edict deck template.",
+      "summary": "Early Structures and Edicts available from setup.",
       "color": null,
       "data": {
-        "deck_type": "empire",
+        "deck_type": "foundation",
         "item_ids": [
           "peasant-village-culture",
           "barracks-unrest",
-          "capital",
           "farm-industry",
           "farm-unrest",
-          "fortified-manor-military",
-          "grand-garrison-military",
           "manor-unrest",
-          "market-hall-culture",
-          "monastery-culture",
-          "mountain-village",
           "peasant-home-military",
           "peasant-home-unrest",
-          "scriptorium",
           "stone-quarry-industry",
-          "temple-culture",
           "votive-chapel-faith",
           "woodcutter-industry"
         ],
@@ -37,18 +29,38 @@
             "barracks-unrest",
             "farm-industry",
             "farm-unrest",
-            "fortified-manor-military",
-            "grand-garrison-military"
+            "manor-unrest",
+            "peasant-home-military"
           ],
           "4": [
-            "manor-unrest",
-            "market-hall-culture"
+            "peasant-home-unrest",
+            "stone-quarry-industry"
           ],
           "5": [
-            "monastery-culture",
-            "mountain-village"
+            "votive-chapel-faith",
+            "woodcutter-industry"
           ]
         }
+      }
+    },
+    {
+      "id": "chronicle-default-institution-deck",
+      "name": "Chronicle Default Institution Deck",
+      "kind": "decks",
+      "category": "deck",
+      "summary": "Advanced Structures shuffled into the Foundation Deck at the end of Era 4.",
+      "color": null,
+      "data": {
+        "deck_type": "institution",
+        "item_ids": [
+          "fortified-manor-military",
+          "grand-garrison-military",
+          "market-hall-culture",
+          "monastery-culture",
+          "scriptorium",
+          "temple-culture"
+        ],
+        "initial_setup": {}
       }
     },
     {

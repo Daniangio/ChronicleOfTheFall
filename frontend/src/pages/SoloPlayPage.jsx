@@ -84,8 +84,10 @@ const SoloPlayPage = () => {
         {selectedLevel ? (
           <div className="border-l-0 border-slate-800 text-left text-xs text-slate-400 lg:border-l lg:pl-4">
             <p><span className="font-semibold text-slate-300">Initial City:</span> {selectedLevel.initial_city_name || selectedLevel.initial_city_card_id || "Missing"}</p>
-            <p className="mt-1"><span className="font-semibold text-slate-300">Empire Deck:</span> {selectedLevel.empire_deck_name || selectedLevel.empire_deck_id || "Missing"}</p>
+            <p className="mt-1"><span className="font-semibold text-slate-300">Foundation Deck:</span> {selectedLevel.foundation_deck_name || selectedLevel.foundation_deck_id || "Missing"}</p>
+            <p className="mt-1"><span className="font-semibold text-slate-300">Institution Deck:</span> {selectedLevel.institution_deck_name || selectedLevel.institution_deck_id || "Missing"}</p>
             <p className="mt-1"><span className="font-semibold text-slate-300">Crisis Deck:</span> {selectedLevel.crisis_deck_name || selectedLevel.crisis_deck_id || "Missing"}</p>
+            <p className="mt-1"><span className="font-semibold text-slate-300">Available Cities:</span> {selectedLevel.available_city_count}</p>
           </div>
         ) : null}
       </section>

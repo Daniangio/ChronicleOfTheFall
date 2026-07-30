@@ -243,7 +243,7 @@ There are two Event types:
 1. **Edict**
 2. **Crisis**
 
-When an Event finishes resolving, place an Edict in the Empire discard pile or
+When an Event finishes resolving, place an Edict in the Foundation discard pile or
 a Crisis in the Crisis discard pile unless the card says otherwise.
 
 ---
@@ -278,14 +278,14 @@ Success: Add 1 Wealth.
 Failure: Lose 1 Stability.
 
 Crisis cards are kept in a separate Crisis Deck and never shuffled into the
-Empire Deck. Players receive Crisis cards at setup and during Crisis Intake.
+Foundation Deck. Players receive Crisis cards at setup and during Crisis Intake.
 They remain private in hand or Scheme Slots until committed.
 
 Crisis cards cannot be discarded during Hand Reset. They may be moved, swapped,
 and committed from Scheme Slots under the normal Plotting rules.
 
 When a Crisis finishes resolving, place it face up in the Crisis discard pile.
-It does not enter the Empire discard pile.
+It does not enter the Foundation discard pile.
 
 ---
 
@@ -410,7 +410,7 @@ The effect expires during the End-of-Era Cleanup Phase.
 
 # 5. Discard Timing and Visibility
 
-The Empire uses one face-up Empire discard pile and one face-up Crisis
+The Empire uses one face-up Foundation discard pile and one face-up Crisis
 discard pile.
 
 Whenever a card is discarded, place it face up in its appropriate discard pile
@@ -426,8 +426,8 @@ Discard timing:
 * Crisis cards remain in hand during the Hand Reset Phase.
 * Cards in Scheme Slots are not discarded during the Hand Reset Phase.
 
-When the Empire Deck is empty, shuffle the face-up Empire discard pile to form
-a new Empire Deck. Crisis cards never enter this reshuffle.
+When the Foundation Deck is empty, shuffle the face-up Foundation discard pile
+to form a new Foundation Deck. Crisis cards never enter this reshuffle.
 
 ---
 
@@ -435,11 +435,13 @@ a new Empire Deck. Crisis cards never enter this reshuffle.
 
 Each game uses:
 
-* 1 Empire Deck
+* 1 Foundation Deck
+* 1 Institution Deck
 * 1 Crisis Deck
-* 1 face-up Empire discard pile
+* 1 face-up Foundation discard pile
 * 1 face-up Crisis discard pile
 * City cards
+* a public City Charter pool selected by the Level
 * Structure cards
 * Event cards
 * Hidden Agenda cards
@@ -481,24 +483,41 @@ The Capital may also have starting Tags if required by the current prototype dec
 
 ---
 
-## 7.3 Prepare the Empire Deck
+## 7.3 Prepare the Development Decks
 
-Shuffle the Empire Deck.
+Shuffle the Foundation Deck and Institution Deck separately.
 
-The Empire Deck contains Development cards and Edict cards.
+The Foundation Deck contains early Structures and Edicts used during setup and
+the first four Eras. The Institution Deck contains advanced Structures and
+Edicts. City cards are not placed in either deck.
 
-Crisis cards are removed from the Empire Deck and shuffled into the separate
-Crisis Deck.
+Crisis cards are shuffled into the separate Crisis Deck.
 
-Recommended prototype deck composition:
+At the end of Era 4, immediately before Hand Refill, shuffle every card in the
+Institution Deck into the remaining Foundation Deck. From that point forward,
+players continue drawing from the combined Foundation Deck.
 
-* 40–45% Development cards
-* 40–45% Edict cards
-* 10–20% flexible political or advanced cards
+The Level specifies both decks. Cards marked for initial setup must belong to
+the selected Foundation Deck.
 
 ---
 
-## 7.4 Deal Hidden Agendas
+## 7.4 Prepare City Charters
+
+The Level specifies:
+
+* the initial City;
+* a pool of eligible City cards;
+* how many of those Cities are available in this game.
+
+Randomly draw the configured number from the pool and reveal them face up as
+the public **City Charter Row**. Unselected City cards are out of play. A
+Charter remains available until it receives enough Council support to enter
+the Docket.
+
+---
+
+## 7.5 Deal Hidden Agendas
 
 Shuffle the deck of complete Hidden Agenda cards and deal 2 face down to each
 player. Each player secretly keeps 1 as their Hidden Agenda. The unchosen Agenda
@@ -512,18 +531,17 @@ standard two-card choice.
 
 ---
 
-## 7.5 Assign Offices
+## 7.6 Assign Offices
 
 Choose a random player to become the first **Minister of the Empire**.
 
 Assign the four Ministries according to player count, following Section 8.
 
-During the first Era, do not rotate offices. Begin with the Suspicion Phase if
-the Level activates it in Era 1; otherwise begin with Production.
+During the first Era, do not rotate offices. Begin with the Council Vote Phase.
 
 ---
 
-## 7.6 Deal Starting Hands
+## 7.7 Deal Starting Hands
 
 Each normal player receives a starting hand of 3 cards.
 
@@ -531,8 +549,8 @@ The initial Minister of State receives a starting hand of 4 cards.
 
 For the first prototype, use one of these setup methods:
 
-* **Simple setup:** deal all starting cards from the Empire Deck.
-* **Guided setup:** give each player 2 random Base cards, then fill the rest of their starting hand from the Empire Deck.
+* **Simple setup:** deal all starting cards from the Foundation Deck.
+* **Guided setup:** give each player 2 random Base cards, then fill the rest of their starting hand from the Foundation Deck.
 
 Suggested Base cards include simple early Structures such as Farm, Chapel, Peasant Home, Woodcutter, Quarry, Shrine, Clinic, or Garrison.
 
@@ -541,7 +559,7 @@ adds it to their hand. If the Crisis Deck is empty, skip this draw.
 
 ---
 
-## 7.7 Scheme Slots
+## 7.8 Scheme Slots
 
 Each player has 2 private Scheme Slots.
 
@@ -712,7 +730,7 @@ names another Choice Minister.
 Each Era follows this sequence:
 
 1. **Office Rotation Phase**
-2. **Suspicion Phase**, once activated by the Level
+2. **Council Vote Phase**
 3. **Production Phase**
 4. **Plotting Phase**
 5. **Hand Reset Phase**
@@ -723,8 +741,8 @@ Each Era follows this sequence:
 10. **Hand Refill Phase**
 11. **End-of-Era Cleanup Phase**
 
-During the first Era, skip the Office Rotation Phase. Skip Suspicion as well
-unless the Level activates it in Era 1.
+During the first Era, skip the Office Rotation Phase. The Council Vote Phase
+still occurs, even if Suspicion is not active yet.
 
 ---
 
@@ -737,24 +755,26 @@ At the beginning of each Era after the first:
 3. Confirm that no player holds both Minister of State and Minister of War.
 4. Resolve any office-related effects that occur at the beginning of the Era.
 
-Then proceed to the Suspicion Phase if it is active, or Production otherwise.
+Then proceed to the Council Vote Phase.
 
 ---
 
-# 12. Suspicion Phase
+# 12. Council Vote Phase
 
-Suspicion represents public blame, court rumors, and political distrust.
+The Council Vote combines public support for founding Cities with Suspicion,
+which represents public blame, court rumors, and political distrust.
 
 Each Level defines the first Era in which Suspicion is active. The default is
-Era 5. Before that Era, skip this phase.
+Era 5. Before that Era, players may support City Charters but may not place
+Suspicion.
 
-Once Suspicion is active, each player places one Suspicion token at the beginning
-of every Era after offices are set.
+Starting with the Minister of the Empire and proceeding clockwise, each player
+casts exactly one public vote by placing their Council token on:
 
-Starting with the Minister of the Empire and proceeding clockwise, each player places their Suspicion token on:
+* one available City Charter; or
+* another player, if Suspicion is active.
 
-* another player;
-* or no one.
+If there is no legal vote, continue without placing a token.
 
 A player may not place Suspicion on themselves.
 
@@ -764,7 +784,19 @@ Suspicion tokens are public.
 
 ---
 
-## 12.1 Suspicion Effects
+## 12.1 Founding Support
+
+After all players vote, each City Charter with 2 or more Council tokens is
+removed from the Charter Row and queued in the Council Docket for that Era.
+
+City founding cards resolve before every Crisis. If more than one City qualifies,
+the Minister of the Empire orders those Cities among themselves. A queued City
+must still satisfy its Tag requirements and resource cost when it resolves. If
+it cannot be founded, discard it face up.
+
+---
+
+## 12.2 Suspicion Effects
 
 After all Suspicion tokens are placed, count how many each player received.
 
@@ -900,7 +932,7 @@ For digital play, the Docket shows that the card belongs to the suspected player
 # 15. Hand Reset Phase
 
 After every player has committed or declared that they cannot commit, each player
-discards all non-Crisis cards remaining in hand face up into the Empire discard
+discards all non-Crisis cards remaining in hand face up into the Foundation discard
 pile.
 
 Crisis cards remain in hand.
@@ -918,16 +950,17 @@ After every player has committed or declared that they cannot commit:
 1. Reveal all committed cards into the **Council Docket**.
 2. Keep each normal contributor anonymous.
 3. Keep any face-up Suspicion commitments associated with their contributor.
-4. Move every Crisis to the front of the Docket.
-5. The Minister of the Empire orders the Crisis cards among themselves, then
-   orders all remaining cards among themselves.
-6. Lock the chosen order.
-7. Resolve the first card, then continue through the Docket from left to right.
+4. Move every supported City founding card to the front of the Docket.
+5. Move every Crisis immediately after the City founding cards.
+6. The Minister of the Empire orders City cards among themselves, Crisis cards
+   among themselves, then all remaining cards among themselves.
+7. Lock the chosen order.
+8. Resolve the first card, then continue through the Docket from left to right.
 
 The Docket is not shuffled and its resolution order is not random.
 
-Every Crisis must finish resolving before any non-Crisis card can resolve. A
-Crisis may never be ordered behind an Edict or Development card.
+Every queued City founding must finish before any Crisis. Every Crisis must then
+finish before any Edict or Structure.
 
 Resolve each card fully before resolving the next card.
 
@@ -1274,7 +1307,7 @@ During the End-of-Era Cleanup Phase:
 1. Remove all Suspicion tokens.
 2. End all effects that last "until the end of the Era".
 3. Clear any temporary waivers or unresolved temporary modifiers.
-4. If the Empire Deck is empty, shuffle the face-up discard pile to form a new Empire Deck.
+4. If the Foundation Deck is empty, shuffle the face-up discard pile to form a new Foundation Deck.
 
 Do not move resolved Events, destroyed Structures, or failed Developments during
 this phase. Those cards are discarded immediately when they resolve, are

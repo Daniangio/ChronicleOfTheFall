@@ -53,10 +53,13 @@ async def create_game_room(
         if level is None:
             raise ValueError("No level is configured.")
         level_data = getattr(level, "data", {}) or {}
-        empire_deck = _deck_by_id(decks, level_data.get("empire_deck_id"))
+        foundation_deck = _deck_by_id(decks, level_data.get("foundation_deck_id"))
+        institution_deck = _deck_by_id(decks, level_data.get("institution_deck_id"))
         crisis_deck = _deck_by_id(decks, level_data.get("crisis_deck_id"))
-        if empire_deck is None or str((getattr(empire_deck, "data", {}) or {}).get("deck_type") or "") != "empire":
-            raise ValueError("The selected level has no valid Empire deck.")
+        if foundation_deck is None or str((getattr(foundation_deck, "data", {}) or {}).get("deck_type") or "") != "foundation":
+            raise ValueError("The selected level has no valid Foundation deck.")
+        if institution_deck is None or str((getattr(institution_deck, "data", {}) or {}).get("deck_type") or "") != "institution":
+            raise ValueError("The selected level has no valid Institution deck.")
         if crisis_deck is None or str((getattr(crisis_deck, "data", {}) or {}).get("deck_type") or "") != "crisis":
             raise ValueError("The selected level has no valid Crisis deck.")
         initial_city_card_id = str(level_data.get("initial_city_card_id") or "capital-foundation")
@@ -65,12 +68,20 @@ async def create_game_room(
             room_id=room_id,
             card_entries=cards,
             tag_entries=tags,
-            empire_deck_ids=_deck_item_ids(empire_deck),
+            foundation_deck_ids=_deck_item_ids(foundation_deck),
+            institution_deck_ids=_deck_item_ids(institution_deck),
             crisis_deck_ids=_deck_item_ids(crisis_deck),
-            setup_pool_ids=_deck_setup_ids(empire_deck, player_count=payload.player_count),
-            empire_deck_id=str(getattr(empire_deck, "id", "") or ""),
+            setup_pool_ids=_deck_setup_ids(foundation_deck, player_count=payload.player_count),
+            foundation_deck_id=str(getattr(foundation_deck, "id", "") or ""),
+            institution_deck_id=str(getattr(institution_deck, "id", "") or ""),
             crisis_deck_id=str(getattr(crisis_deck, "id", "") or ""),
             initial_city_card_id=initial_city_card_id,
+            city_pool_card_ids=[
+                str(card_id)
+                for card_id in level_data.get("city_pool_card_ids", [])
+                if str(card_id or "").strip()
+            ],
+            available_city_count=max(0, int(level_data.get("available_city_count") or 0)),
             level_id=str(getattr(level, "id", "") or ""),
             suspicion_start_era=max(1, int(level_data.get("suspicion_start_era") or 5)),
             player_count=payload.player_count,
@@ -115,10 +126,13 @@ async def list_game_levels(current_user: User = Depends(get_current_user), db: S
             "summary": level.get("summary") or "",
             "initial_city_card_id": (level.get("data") or {}).get("initial_city_card_id") or "",
             "initial_city_name": cards.get((level.get("data") or {}).get("initial_city_card_id"), {}).get("name") or "",
-            "empire_deck_id": (level.get("data") or {}).get("empire_deck_id") or "",
-            "empire_deck_name": decks.get((level.get("data") or {}).get("empire_deck_id"), {}).get("name") or "",
+            "foundation_deck_id": (level.get("data") or {}).get("foundation_deck_id") or "",
+            "foundation_deck_name": decks.get((level.get("data") or {}).get("foundation_deck_id"), {}).get("name") or "",
+            "institution_deck_id": (level.get("data") or {}).get("institution_deck_id") or "",
+            "institution_deck_name": decks.get((level.get("data") or {}).get("institution_deck_id"), {}).get("name") or "",
             "crisis_deck_id": (level.get("data") or {}).get("crisis_deck_id") or "",
             "crisis_deck_name": decks.get((level.get("data") or {}).get("crisis_deck_id"), {}).get("name") or "",
+            "available_city_count": max(0, int((level.get("data") or {}).get("available_city_count") or 0)),
         }
         for level in levels
     ]

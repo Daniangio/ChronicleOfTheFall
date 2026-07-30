@@ -296,7 +296,7 @@ def test_new_database_catalog_starts_with_repository_ingredients(tmp_path):
                     name="Starter Deck",
                     category="deck",
                     data={
-                        "deck_type": "empire",
+                        "deck_type": "foundation",
                         "item_ids": ["farm"] * 10,
                         "initial_setup": {"3": ["farm"] * 6, "4": ["farm"] * 2, "5": ["farm"] * 2},
                     },
@@ -318,6 +318,19 @@ def test_new_database_catalog_starts_with_repository_ingredients(tmp_path):
                 db=db,
             )
         )
+        created_institution_deck = asyncio.run(
+            admin_create_catalog_entry(
+                "decks",
+                AdminCatalogEntryCreate(
+                    id="starter-institution-deck",
+                    name="Starter Institution Deck",
+                    category="deck",
+                    data={"deck_type": "institution", "item_ids": ["farm"], "initial_setup": {}},
+                ),
+                _admin=admin,
+                db=db,
+            )
+        )
         created_level = asyncio.run(
             admin_create_catalog_entry(
                 "levels",
@@ -327,8 +340,11 @@ def test_new_database_catalog_starts_with_repository_ingredients(tmp_path):
                     category="level",
                     data={
                         "initial_city_card_id": "capital-foundation",
-                        "empire_deck_id": created_deck.id,
+                        "foundation_deck_id": created_deck.id,
+                        "institution_deck_id": created_institution_deck.id,
                         "crisis_deck_id": created_crisis_deck.id,
+                        "city_pool_card_ids": [],
+                        "available_city_count": 0,
                         "suspicion_start_era": 5,
                     },
                 ),
@@ -698,6 +714,32 @@ def test_export_all_includes_every_catalog_admin_kind(tmp_path):
                 db=db,
             )
         )
+        asyncio.run(
+            admin_create_catalog_entry(
+                "cards",
+                AdminCatalogEntryCreate(
+                    id="test-structure",
+                    name="Test Structure",
+                    category="structure",
+                    data={},
+                ),
+                _admin=admin,
+                db=db,
+            )
+        )
+        asyncio.run(
+            admin_create_catalog_entry(
+                "decks",
+                AdminCatalogEntryCreate(
+                    id="test-institution-deck",
+                    name="Test Institution Deck",
+                    category="deck",
+                    data={"deck_type": "institution", "item_ids": ["test-structure"], "initial_setup": {}},
+                ),
+                _admin=admin,
+                db=db,
+            )
+        )
 
         examples = {
             "cards": AdminCatalogEntryCreate(
@@ -719,8 +761,11 @@ def test_export_all_includes_every_catalog_admin_kind(tmp_path):
                 category="level",
                 data={
                     "initial_city_card_id": "test-card",
-                    "empire_deck_id": "test-deck",
+                    "foundation_deck_id": "test-deck",
+                    "institution_deck_id": "test-institution-deck",
                     "crisis_deck_id": "test-crisis-deck",
+                    "city_pool_card_ids": [],
+                    "available_city_count": 0,
                     "suspicion_start_era": 5,
                 },
             ),
@@ -729,12 +774,12 @@ def test_export_all_includes_every_catalog_admin_kind(tmp_path):
                 name="Test Deck",
                 category="deck",
                 data={
-                    "deck_type": "empire",
-                    "item_ids": ["test-card"] * 10,
+                    "deck_type": "foundation",
+                    "item_ids": ["test-structure"] * 10,
                     "initial_setup": {
-                        "3": ["test-card"] * 6,
-                        "4": ["test-card"] * 2,
-                        "5": ["test-card"] * 2,
+                        "3": ["test-structure"] * 6,
+                        "4": ["test-structure"] * 2,
+                        "5": ["test-structure"] * 2,
                     },
                 },
             ),

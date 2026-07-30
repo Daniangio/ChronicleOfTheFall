@@ -174,10 +174,12 @@ def build_state(**overrides) -> dict:
         "room_id": "test-room",
         "card_entries": CARDS,
         "tag_entries": TAGS,
-        "empire_deck_ids": [*setup_pool_ids, *(["farm", "garrison", "tax-riots"] * 12)],
+        "foundation_deck_ids": [*setup_pool_ids, *(["farm", "garrison", "tax-riots"] * 12)],
+        "institution_deck_ids": [],
         "crisis_deck_ids": ["border-raid"] * 12,
         "setup_pool_ids": setup_pool_ids,
-        "empire_deck_id": "empire-deck",
+        "foundation_deck_id": "foundation-deck",
+        "institution_deck_id": "institution-deck",
         "crisis_deck_id": "crisis-deck",
         "initial_city_card_id": "capital",
         "suspicion_start_era": 1,
@@ -207,6 +209,93 @@ def finish_ministry_draft(state: dict) -> dict:
 
 
 class TestAnonymousCouncilEngine(unittest.TestCase):
+    def test_level_city_pool_draws_public_charters_at_setup(self):
+        frontier = catalog_entry(
+            "frontier-city",
+            "Frontier City",
+            "cards",
+            category="city",
+            data={"building_slots": 3, "cost": {"labor": 1}},
+        )
+        river = catalog_entry(
+            "river-city",
+            "River City",
+            "cards",
+            category="city",
+            data={"building_slots": 2},
+        )
+
+        state = build_state(
+            card_entries=[*CARDS, frontier, river],
+            city_pool_card_ids=["frontier-city", "river-city"],
+            available_city_count=1,
+        )
+
+        self.assertEqual(len(state["available_city_card_ids"]), 1)
+        self.assertIn(state["available_city_card_ids"][0], {"frontier-city", "river-city"})
+        self.assertEqual(state["phase"], "council_vote")
+        city_action = next(
+            action
+            for action in state["possible_actions"]
+            if action.get("target_type") == "city"
+        )
+        self.assertTrue(city_action["buildable"])
+
+    def test_two_city_votes_queue_founding_before_crisis(self):
+        frontier = catalog_entry(
+            "frontier-city",
+            "Frontier City",
+            "cards",
+            category="city",
+            data={"building_slots": 3},
+        )
+        state = build_state(
+            card_entries=[*CARDS, frontier],
+            city_pool_card_ids=["frontier-city"],
+            available_city_count=1,
+            suspicion_start_era=5,
+        )
+        for _ in state["players"]:
+            action = next(
+                entry
+                for entry in state["possible_actions"]
+                if entry.get("target_type") == "city"
+            )
+            state = perform_action(state, action["type"], action)
+
+        self.assertEqual(state["phase"], "plotting")
+        self.assertEqual(state["available_city_card_ids"], [])
+        self.assertEqual(state["founding_commitments"][0]["item_id"], "frontier-city")
+
+        state["phase"] = "hand_reset"
+        state["council_stack"] = [
+            {"id": "structure", "item_id": "farm", "kind": "cards"},
+            {"id": "crisis", "item_id": "border-raid", "kind": "events"},
+            *state["founding_commitments"],
+        ]
+        state = perform_action(state, "continue_phase", {})
+        self.assertEqual(
+            [entry.get("priority_kind") or entry["kind"] for entry in state["council_stack"]],
+            ["founding", "events", "cards"],
+        )
+
+    def test_institution_deck_merges_before_era_four_hand_refill(self):
+        state = build_state(institution_deck_ids=["garrison", "garrison"])
+        foundation_count = len(state["foundation_deck"])
+        state["era"] = 4
+        state["phase"] = "crisis_intake"
+
+        state = perform_action(state, "continue_phase", {})
+
+        self.assertEqual(state["phase"], "hand_refill")
+        self.assertTrue(state["institution_merged"])
+        self.assertEqual(state["institution_deck"], [])
+        self.assertEqual(len(state["foundation_deck"]), foundation_count + 2)
+        self.assertIn(
+            "The Institution Deck was shuffled into the Foundation Deck.",
+            state["log"],
+        )
+
     def test_plotting_preview_uses_full_current_resources_and_tags(self):
         state = build_state()
         farm = next(card for card in state["catalog"]["cards"] if card["id"] == "farm")
@@ -303,10 +392,10 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
         _apply_on_build_effects(state, card, city)
         self.assertEqual(city["condition_tokens"], {})
 
-    def test_setup_deals_base_and_empire_cards_and_places_initial_city(self):
+    def test_setup_deals_base_and_foundation_cards_and_places_initial_city(self):
         state = build_state()
 
-        self.assertEqual(state["phase"], "suspicion")
+        self.assertEqual(state["phase"], "council_vote")
         self.assertEqual(state["rules_version"], "anonymous-council")
         self.assertEqual(state["cities"][0]["city_card_id"], "capital")
         self.assertEqual(state["cities"][0]["building_slots"], 4)
@@ -321,7 +410,7 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
             )
         )
         self.assertTrue(all(player["hand"].count("border-raid") == 1 for player in state["players"]))
-        self.assertNotIn("border-raid", state["empire_deck"])
+        self.assertNotIn("border-raid", state["foundation_deck"])
         self.assertTrue(all(len(player["scheme_slots"]) == 2 for player in state["players"]))
         self.assertEqual(state["pillars"], {"treasury": 5, "stability": 5, "morale": 5})
 
@@ -463,12 +552,12 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
         state["minister_of_empire_player_id"] = "player-1"
         _assign_ministries(state, rotate=False)
 
-        for target in ("player-2", "", "player-2"):
+        for target in ("player-2", "player-3", "player-2"):
             action = next(
                 entry for entry in state["possible_actions"]
-                if entry["target_player_id"] == target
+                if entry.get("target_type") == "player" and entry.get("target_id") == target
             )
-            state = perform_action(state, "place_suspicion", action)
+            state = perform_action(state, "cast_council_vote", action)
 
         player_two = next(player for player in state["players"] if player["id"] == "player-2")
         self.assertEqual(player_two["suspicion"], 2)
@@ -484,10 +573,13 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
 
     def test_suspicion_controls_commit_visibility_and_event_eligibility(self):
         state = finish_ministry_draft(build_state())
-        placements = ["player-2", "", "player-2", "player-2"]
+        placements = ["player-2", "player-3", "player-2", "player-2"]
         for target in placements:
-            action = next(entry for entry in state["possible_actions"] if entry["target_player_id"] == target)
-            state = perform_action(state, "place_suspicion", action)
+            action = next(
+                entry for entry in state["possible_actions"]
+                if entry.get("target_type") == "player" and entry.get("target_id") == target
+            )
+            state = perform_action(state, "cast_council_vote", action)
 
         self.assertEqual(state["players"][1]["suspicion"], 3)
         self.assertFalse(state["players"][1]["hand_revealed"])
@@ -613,15 +705,16 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
 
         self.assertNotIn(
             empire_player_id,
-            {action["target_player_id"] for action in state["possible_actions"]},
+            {action.get("target_id") for action in state["possible_actions"]},
         )
         with self.assertRaisesRegex(ValueError, "cannot receive Suspicion"):
             perform_action(
                 state,
-                "place_suspicion",
+                "cast_council_vote",
                 {
                     "player_id": state["active_player_id"],
-                    "target_player_id": empire_player_id,
+                    "target_type": "player",
+                    "target_id": empire_player_id,
                 },
             )
 
@@ -741,7 +834,7 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
             }
         )
 
-        with self.assertRaisesRegex(ValueError, "before non-Crisis"):
+        with self.assertRaisesRegex(ValueError, "Crises before other cards"):
             perform_action(
                 state,
                 "confirm_docket_order",
@@ -786,7 +879,7 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
         state["cities"][0]["cards"].append("farm")
         state["stored_resources"] = {"wealth": 2}
         for _ in range(4):
-            state = perform_action(state, "place_suspicion", state["possible_actions"][0])
+            state = perform_action(state, "cast_council_vote", state["possible_actions"][0])
 
         self.assertEqual(state["phase"], "plotting")
         self.assertEqual(state["global_resource_pool"], {"wealth": 3, "labor": 3})
@@ -860,7 +953,7 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
 
         self.assertEqual(state["pillars"]["stability"], 4)
         self.assertEqual(state["pillars"]["treasury"], 5)
-        self.assertIn("tax-riots", state["empire_discard"])
+        self.assertIn("tax-riots", state["foundation_discard"])
         self.assertEqual(state["docket_resolution"][0]["status"], "succeeded")
 
     def test_unpaid_event_records_alternative_effect_as_failed(self):
@@ -941,7 +1034,7 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
         self.assertEqual(state["global_resource_pool"], {"wealth": 2})
         self.assertEqual(state["pillars"]["morale"], 6)
         self.assertEqual(state["current_reveal"]["status"], "resolved")
-        self.assertIn(event["id"], state["empire_discard"])
+        self.assertIn(event["id"], state["foundation_discard"])
 
     def test_event_choice_minister_overrides_normal_decision_rule(self):
         state = finish_ministry_draft(build_state())
@@ -1282,7 +1375,7 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
 
         self.assertEqual(state["cities"][0]["condition_tokens"], {})
         self.assertEqual(state["cities"][1]["condition_tokens"], {"unrest-token": 2})
-        self.assertIn(event["id"], state["empire_discard"])
+        self.assertIn(event["id"], state["foundation_discard"])
 
     def test_minister_of_war_chooses_destroyed_structure(self):
         state = build_state()
@@ -1320,7 +1413,7 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
         )
         state = perform_action(state, "choose_event_destroy_building", choice)
         self.assertEqual(state["cities"][0]["cards"], ["farm"])
-        self.assertIn("garrison", state["empire_discard"])
+        self.assertIn("garrison", state["foundation_discard"])
 
     def test_health_minister_is_not_immune_to_forced_discard(self):
         state = build_state()
@@ -1556,7 +1649,7 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
         self.assertEqual(state["pillars"]["stability"], 4)
         self.assertEqual(state["pillars"]["treasury"], 5)
         self.assertIn("border-raid", state["crisis_discard"])
-        self.assertNotIn("border-raid", state["empire_discard"])
+        self.assertNotIn("border-raid", state["foundation_discard"])
 
     def test_event_effect_can_compare_one_tag_count_to_another(self):
         state = build_state()
@@ -1651,7 +1744,7 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
 
         state = perform_action(state, "reveal_next", {})
         self.assertEqual(state["cities"][0]["cards"], ["temple"])
-        self.assertIn("temple", state["empire_discard"])
+        self.assertIn("temple", state["foundation_discard"])
 
     def test_collapse_reveals_agendas_and_calculates_winners(self):
         state = build_state()
@@ -1692,11 +1785,11 @@ class TestGameRoomService(unittest.IsolatedAsyncioTestCase):
         next_state = await service.apply_goldfishing_action(
             room_id=room["id"],
             user=user,
-            action="place_suspicion",
+            action="cast_council_vote",
             payload=action,
         )
 
-        self.assertEqual(len(next_state["suspicion_placements"]), 1)
+        self.assertEqual(len(next_state["council_votes"]), 1)
 
     async def test_memory_room_lifecycle_records_history(self):
         service = GameRoomService()

@@ -18,7 +18,7 @@ AGENDA_SCORING_TAGS = ("culture", "diplomacy", "faith", "industry", "military", 
 
 PHASES = (
     "agenda_selection",
-    "suspicion",
+    "council_vote",
     "production",
     "plotting",
     "hand_reset",
@@ -81,12 +81,16 @@ def build_goldfishing_state(
     room_id: str,
     card_entries: list[dict[str, Any]],
     tag_entries: list[dict[str, Any]],
-    empire_deck_ids: list[str],
+    foundation_deck_ids: list[str],
+    institution_deck_ids: list[str],
     crisis_deck_ids: list[str],
     setup_pool_ids: list[str],
-    empire_deck_id: str,
+    foundation_deck_id: str,
+    institution_deck_id: str,
     crisis_deck_id: str,
     initial_city_card_id: str = "capital-foundation",
+    city_pool_card_ids: list[str] | None = None,
+    available_city_count: int = 0,
     level_id: str = "",
     suspicion_start_era: int = 5,
     player_count: int = DEFAULT_PLAYER_COUNT,
@@ -120,9 +124,14 @@ def build_goldfishing_state(
         initial_city_card_id = city["id"] if city else ""
     initial_city = card_lookup.get(initial_city_card_id, {})
 
-    empire_valid_ids = [
+    foundation_valid_ids = [
         item_id
-        for item_id in empire_deck_ids
+        for item_id in foundation_deck_ids
+        if item_id in item_ids and item_id != initial_city_card_id
+    ]
+    institution_ids = [
+        item_id
+        for item_id in institution_deck_ids
         if item_id in item_ids and item_id != initial_city_card_id
     ]
     crisis_ids = [item_id for item_id in crisis_deck_ids if item_id in item_ids]
@@ -132,20 +141,31 @@ def build_goldfishing_state(
         if item_id in item_ids and item_id != initial_city_card_id
     )
     remaining_setup = Counter(setup_counts)
-    empire_ids: list[str] = []
-    for item_id in empire_valid_ids:
+    foundation_ids: list[str] = []
+    for item_id in foundation_valid_ids:
         if remaining_setup[item_id] > 0:
             remaining_setup[item_id] -= 1
         else:
-            empire_ids.append(item_id)
+            foundation_ids.append(item_id)
     if any(remaining_setup.values()):
         raise ValueError("Initial setup contains copies that are not present in the selected deck.")
-    empire_deck = Deck(empire_ids)
+    foundation_deck = Deck(foundation_ids)
+    institution_deck = Deck(institution_ids)
     base_deck = Deck(list(setup_counts.elements()))
     crisis_deck = Deck(crisis_ids)
-    empire_deck.shuffle(f"{room_id}:empire")
+    foundation_deck.shuffle(f"{room_id}:foundation")
+    institution_deck.shuffle(f"{room_id}:institution")
     base_deck.shuffle(f"{room_id}:base")
     crisis_deck.shuffle(f"{room_id}:crisis")
+    city_pool = Deck([
+        item_id
+        for item_id in dict.fromkeys(city_pool_card_ids or [])
+        if item_id != initial_city_card_id
+        and item_id in card_lookup
+        and _is_city_card(card_lookup[item_id])
+    ])
+    city_pool.shuffle(f"{room_id}:city-pool")
+    available_city_ids = city_pool.draw(max(0, int(available_city_count)))
 
     players: list[dict[str, Any]] = []
     agenda_deck = Deck([entry["id"] for entry in agendas])
@@ -154,10 +174,16 @@ def build_goldfishing_state(
         raise ValueError("The Hidden Agenda pool requires at least two cards per player.")
     for index in range(player_count):
         base_cards = base_deck.draw(BASE_HAND_SIZE, seed=f"{room_id}:base:{index}")
-        empire_cards = empire_deck.draw(EMPIRE_HAND_SIZE, seed=f"{room_id}:empire:{index}")
+        foundation_cards = foundation_deck.draw(
+            EMPIRE_HAND_SIZE,
+            seed=f"{room_id}:foundation:{index}",
+        )
         if len(base_cards) < BASE_HAND_SIZE:
-            empire_cards.extend(
-                empire_deck.draw(BASE_HAND_SIZE - len(base_cards), seed=f"{room_id}:base-fallback:{index}")
+            foundation_cards.extend(
+                foundation_deck.draw(
+                    BASE_HAND_SIZE - len(base_cards),
+                    seed=f"{room_id}:base-fallback:{index}",
+                )
             )
         starting_crisis = crisis_deck.draw(1)
         agenda_options = agenda_deck.draw(2)
@@ -170,7 +196,7 @@ def build_goldfishing_state(
                     else f"Bot {index}" if mode == "solo_bots" else f"Player {index + 1}"
                 ),
                 "controller": "bot" if mode == "solo_bots" and index > 0 else "human",
-                "hand": [*base_cards, *empire_cards, *starting_crisis],
+                "hand": [*base_cards, *foundation_cards, *starting_crisis],
                 "scheme_slots": [None] * SCHEME_SLOTS,
                 "ministry_ids": [],
                 "suspicion": 0,
@@ -198,7 +224,7 @@ def build_goldfishing_state(
         "era": 1,
         "epoch": 1,
         "suspicion_start_era": max(1, int(suspicion_start_era)),
-        "phase": "suspicion",
+        "phase": "council_vote",
         "active_player_id": "player-1",
         "minister_of_empire_player_id": "player-1",
         "players": players,
@@ -208,7 +234,8 @@ def build_goldfishing_state(
         "frozen_resources": [],
         "blocked_players": [],
         "ministry_assignments": {},
-        "suspicion_placements": {},
+        "council_votes": {},
+        "founding_commitments": [],
         "commitments": [],
         "council_stack": [],
         "current_reveal": None,
@@ -239,8 +266,12 @@ def build_goldfishing_state(
                 "condition_tokens": {},
             }
         ] if initial_city_card_id else [],
-        "empire_deck": empire_deck.to_list(),
-        "empire_discard": [],
+        "available_city_card_ids": available_city_ids,
+        "city_vote_counts": {},
+        "foundation_deck": foundation_deck.to_list(),
+        "institution_deck": institution_deck.to_list(),
+        "institution_merged": False,
+        "foundation_discard": [],
         "base_deck": base_deck.to_list(),
         "crisis_deck": crisis_deck.to_list(),
         "crisis_discard": [],
@@ -256,19 +287,20 @@ def build_goldfishing_state(
             "agendas": agendas,
         },
         "decks": {
-            "empire": empire_deck_id,
+            "foundation": foundation_deck_id,
+            "institution": institution_deck_id,
             "crisis": crisis_deck_id,
         },
         "level_id": level_id,
         "log": [
-            f"Setup complete. {player_count} players received {BASE_HAND_SIZE} Base cards and "
-            f"{EMPIRE_HAND_SIZE} Empire cards."
+            f"Setup complete. {player_count} players received {BASE_HAND_SIZE} setup cards and "
+            f"{EMPIRE_HAND_SIZE} Foundation card."
         ],
     }
     _assign_ministries(state, rotate=False, begin_phase=False)
     state_holder = _ministry_holder(state, "state")
     if state_holder:
-        _player(state, state_holder)["hand"].extend(_draw_empire(state, 1))
+        _player(state, state_holder)["hand"].extend(_draw_foundation(state, 1))
     _begin_agenda_selection(state)
     return _prepare_state(state)
 
@@ -277,7 +309,7 @@ def perform_action(state: dict[str, Any], action: str, payload: dict[str, Any] |
     next_state = deepcopy(state)
     data = payload or {}
     handlers = {
-        "place_suspicion": _place_suspicion,
+        "cast_council_vote": _cast_council_vote,
         "continue_phase": _continue_phase,
         "select_commit_card": _select_commit_card,
         "confirm_plotting": _confirm_plotting,
@@ -323,29 +355,89 @@ def item_by_id(state: dict[str, Any], item_id: str) -> dict[str, Any]:
         return event_by_id(state, item_id)
 
 
-def _place_suspicion(state: dict[str, Any], payload: dict[str, Any]) -> None:
-    _require_phase(state, "suspicion")
+def _cast_council_vote(state: dict[str, Any], payload: dict[str, Any]) -> None:
+    _require_phase(state, "council_vote")
     player_id = _require_active_player(state, payload)
-    target_id = str(payload.get("target_player_id") or "")
-    if target_id == state.get("minister_of_empire_player_id"):
-        raise ValueError("The Minister of the Empire cannot receive Suspicion.")
-    if target_id == player_id:
-        raise ValueError("A player cannot place Suspicion on themselves.")
-    if target_id and target_id not in {player["id"] for player in state["players"]}:
-        raise ValueError("Suspicion target not found.")
-    if player_id in state["suspicion_placements"]:
-        raise ValueError("This player already placed Suspicion.")
-    state["suspicion_placements"][player_id] = target_id or None
-    if target_id:
+    target_type = str(payload.get("target_type") or "")
+    target_id = str(payload.get("target_id") or "")
+    if player_id in state["council_votes"]:
+        raise ValueError("This player already cast a Council vote.")
+    if target_type == "player":
+        if int(state.get("era", 1)) < int(state.get("suspicion_start_era", 5)):
+            raise ValueError("Suspicion is not active yet.")
+        if target_id == state.get("minister_of_empire_player_id"):
+            raise ValueError("The Minister of the Empire cannot receive Suspicion.")
+        if target_id == player_id:
+            raise ValueError("A player cannot place Suspicion on themselves.")
+        if target_id not in {player["id"] for player in state["players"]}:
+            raise ValueError("Suspicion target not found.")
         target = _player(state, target_id)
         target["suspicion"] = int(target.get("suspicion", 0)) + 1
-        state["log"].append(f"{_player(state, player_id)['name']} placed Suspicion on {target['name']}.")
+        state["log"].append(
+            f"{_player(state, player_id)['name']} voted Suspicion on {target['name']}."
+        )
+    elif target_type == "city":
+        if target_id not in state.get("available_city_card_ids", []):
+            raise ValueError("City charter not found.")
+        state.setdefault("city_vote_counts", {})[target_id] = (
+            int(state.get("city_vote_counts", {}).get(target_id, 0)) + 1
+        )
+        state["log"].append(
+            f"{_player(state, player_id)['name']} supported "
+            f"{card_by_id(state, target_id)['name']} for founding."
+        )
+    elif target_type == "abstain" and not _council_vote_targets(state, player_id):
+        state["log"].append(f"{_player(state, player_id)['name']} had no legal Council vote.")
     else:
-        state["log"].append(f"{_player(state, player_id)['name']} placed no Suspicion.")
-    _advance_ordered_player(state, completed_ids=set(state["suspicion_placements"]))
-    if len(state["suspicion_placements"]) == len(state["players"]):
+        raise ValueError("Council vote target not found.")
+    state["council_votes"][player_id] = {"target_type": target_type, "target_id": target_id}
+    _advance_ordered_player(state, completed_ids=set(state["council_votes"]))
+    if len(state["council_votes"]) == len(state["players"]):
+        _queue_supported_cities(state)
         _apply_suspicion_depositions(state)
         _begin_production(state)
+
+
+def _council_vote_targets(state: dict[str, Any], player_id: str) -> list[dict[str, str]]:
+    targets = [
+        {"target_type": "city", "target_id": city_id}
+        for city_id in state.get("available_city_card_ids", [])
+    ]
+    if int(state.get("era", 1)) >= int(state.get("suspicion_start_era", 5)):
+        protected_player_id = state.get("minister_of_empire_player_id")
+        targets.extend(
+            {"target_type": "player", "target_id": player["id"]}
+            for player in state["players"]
+            if player["id"] not in {player_id, protected_player_id}
+        )
+    return targets
+
+
+def _queue_supported_cities(state: dict[str, Any]) -> None:
+    supported_ids = [
+        city_id
+        for city_id in state.get("available_city_card_ids", [])
+        if int(state.get("city_vote_counts", {}).get(city_id, 0)) >= 2
+    ]
+    state["founding_commitments"] = [
+        {
+            "id": f"founding-{uuid.uuid4().hex[:10]}",
+            "item_id": city_id,
+            "kind": "cards",
+            "owner_player_id": "",
+            "face_up": True,
+            "priority_kind": "founding",
+        }
+        for city_id in supported_ids
+    ]
+    if supported_ids:
+        state["available_city_card_ids"] = [
+            city_id
+            for city_id in state.get("available_city_card_ids", [])
+            if city_id not in supported_ids
+        ]
+        names = ", ".join(card_by_id(state, city_id)["name"] for city_id in supported_ids)
+        state["log"].append(f"City charters entered the Council Docket: {names}.")
 
 
 def _must_commit_face_up(player: dict[str, Any]) -> bool:
@@ -555,8 +647,8 @@ def _move_docket_card(state: dict[str, Any], payload: dict[str, Any]) -> None:
 def _confirm_docket_order(state: dict[str, Any], payload: dict[str, Any]) -> None:
     _require_phase(state, "docket_ordering")
     _require_active_player(state, payload)
-    if not _crises_are_first(state, state.get("council_stack", [])):
-        raise ValueError("Every Crisis must resolve before non-Crisis cards.")
+    if not _docket_priority_is_valid(state, state.get("council_stack", [])):
+        raise ValueError("City founding must resolve before Crises, and Crises before other cards.")
     state["phase"] = "reveal"
     state["current_reveal"] = None
     state["revealed_cards"] = []
@@ -666,7 +758,7 @@ def _refill_hand(state: dict[str, Any], payload: dict[str, Any]) -> None:
     player_id = _require_active_player(state, payload)
     player = _player(state, player_id)
     draw_amount = _refill_draw_amount(state, player)
-    drawn = _draw_empire(state, draw_amount)
+    drawn = _draw_foundation(state, draw_amount)
     player["hand"].extend(drawn)
     player["pending_draws"] = 0
     state["log"].append(f"{player['name']} drew {len(drawn)} cards during Hand Refill.")
@@ -721,12 +813,12 @@ def _assign_ministries(state: dict[str, Any], *, rotate: bool, begin_phase: bool
         f"Era {state['era']}: {_player(state, empire_player_id)['name']} is Minister of the Empire."
     )
     if begin_phase:
-        _begin_suspicion(state)
+        _begin_council_vote(state)
 
 
 def _begin_agenda_selection(state: dict[str, Any]) -> None:
     if not any(player.get("agenda_options") for player in state["players"]):
-        _begin_suspicion(state)
+        _begin_council_vote(state)
         return
     state["phase"] = "agenda_selection"
     state["active_player_id"] = ""
@@ -748,18 +840,19 @@ def _choose_agenda(state: dict[str, Any], payload: dict[str, Any]) -> None:
     state["sealed_agenda_count"] = int(state.get("sealed_agenda_count", 0)) + max(0, len(options) - 1)
     state["log"].append(f"{player['name']} chose a Hidden Agenda.")
     if all(player.get("hidden_agenda_id") or not player.get("agenda_options") for player in state["players"]):
-        _begin_suspicion(state)
+        _begin_council_vote(state)
 
 
-def _begin_suspicion(state: dict[str, Any]) -> None:
-    if int(state.get("era", 1)) < int(state.get("suspicion_start_era", 5)):
-        state["log"].append("Suspicion is not active yet.")
-        _begin_production(state)
-        return
-    state["phase"] = "suspicion"
-    state["suspicion_placements"] = {}
+def _begin_council_vote(state: dict[str, Any]) -> None:
+    state["phase"] = "council_vote"
+    state["council_votes"] = {}
+    state["city_vote_counts"] = {}
+    state["founding_commitments"] = []
     state["active_player_id"] = state["minister_of_empire_player_id"]
-    state["log"].append("Suspicion Phase began.")
+    state["log"].append("Council Vote Phase began.")
+    if not any(_council_vote_targets(state, player["id"]) for player in state["players"]):
+        state["log"].append("No legal Council votes were available.")
+        _begin_production(state)
 
 
 def _run_production(state: dict[str, Any]) -> None:
@@ -790,7 +883,7 @@ def _begin_production(state: dict[str, Any]) -> None:
 def _begin_plotting(state: dict[str, Any]) -> None:
     state["phase"] = "plotting"
     state["commitments"] = []
-    state["council_stack"] = []
+    state["council_stack"] = list(state.get("founding_commitments", []))
     state["docket_resolution"] = []
     for player in state["players"]:
         player["committed"] = False
@@ -803,7 +896,10 @@ def _advance_plotting(state: dict[str, Any]) -> None:
     committed = {player["id"] for player in state["players"] if player.get("committed")}
     if len(committed) < len(state["players"]):
         return
-    state["council_stack"] = list(state["commitments"])
+    state["council_stack"] = [
+        *state.get("founding_commitments", []),
+        *state["commitments"],
+    ]
     _begin_hand_reset(state)
 
 
@@ -895,7 +991,7 @@ def _run_hand_reset(state: dict[str, Any]) -> None:
         player["hand"] = crises
     state["council_stack"] = sorted(
         state.get("council_stack", []),
-        key=lambda commitment: 0 if _commitment_is_crisis(state, commitment) else 1,
+        key=lambda commitment: _commitment_priority(state, commitment),
     )
     state["phase"] = "docket_ordering"
     state["active_player_id"] = state["minister_of_empire_player_id"]
@@ -905,6 +1001,7 @@ def _run_hand_reset(state: dict[str, Any]) -> None:
 
 
 def _begin_hand_refill(state: dict[str, Any]) -> None:
+    _merge_institution_deck_if_due(state)
     state["phase"] = "hand_refill"
     state["refill_completed"] = []
     state["active_player_id"] = state["minister_of_empire_player_id"]
@@ -929,7 +1026,9 @@ def _end_era(state: dict[str, Any]) -> None:
     state["structure_tag_requirement_waivers"] = 0
     state["plague_morale_suppressed"] = False
     state["refill_draw_penalty"] = 0
-    state["suspicion_placements"] = {}
+    state["council_votes"] = {}
+    state["city_vote_counts"] = {}
+    state["founding_commitments"] = []
     _assign_ministries(state, rotate=True)
 
 
@@ -945,18 +1044,30 @@ def _possible_actions(state: dict[str, Any]) -> list[dict[str, Any]]:
             if not player.get("hidden_agenda_id")
             for agenda_id in player.get("agenda_options", [])
         ]
-    if phase == "suspicion":
-        protected_player_id = state.get("minister_of_empire_player_id")
+    if phase == "council_vote":
+        targets = _council_vote_targets(state, active)
+        if not targets:
+            targets = [{"target_type": "abstain", "target_id": ""}]
         return [
-            {"type": "place_suspicion", "player_id": active, "target_player_id": target}
-            for target in [
-                "",
-                *[
-                    player["id"]
-                    for player in state["players"]
-                    if player["id"] not in {active, protected_player_id}
-                ],
-            ]
+            {
+                "type": "cast_council_vote",
+                "player_id": active,
+                **target,
+                **(
+                    {
+                        "buildable": (
+                            _city_charter_buildable_this_era(
+                                state,
+                                card_by_id(state, target["target_id"]),
+                            )
+                        ),
+                        "votes": int(state.get("city_vote_counts", {}).get(target["target_id"], 0)),
+                    }
+                    if target["target_type"] == "city"
+                    else {}
+                ),
+            }
+            for target in targets
         ]
     if phase == "plotting":
         actions: list[dict[str, Any]] = []
@@ -1045,8 +1156,8 @@ def _possible_actions(state: dict[str, Any]) -> list[dict[str, Any]]:
             for index, commitment in enumerate(docket)
             for direction in (-1, 1)
             if 0 <= index + direction < len(docket)
-            and _commitment_is_crisis(state, commitment)
-            == _commitment_is_crisis(state, docket[index + direction])
+            and _commitment_priority(state, commitment)
+            == _commitment_priority(state, docket[index + direction])
         ]
         return [*actions, {"type": "confirm_docket_order", "player_id": active}]
     if phase == "reveal":
@@ -1288,6 +1399,24 @@ def _placement_payload(
 def _can_pay_cost(state: dict[str, Any], card: dict[str, Any]) -> bool:
     pool = _counts(state.get("global_resource_pool"))
     return all(int(pool.get(resource_id, 0)) >= amount for resource_id, amount in _counts((card.get("data") or {}).get("cost")).items())
+
+
+def _city_charter_buildable_this_era(state: dict[str, Any], card: dict[str, Any]) -> bool:
+    if not _legal_placements(state, card):
+        return False
+    projected_pool = Counter(_counts(state.get("stored_resources")))
+    frozen = set(state.get("frozen_resources", []))
+    for city in state.get("cities", []):
+        for card_id in [city.get("city_card_id"), *city.get("cards", [])]:
+            if not card_id:
+                continue
+            for resource_id, amount in _production_for_card(card_by_id(state, card_id)).items():
+                if resource_id not in frozen:
+                    projected_pool[resource_id] += amount
+    return all(
+        int(projected_pool.get(resource_id, 0)) >= amount
+        for resource_id, amount in _counts((card.get("data") or {}).get("cost")).items()
+    )
 
 
 def _pay_cost(state: dict[str, Any], card: dict[str, Any]) -> None:
@@ -2219,12 +2348,29 @@ def _positive_counts(value: Counter | dict[str, int]) -> dict[str, int]:
     return {str(key): int(amount) for key, amount in value.items() if int(amount) > 0}
 
 
-def _draw_empire(state: dict[str, Any], amount: int) -> list[str]:
-    deck = Deck(state.get("empire_deck", []), discard_ids=state.get("empire_discard", []))
+def _draw_foundation(state: dict[str, Any], amount: int) -> list[str]:
+    deck = Deck(
+        state.get("foundation_deck", []),
+        discard_ids=state.get("foundation_discard", []),
+    )
     cards = deck.draw(amount, seed=f"{state['room_id']}:{state['era']}:draw")
-    state["empire_deck"] = deck.to_list()
-    state["empire_discard"] = deck.discard_list()
+    state["foundation_deck"] = deck.to_list()
+    state["foundation_discard"] = deck.discard_list()
     return cards
+
+
+def _merge_institution_deck_if_due(state: dict[str, Any]) -> None:
+    if int(state.get("era", 1)) != 4 or state.get("institution_merged"):
+        return
+    combined = Deck([
+        *state.get("foundation_deck", []),
+        *state.get("institution_deck", []),
+    ])
+    combined.shuffle(f"{state['room_id']}:era-4:institution-merge")
+    state["foundation_deck"] = combined.to_list()
+    state["institution_deck"] = []
+    state["institution_merged"] = True
+    state["log"].append("The Institution Deck was shuffled into the Foundation Deck.")
 
 
 def _discard_item(state: dict[str, Any], item_id: str) -> None:
@@ -2233,7 +2379,7 @@ def _discard_item(state: dict[str, Any], item_id: str) -> None:
     if _is_crisis(item_by_id(state, item_id)):
         state.setdefault("crisis_discard", []).append(item_id)
     else:
-        state.setdefault("empire_discard", []).append(item_id)
+        state.setdefault("foundation_discard", []).append(item_id)
 
 
 def _is_event(item: dict[str, Any]) -> bool:
@@ -2248,15 +2394,15 @@ def _commitment_is_crisis(state: dict[str, Any], commitment: dict[str, Any]) -> 
     return _is_crisis(item_by_id(state, str(commitment.get("item_id") or "")))
 
 
-def _crises_are_first(state: dict[str, Any], docket: list[dict[str, Any]]) -> bool:
-    non_crisis_seen = False
-    for commitment in docket:
-        if _commitment_is_crisis(state, commitment):
-            if non_crisis_seen:
-                return False
-        else:
-            non_crisis_seen = True
-    return True
+def _commitment_priority(state: dict[str, Any], commitment: dict[str, Any]) -> int:
+    if commitment.get("priority_kind") == "founding":
+        return 0
+    return 1 if _commitment_is_crisis(state, commitment) else 2
+
+
+def _docket_priority_is_valid(state: dict[str, Any], docket: list[dict[str, Any]]) -> bool:
+    priorities = [_commitment_priority(state, commitment) for commitment in docket]
+    return priorities == sorted(priorities)
 
 
 def _is_city_card(card: dict[str, Any]) -> bool:

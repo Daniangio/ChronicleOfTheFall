@@ -13,7 +13,8 @@ const sections = [
   { key: "catalog-inspector", label: "Catalog Inspector", to: "/admin/catalog-inspector" },
   { key: "tags", label: "Tags", to: "/admin/tags" },
   { key: "images", label: "Images", to: "/admin/images" },
-  { key: "cards", label: "Cards", to: "/admin/cards" },
+  { key: "structures", label: "Structures", to: "/admin/structures" },
+  { key: "cities", label: "Cities", to: "/admin/cities" },
   { key: "build-paths", label: "Build Paths", to: "/admin/build-paths" },
   { key: "ministries", label: "Ministries", to: "/admin/ministries" },
   { key: "pillars", label: "Pillars", to: "/admin/pillars" },
@@ -569,7 +570,7 @@ const repeatedListToCounts = (items) => {
   }, {});
 };
 
-const defaultEmpireInitialSetup = (items) => {
+const defaultFoundationInitialSetup = (items) => {
   const ids = items
     .filter((item) => item.kind === "cards" && item.category === "structure")
     .map((item) => item.id)
@@ -1992,11 +1993,15 @@ const EventGuidedFields = ({ data, setField, tagEntries, ministryEntries, pillar
 };
 
 const UnifiedDeckGuidedFields = ({ data, setField, items }) => {
-  const deckType = data.deck_type === "crisis" ? "crisis" : "empire";
+  const deckType = ["foundation", "institution", "crisis"].includes(data.deck_type)
+    ? data.deck_type
+    : "foundation";
+  const isFoundation = deckType === "foundation";
   const eligibleItems = items.filter((item) => (
     deckType === "crisis"
       ? item.kind === "events" && item.data?.subtype === "crisis"
-      : item.kind === "cards" || (item.kind === "events" && item.data?.subtype === "edict")
+      : (item.kind === "cards" && item.category === "structure")
+        || (item.kind === "events" && item.data?.subtype === "edict")
   ));
   const itemIds = Array.isArray(data.item_ids) ? data.item_ids : [];
   const setup = data.initial_setup && typeof data.initial_setup === "object"
@@ -2010,7 +2015,7 @@ const UnifiedDeckGuidedFields = ({ data, setField, items }) => {
     const normalized = Math.max(0, Math.min(99, Number(copies) || 0));
     const otherIds = itemIds.filter((id) => id !== itemId);
     setField("item_ids", [...otherIds, ...Array.from({ length: normalized }, () => itemId)]);
-    if (deckType === "crisis") return;
+    if (!isFoundation) return;
     const nextSetup = Object.fromEntries(["3", "4", "5"].map((tier) => {
       const allowed = Math.max(0, normalized - ["3", "4", "5"]
         .filter((candidate) => candidate !== tier)
@@ -2042,37 +2047,39 @@ const UnifiedDeckGuidedFields = ({ data, setField, items }) => {
         label="Deck Type"
         value={deckType}
         options={[
-          { value: "empire", label: "Empire" },
+          { value: "foundation", label: "Foundation" },
+          { value: "institution", label: "Institution" },
           { value: "crisis", label: "Crisis" },
         ]}
         onChange={(value) => {
           const defaultItems = items.filter((item) => (
             value === "crisis"
               ? item.kind === "events" && item.data?.subtype === "crisis"
-              : item.kind === "cards" || (item.kind === "events" && item.data?.subtype === "edict")
+              : (item.kind === "cards" && item.category === "structure")
+                || (item.kind === "events" && item.data?.subtype === "edict")
           ));
           setField("deck_type", value);
           setField("item_ids", defaultItems.map((item) => item.id));
-          setField("initial_setup", value === "empire" ? defaultEmpireInitialSetup(defaultItems) : {});
+          setField("initial_setup", value === "foundation" ? defaultFoundationInitialSetup(defaultItems) : {});
         }}
       />
-      <div className={`grid gap-2 px-3 text-xs font-semibold text-slate-500 ${deckType === "empire" ? "grid-cols-[minmax(0,1fr)_5rem_repeat(3,5.5rem)]" : "grid-cols-[minmax(0,1fr)_5rem]"}`}>
+      <div className={`grid gap-2 px-3 text-xs font-semibold text-slate-500 ${isFoundation ? "grid-cols-[minmax(0,1fr)_5rem_repeat(3,5.5rem)]" : "grid-cols-[minmax(0,1fr)_5rem]"}`}>
         <span>Card</span><span>Deck</span>
-        {deckType === "empire" ? <><span>Initial 3+</span><span>Initial 4+</span><span>Initial 5</span></> : null}
+        {isFoundation ? <><span>Initial 3+</span><span>Initial 4+</span><span>Initial 5</span></> : null}
       </div>
       {eligibleItems.map((item) => (
-        <div key={item.id} className={`grid items-center gap-2 rounded-md border border-slate-800 bg-slate-950 p-3 ${deckType === "empire" ? "grid-cols-[minmax(0,1fr)_5rem_repeat(3,5.5rem)]" : "grid-cols-[minmax(0,1fr)_5rem]"}`}>
+        <div key={item.id} className={`grid items-center gap-2 rounded-md border border-slate-800 bg-slate-950 p-3 ${isFoundation ? "grid-cols-[minmax(0,1fr)_5rem_repeat(3,5.5rem)]" : "grid-cols-[minmax(0,1fr)_5rem]"}`}>
           <span className="min-w-0">
             <span className="block truncate text-sm font-semibold text-slate-200">{item.name}</span>
             <span className="block text-xs text-slate-500">{item.kind === "events" ? `Event - ${item.data?.subtype || "event"}` : item.category}</span>
           </span>
           <input className="h-8 rounded border border-slate-700 bg-slate-900 px-1 text-center text-sm text-white" min="0" max="99" type="number" value={deckCounts[item.id] || 0} onChange={(event) => setDeckCopies(item.id, event.target.value)} />
-          {deckType === "empire" ? ["3", "4", "5"].map((tier) => (
+          {isFoundation ? ["3", "4", "5"].map((tier) => (
             <input key={tier} className="h-8 rounded border border-slate-700 bg-slate-900 px-1 text-center text-sm text-white disabled:opacity-40" disabled={!deckCounts[item.id]} min="0" max={deckCounts[item.id] || 0} type="number" value={tierCounts[tier][item.id] || 0} onChange={(event) => setTierCopies(tier, item.id, event.target.value)} />
           )) : null}
         </div>
       ))}
-      {deckType === "empire" ? <div className="grid gap-2 sm:grid-cols-3">
+      {isFoundation ? <div className="grid gap-2 sm:grid-cols-3">
         {["3", "4", "5"].map((tier) => {
           const total = (setup[tier] || []).length;
           return (
@@ -2088,8 +2095,10 @@ const UnifiedDeckGuidedFields = ({ data, setField, items }) => {
 
 const LevelGuidedFields = ({ data, setField, cardEntries, deckEntries }) => {
   const cityCards = cardEntries.filter((card) => card.category === "city");
-  const empireDecks = deckEntries.filter((deck) => deck.data?.deck_type === "empire");
+  const foundationDecks = deckEntries.filter((deck) => deck.data?.deck_type === "foundation");
+  const institutionDecks = deckEntries.filter((deck) => deck.data?.deck_type === "institution");
   const crisisDecks = deckEntries.filter((deck) => deck.data?.deck_type === "crisis");
+  const cityPoolIds = Array.isArray(data.city_pool_card_ids) ? data.city_pool_card_ids : [];
   return (
     <>
       <SelectField
@@ -2099,10 +2108,16 @@ const LevelGuidedFields = ({ data, setField, cardEntries, deckEntries }) => {
         onChange={(value) => setField("initial_city_card_id", value)}
       />
       <SelectField
-        label="Empire Deck"
-        value={data.empire_deck_id || ""}
-        options={[{ value: "", label: "Select Empire deck" }, ...empireDecks.map((deck) => ({ value: deck.id, label: deck.name }))]}
-        onChange={(value) => setField("empire_deck_id", value)}
+        label="Foundation Deck"
+        value={data.foundation_deck_id || ""}
+        options={[{ value: "", label: "Select Foundation deck" }, ...foundationDecks.map((deck) => ({ value: deck.id, label: deck.name }))]}
+        onChange={(value) => setField("foundation_deck_id", value)}
+      />
+      <SelectField
+        label="Institution Deck"
+        value={data.institution_deck_id || ""}
+        options={[{ value: "", label: "Select Institution deck" }, ...institutionDecks.map((deck) => ({ value: deck.id, label: deck.name }))]}
+        onChange={(value) => setField("institution_deck_id", value)}
       />
       <SelectField
         label="Crisis Deck"
@@ -2110,6 +2125,33 @@ const LevelGuidedFields = ({ data, setField, cardEntries, deckEntries }) => {
         options={[{ value: "", label: "Select Crisis deck" }, ...crisisDecks.map((deck) => ({ value: deck.id, label: deck.name }))]}
         onChange={(value) => setField("crisis_deck_id", value)}
       />
+      <NumberField
+        label="Available Cities at Setup"
+        value={data.available_city_count ?? Math.min(5, cityPoolIds.length)}
+        onChange={(value) => setField("available_city_count", Math.max(0, Math.min(cityPoolIds.length, value)))}
+      />
+      <fieldset className="space-y-2">
+        <legend className="text-sm font-medium text-slate-300">City Charter Pool</legend>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {cityCards
+            .filter((card) => card.id !== data.initial_city_card_id)
+            .map((card) => (
+              <label key={card.id} className="flex items-center gap-2 rounded-md border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-200">
+                <input
+                  type="checkbox"
+                  checked={cityPoolIds.includes(card.id)}
+                  onChange={(event) => setField(
+                    "city_pool_card_ids",
+                    event.target.checked
+                      ? [...cityPoolIds, card.id]
+                      : cityPoolIds.filter((itemId) => itemId !== card.id)
+                  )}
+                />
+                {card.name}
+              </label>
+            ))}
+        </div>
+      </fieldset>
       <NumberField
         label="Suspicion Starts in Era"
         value={data.suspicion_start_era ?? 5}
@@ -2154,7 +2196,7 @@ const GuidedMetadataEditor = ({
   const listFields = tagListFieldsBySection[activeSection] || [];
   const singleFields = tagSingleFieldsBySection[activeSection] || [];
   const usefulFields = [...countFields, ...listFields, ...singleFields];
-  const hasCardGuidance = activeSection === "cards";
+  const hasCardGuidance = activeSection === "structures" || activeSection === "cities";
   const hasDeckGuidance = activeSection === "decks";
   const hasLevelGuidance = activeSection === "levels";
   const hasMinistryGuidance = activeSection === "ministries";
@@ -2338,7 +2380,16 @@ const AdminPage = () => {
 
   const activeSection = sections.some((entry) => entry.key === section) ? section : null;
   const activeEventSubtype = activeSection === "crises" ? "crisis" : activeSection === "edicts" ? "edict" : "";
-  const activeCatalogKind = activeEventSubtype ? "events" : activeSection;
+  const activeCardCategory = activeSection === "structures"
+    ? "structure"
+    : activeSection === "cities"
+      ? "city"
+      : "";
+  const activeCatalogKind = activeEventSubtype
+    ? "events"
+    : activeCardCategory
+      ? "cards"
+      : activeSection;
   const isCatalogSection = catalogSections.has(activeCatalogKind);
   const isReadOnlyCatalogSection = readOnlyCatalogSections.has(activeCatalogKind);
 
@@ -2571,9 +2622,10 @@ const AdminPage = () => {
       const matchesEventSubtype =
         !activeEventSubtype ||
         String(entry.data?.subtype || "edict") === activeEventSubtype;
-      return matchesQuery && matchesCategory && matchesEventSubtype;
+      const matchesCardCategory = !activeCardCategory || entry.category === activeCardCategory;
+      return matchesQuery && matchesCategory && matchesEventSubtype && matchesCardCategory;
     });
-  }, [activeCatalogKind, activeEventSubtype, catalogEntries, query, tagCategoryFilter]);
+  }, [activeCardCategory, activeCatalogKind, activeEventSubtype, catalogEntries, query, tagCategoryFilter]);
 
   const tagCategories = useMemo(
     () => Array.from(new Set(catalogEntries.map((entry) => entry.category || "uncategorized"))).sort(),
@@ -2595,7 +2647,7 @@ const AdminPage = () => {
       color: activeCatalogKind === "tags" ? "#64748b" : "",
       category:
         activeCatalogKind === "cards"
-            ? "structure"
+            ? activeCardCategory
             : activeCatalogKind === "decks"
               ? "deck"
             : activeCatalogKind === "levels"
@@ -2617,20 +2669,23 @@ const AdminPage = () => {
         activeCatalogKind === "decks"
               ? (() => {
                   const defaultItems = [
-                    ...cardEntries,
+                    ...cardEntries.filter((entry) => entry.category === "structure"),
                     ...eventEntries.filter((entry) => entry.data?.subtype === "edict"),
                   ];
                   return stringifyData({
-                    deck_type: "empire",
+                    deck_type: "foundation",
                     item_ids: defaultItems.map((entry) => entry.id),
-                    initial_setup: defaultEmpireInitialSetup(defaultItems),
+                    initial_setup: defaultFoundationInitialSetup(defaultItems),
                   });
                 })()
             : activeCatalogKind === "levels"
               ? stringifyData({
                   initial_city_card_id: "",
-                  empire_deck_id: "",
+                  foundation_deck_id: "",
+                  institution_deck_id: "",
                   crisis_deck_id: "",
+                  city_pool_card_ids: [],
+                  available_city_count: 0,
                   suspicion_start_era: 5,
                 })
             : activeCatalogKind === "ministries"
@@ -2721,24 +2776,33 @@ const AdminPage = () => {
                 ? "effect-icon"
               : activeCatalogKind === "tags"
                 ? tagResourceType
-              : catalogForm.category,
+              : activeCatalogKind === "cards" && activeCardCategory
+                ? activeCardCategory
+                : catalogForm.category,
         summary: catalogForm.summary,
         color: activeCatalogKind === "tags" ? catalogForm.color : null,
         data: activeCatalogKind === "decks"
             ? {
                 ...normalizedData,
-                deck_type: normalizedData.deck_type === "crisis" ? "crisis" : "empire",
+                deck_type: ["foundation", "institution", "crisis"].includes(normalizedData.deck_type)
+                  ? normalizedData.deck_type
+                  : "foundation",
                 item_ids: Array.isArray(normalizedData.item_ids) ? normalizedData.item_ids : [],
-                ...(normalizedData.deck_type === "crisis"
-                  ? { initial_setup: {} }
-                  : { initial_setup: normalizedData.initial_setup || { "3": [], "4": [], "5": [] } }),
+                ...(normalizedData.deck_type === "foundation"
+                  ? { initial_setup: normalizedData.initial_setup || { "3": [], "4": [], "5": [] } }
+                  : { initial_setup: {} }),
               }
           : activeCatalogKind === "levels"
             ? {
                 ...normalizedData,
                 initial_city_card_id: normalizedData.initial_city_card_id || "",
-                empire_deck_id: normalizedData.empire_deck_id || "",
+                foundation_deck_id: normalizedData.foundation_deck_id || "",
+                institution_deck_id: normalizedData.institution_deck_id || "",
                 crisis_deck_id: normalizedData.crisis_deck_id || "",
+                city_pool_card_ids: Array.isArray(normalizedData.city_pool_card_ids)
+                  ? normalizedData.city_pool_card_ids
+                  : [],
+                available_city_count: Math.max(0, Number(normalizedData.available_city_count) || 0),
                 suspicion_start_era: Math.max(1, Number(normalizedData.suspicion_start_era) || 5),
               }
           : activeCatalogKind === "tags"
@@ -2941,8 +3005,15 @@ const AdminPage = () => {
               (entry) => String(entry.data?.subtype || "edict") === activeEventSubtype
             ),
           }
+        : kind === "cards" && activeCardCategory
+          ? {
+              ...payload,
+              entries: (payload.entries || []).filter(
+                (entry) => entry.category === activeCardCategory
+              ),
+            }
         : payload;
-      const exportedKind = activeEventSubtype || kind || "all";
+      const exportedKind = activeEventSubtype || activeCardCategory || kind || "all";
       downloadJson(scopedPayload, `chronicle-catalog-${exportedKind}.json`);
     } catch (exportError) {
       setError(exportError.message || "Failed to export catalog.");
@@ -2965,6 +3036,9 @@ const AdminPage = () => {
         entries: entries.map((entry) => ({
           ...entry,
           kind: entry.kind || activeCatalogKind,
+          category: !importAll && activeCardCategory && (entry.kind || activeCatalogKind) === "cards"
+            ? activeCardCategory
+            : entry.category,
           data: !importAll && activeEventSubtype && (entry.kind || activeCatalogKind) === "events"
             ? { ...(entry.data || {}), subtype: activeEventSubtype }
             : entry.data,
@@ -3382,7 +3456,15 @@ const AdminPage = () => {
                     type="button"
                   >
                     <Plus className="h-4 w-4" aria-hidden="true" />
-                    New {activeEventSubtype === "crisis" ? "Crisis" : activeEventSubtype === "edict" ? "Edict" : activeSection.slice(0, -1)}
+                    New {activeEventSubtype === "crisis"
+                      ? "Crisis"
+                      : activeEventSubtype === "edict"
+                        ? "Edict"
+                        : activeCardCategory === "structure"
+                          ? "Structure"
+                          : activeCardCategory === "city"
+                            ? "City"
+                            : activeSection.slice(0, -1)}
                   </button>
                 </>
               )}
@@ -3502,19 +3584,8 @@ const AdminPage = () => {
               )}
 
               <div className={`grid gap-4 ${activeCatalogKind === "events" ? "" : "sm:grid-cols-2"}`}>
-                {activeCatalogKind === "cards" ? (
-                  <label className="block">
-                    <span className="text-sm font-medium text-slate-300">Category</span>
-                    <select
-                      value={catalogForm.category}
-                      onChange={(event) => setCatalogForm((state) => ({ ...state, category: event.target.value }))}
-                      className="mt-2 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none focus:border-teal-400"
-                    >
-                      <option value="structure">Structure</option>
-                      <option value="city">City</option>
-                    </select>
-                  </label>
-                ) : activeCatalogKind === "tags" ? (
+                {activeCatalogKind === "cards" ? null : (
+                  activeCatalogKind === "tags" ? (
                   <label className="block">
                     <span className="text-sm font-medium text-slate-300">Type</span>
                     <select
@@ -3541,7 +3612,7 @@ const AdminPage = () => {
                       <option value="volatile">Volatile Resource</option>
                     </select>
                   </label>
-                ) : activeCatalogKind === "events" ? null : (
+                  ) : activeCatalogKind === "events" ? null : (
                   <label className="block">
                     <span className="text-sm font-medium text-slate-300">Category</span>
                     <input
@@ -3550,6 +3621,7 @@ const AdminPage = () => {
                       className="mt-2 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none focus:border-teal-400 disabled:text-slate-500"
                     />
                   </label>
+                  )
                 )}
                 {activeSection === "tags" ? (
                   <label className="block">

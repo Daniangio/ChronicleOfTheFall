@@ -11,6 +11,7 @@ from .goldfishing_engine import (
     _agenda_condition_met,
     _can_pay_cost,
     _city_tag_counts,
+    _commitment_priority,
     _counts,
     _empire_tag_counts,
     _event_requirements_met,
@@ -136,10 +137,32 @@ def choose_next_bot_action(state: dict[str, Any]) -> dict[str, Any] | None:
                 _stable_action_key(action),
             ),
         )
-    if phase == "suspicion":
-        return next(
-            (action for action in bot_actions if not action.get("target_player_id")),
-            bot_actions[0],
+    if phase == "council_vote":
+        buildable_cities = [
+            action
+            for action in bot_actions
+            if action.get("target_type") == "city" and action.get("buildable")
+        ]
+        if buildable_cities:
+            return max(
+                buildable_cities,
+                key=lambda action: (
+                    _item_value(
+                        state,
+                        item_by_id(state, str(action.get("target_id") or "")),
+                        bot_id,
+                    ),
+                    int(action.get("votes") or 0) == 1,
+                    _stable_action_key(action),
+                ),
+            )
+        return max(
+            bot_actions,
+            key=lambda action: (
+                action.get("target_type") == "city",
+                action.get("target_type") == "abstain",
+                _stable_action_key(action),
+            ),
         )
     if phase == "plotting":
         return _choose_plotting_action(state, bot_id, bot_actions)
@@ -283,7 +306,7 @@ def _choose_docket_action(
     desired = sorted(
         docket,
         key=lambda commitment: (
-            0 if _is_crisis(item_by_id(state, commitment["item_id"])) else 1,
+            _commitment_priority(state, commitment),
             -dependency_bonus[commitment["id"]],
             -_item_value(state, item_by_id(state, commitment["item_id"]), bot_id),
             commitment["id"],
@@ -400,10 +423,28 @@ def _item_value(
             if requirement.get("type") == "resource" and requirements_met
         )
     else:
+        legal_city_ids = set(_legal_placements(state, item))
+        candidate_cities = [
+            city
+            for city in state.get("cities", [])
+            if not legal_city_ids or city.get("id") in legal_city_ids
+        ]
         for tag_id, amount in _counts(data.get("tags")).items():
-            value += amount * (2.0 + profile["tags"].get(tag_id, 0.0))
+            preference = profile["tags"].get(tag_id, 0.0)
+            tag_is_new = _is_city_card(item) or any(
+                int(_city_tag_counts(state, city).get(tag_id, 0)) == 0
+                for city in candidate_cities
+            )
+            novelty = 1.5 if tag_is_new and preference >= 0 else 0.0
+            value += amount * (2.0 + preference + novelty)
         for resource_id, amount in _counts(data.get("production")).items():
-            value += amount * (2.5 + profile["resources"].get(resource_id, 0.0))
+            preference = profile["resources"].get(resource_id, 0.0)
+            resource_is_new = _is_city_card(item) or any(
+                int(_city_production_counts(state, city).get(resource_id, 0)) == 0
+                for city in candidate_cities
+            )
+            novelty = 2.0 if resource_is_new and preference >= 0 else 0.0
+            value += amount * (2.5 + preference + novelty)
         value += _effects_value(
             state,
             [*data.get("on_build_effects", []), *data.get("persistent_effects", [])],
@@ -593,6 +634,14 @@ def _item_playable_now(state: dict[str, Any], item: dict[str, Any]) -> bool:
     if _is_event(item):
         return True
     return _can_pay_cost(state, item) and bool(_legal_placements(state, item))
+
+
+def _city_production_counts(state: dict[str, Any], city: dict[str, Any]) -> dict[str, int]:
+    production: Counter = Counter()
+    for card_id in [city.get("city_card_id"), *city.get("cards", [])]:
+        if card_id:
+            production.update(_production_for_card(item_by_id(state, card_id)))
+    return dict(production)
 
 
 def _readiness_turns(state: dict[str, Any], item: dict[str, Any]) -> int:

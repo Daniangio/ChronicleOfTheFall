@@ -69,7 +69,7 @@ class TestBotPolicy(unittest.TestCase):
                 ))
                 self.assertFalse(state["players"][0]["hidden_agenda_id"])
 
-    def test_bots_never_place_suspicion_and_commit_during_parallel_plotting(self):
+    def test_bots_cast_council_votes_and_commit_during_parallel_plotting(self):
         state = prepare_bot_state()
         human_agenda = next(
             action
@@ -79,19 +79,18 @@ class TestBotPolicy(unittest.TestCase):
         state = advance_bot_players(
             perform_action(state, human_agenda["type"], human_agenda)
         )
-        human_pass = next(
+        human_vote = next(
             action
             for action in state["possible_actions"]
             if action.get("player_id") == "player-1"
-            and not action.get("target_player_id")
         )
         state = advance_bot_players(
-            perform_action(state, human_pass["type"], human_pass)
+            perform_action(state, human_vote["type"], human_vote)
         )
 
         self.assertEqual(state["phase"], "plotting")
         self.assertTrue(all(
-            state["suspicion_placements"].get(player["id"]) is None
+            player["id"] in state["council_votes"]
             for player in state["players"][1:]
         ))
         self.assertTrue(all(player["committed"] for player in state["players"][1:]))
@@ -107,14 +106,13 @@ class TestBotPolicy(unittest.TestCase):
         state = advance_bot_players(
             perform_action(state, human_agenda["type"], human_agenda)
         )
-        human_pass = next(
+        human_vote = next(
             action
             for action in state["possible_actions"]
             if action.get("player_id") == "player-1"
-            and not action.get("target_player_id")
         )
         state = advance_bot_players(
-            perform_action(state, human_pass["type"], human_pass)
+            perform_action(state, human_vote["type"], human_vote)
         )
         human_commit = next(
             action
