@@ -16,6 +16,7 @@ from .schemas import (
 )
 from .security import get_current_user
 from .server_models import User
+from .replay_service import save_bot_replay
 
 
 router = APIRouter()
@@ -35,8 +36,8 @@ async def create_game_room(
     db: Session = Depends(get_db),
 ):
     try:
-        if payload.mode not in {"goldfishing", "solo_bots"}:
-            raise ValueError("Game mode must be goldfishing or solo_bots.")
+        if payload.mode not in {"goldfishing", "solo_bots", "bots_only"}:
+            raise ValueError("Game mode must be goldfishing, solo_bots, or bots_only.")
         service = _service()
         cards = [public_catalog_entry(entry) for entry in list_catalog_records(db, "cards")]
         tags = [public_catalog_entry(entry) for entry in list_catalog_records(db, "tags")]
@@ -94,13 +95,18 @@ async def create_game_room(
             token_entries=tokens,
             effect_icon_entries=effect_icons,
             image_entries=images,
+            selected_agenda_ids=payload.agenda_ids,
         )
-        return await service.create_room(
+        room = await service.create_room(
             user=current_user,
             game_type=payload.game_type,
             game_state=game_state,
             room_id=room_id,
         )
+        internal_state = await service.get_internal_game_state(room_id=room_id, user_id=current_user.id)
+        if internal_state and internal_state.get("phase") == "game_over":
+            save_bot_replay(db, state=internal_state, owner_user_id=current_user.id)
+        return room
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -138,9 +144,25 @@ async def list_game_levels(current_user: User = Depends(get_current_user), db: S
     ]
 
 
+@router.get("/game/agendas")
+async def list_game_agendas(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    del current_user
+    return [
+        {"id": entry.id, "name": entry.name, "summary": entry.summary or ""}
+        for entry in list_catalog_records(db, "agendas")
+    ]
+
+
 @router.post("/game/rooms/{room_id}/end", response_model=GameRoomResponse)
-async def end_game_room(room_id: str, current_user: User = Depends(get_current_user)):
+async def end_game_room(
+    room_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     try:
+        state = await _service().get_internal_game_state(room_id=room_id, user_id=current_user.id)
+        if state:
+            save_bot_replay(db, state=state, owner_user_id=current_user.id)
         return await _service().enqueue_end_room(room_id=room_id, user=current_user)
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -159,8 +181,14 @@ async def perform_game_action(
     room_id: str,
     payload: GoldfishingActionRequest,
     current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
-    return await _apply_action(room_id, current_user, payload.action, payload.payload)
+    result = await _apply_action(room_id, current_user, payload.action, payload.payload)
+    if result.get("mode") == "bots_only" and result.get("phase") == "game_over":
+        state = await _service().get_internal_game_state(room_id=room_id, user_id=current_user.id)
+        if state:
+            save_bot_replay(db, state=state, owner_user_id=current_user.id)
+    return result
 
 
 @router.get("/game/results/{room_id}", response_model=GameResultResponse)

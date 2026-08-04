@@ -210,6 +210,24 @@ def finish_ministry_draft(state: dict) -> dict:
 
 
 class TestAnonymousCouncilEngine(unittest.TestCase):
+    def test_bot_only_setup_uses_selected_agendas_and_records_replay_frames(self):
+        state = build_state(
+            mode="bots_only",
+            player_count=3,
+            selected_agenda_ids=["survivor", "survivor", "survivor"],
+            auto_choose_agendas=False,
+        )
+
+        self.assertEqual(state["phase"], "council_vote")
+        self.assertTrue(all(player["controller"] == "bot" for player in state["players"]))
+        self.assertEqual([player["hidden_agenda_id"] for player in state["players"]], ["survivor"] * 3)
+        self.assertEqual(state["replay_frames"][0]["action"], "setup")
+
+        action = state["possible_actions"][0]
+        state = perform_action(state, action["type"], action)
+        self.assertEqual(state["replay_frames"][-1]["action"], action["type"])
+        self.assertEqual(state["replay_frames"][-1]["era"], 1)
+
     def test_structure_with_same_name_can_only_be_built_in_another_city(self):
         alternate_farm = catalog_entry(
             "alternate-farm",

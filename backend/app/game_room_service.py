@@ -100,6 +100,12 @@ class GameRoomService:
             return None
         return public_game_state(_decode_state(room.get("game_state")))
 
+    async def get_internal_game_state(self, *, room_id: str, user_id: str) -> dict[str, Any] | None:
+        room = await self._load_room(room_id)
+        if not room or room.get("owner_user_id") != user_id:
+            return None
+        return _decode_state(room.get("game_state"))
+
     async def apply_goldfishing_action(
         self,
         *,
@@ -114,7 +120,7 @@ class GameRoomService:
         if room.get("state") == ROOM_STATE_FINISHED:
             raise ValueError("Game room is finished.")
         state = _decode_state(room.get("game_state"))
-        if state.get("mode") not in {"goldfishing", "solo_bots"}:
+        if state.get("mode") not in {"goldfishing", "solo_bots", "bots_only"}:
             raise ValueError("This room does not contain a playable Chronicle game.")
         require_human_action(state, payload)
         state = perform_action(state, action, payload)

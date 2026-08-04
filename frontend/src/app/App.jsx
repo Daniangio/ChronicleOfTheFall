@@ -23,6 +23,7 @@ import LobbyPage from "../pages/LobbyPage.jsx";
 import PlayPage from "../pages/PlayPage.jsx";
 import PostGamePage from "../pages/PostGamePage.jsx";
 import ProfilePage from "../pages/ProfilePage.jsx";
+import ReplayPage from "../pages/ReplayPage.jsx";
 import SoloPlayPage from "../pages/SoloPlayPage.jsx";
 import { useStore } from "../store.js";
 import { buildWsUrl } from "../utils/connection.js";
@@ -237,6 +238,8 @@ function AppContent() {
           <Route path="/lobby" element={authenticatedPage(<LobbyPage />)} />
           <Route path="/play" element={authenticatedPage(<PlayPage />)} />
           <Route path="/play/solo" element={authenticatedPage(<SoloPlayPage />)} />
+          <Route path="/replays" element={authenticatedPage(<ReplayPage />)} />
+          <Route path="/replays/:replayId" element={authenticatedPage(<ReplayPage />)} />
           <Route path="/profile/:userId" element={authenticatedPage(<ProfilePage />)} />
           <Route path="/profile/:userId/friends" element={authenticatedPage(<FriendsPage />)} />
           <Route path="/profile/:userId/history" element={authenticatedPage(<GameHistoryPage />)} />

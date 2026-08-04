@@ -1,4 +1,4 @@
-import { ArrowDown, Download, Edit3, Plus, Save, Search, Trash2, Upload, X } from "lucide-react";
+import { ArrowDown, BarChart3, Download, Edit3, Plus, Save, Search, Trash2, Upload, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, Navigate, NavLink, useParams } from "react-router-dom";
 import { PageSubnavigation } from "../components/AuthenticatedLayout.jsx";
@@ -10,6 +10,7 @@ import { buildApiUrl, buildAssetUrl } from "../utils/connection.js";
 const sections = [
   { key: "users", label: "Users", to: "/admin/users" },
   { key: "audit", label: "Audit", to: "/admin/audit" },
+  { key: "statistics", label: "Statistics", to: "/admin/statistics" },
   { key: "catalog-inspector", label: "Catalog Inspector", to: "/admin/catalog-inspector" },
   { key: "tags", label: "Tags", to: "/admin/tags" },
   { key: "images", label: "Images", to: "/admin/images" },
@@ -2453,6 +2454,10 @@ const AdminPage = () => {
   const [users, setUsers] = useState([]);
   const [selectedUser, setSelectedUser] = useState(null);
   const [auditLogs, setAuditLogs] = useState([]);
+  const [replayEntries, setReplayEntries] = useState([]);
+  const [replayStatistics, setReplayStatistics] = useState(null);
+  const [selectedReplayIds, setSelectedReplayIds] = useState([]);
+  const [replaySelectorOpen, setReplaySelectorOpen] = useState(false);
   const [inspectorEntries, setInspectorEntries] = useState([]);
   const [catalogEntries, setCatalogEntries] = useState([]);
   const [tagEntries, setTagEntries] = useState([]);
@@ -2522,6 +2527,25 @@ const AdminPage = () => {
       setAuditLogs(await request("/api/admin/audit-logs"));
     } catch (loadError) {
       setError(loadError.message || "Failed to load audit logs.");
+    }
+  };
+
+  const loadReplayStatistics = async (requestedIds = null) => {
+    if (!token) return;
+    setError("");
+    try {
+      const replays = replayEntries.length ? replayEntries : await request("/api/admin/replays");
+      const ids = requestedIds || (selectedReplayIds.length ? selectedReplayIds : replays.map((entry) => entry.id));
+      const statistics = await request("/api/admin/replay-statistics", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ replay_ids: ids }),
+      });
+      setReplayEntries(replays);
+      setSelectedReplayIds(ids);
+      setReplayStatistics(statistics);
+    } catch (loadError) {
+      setError(loadError.message || "Failed to calculate replay statistics.");
     }
   };
 
@@ -2654,6 +2678,8 @@ const AdminPage = () => {
       void loadUsers();
     } else if (activeSection === "audit") {
       void loadAudit();
+    } else if (activeSection === "statistics") {
+      void loadReplayStatistics();
     } else if (activeSection === "catalog-inspector") {
       void loadCatalogInspector();
     } else if (activeSection === "build-paths") {
@@ -3299,6 +3325,21 @@ const AdminPage = () => {
         </section>
       ) : null}
 
+      {activeSection === "statistics" ? (
+        <ReplayStatisticsPanel
+          replays={replayEntries}
+          statistics={replayStatistics}
+          selectedIds={selectedReplayIds}
+          selectorOpen={replaySelectorOpen}
+          setSelectorOpen={setReplaySelectorOpen}
+          setSelectedIds={setSelectedReplayIds}
+          applySelection={() => {
+            setReplaySelectorOpen(false);
+            void loadReplayStatistics(selectedReplayIds);
+          }}
+        />
+      ) : null}
+
       {activeSection === "catalog-inspector" ? (
         <section className="rounded-lg border border-slate-800 bg-slate-900 p-5">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -3807,5 +3848,90 @@ const AdminPage = () => {
     </>
   );
 };
+
+const ReplayStatisticsPanel = ({
+  replays,
+  statistics,
+  selectedIds,
+  selectorOpen,
+  setSelectorOpen,
+  setSelectedIds,
+  applySelection,
+}) => {
+  const metricSections = [
+    ["Tags by Era", statistics?.tags_by_era || []],
+    ["Structures built by Era", statistics?.structures_by_era || []],
+    ["Edicts played by Era", statistics?.edicts_by_era || []],
+    ["Crises played by Era", statistics?.crises_by_era || []],
+  ];
+  return (
+    <>
+      <section className="border border-slate-800 bg-slate-900 p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2"><BarChart3 className="h-5 w-5 text-teal-400" /><h2 className="text-lg font-bold text-white">Bot Replay Statistics</h2></div>
+            <p className="mt-1 text-xs text-slate-500">{statistics?.game_count || 0} selected replays</p>
+          </div>
+          <button className="border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800" onClick={() => setSelectorOpen(true)} type="button">Select replays</button>
+        </div>
+      </section>
+
+      {metricSections.map(([title, rows]) => (
+        <section key={title} className="mt-4 border border-slate-800 bg-slate-900 p-4">
+          <h3 className="text-sm font-bold uppercase text-amber-100">{title}</h3>
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full min-w-[42rem] text-left text-xs">
+              <thead className="border-b border-slate-700 text-slate-500"><tr><th className="px-2 py-2">Era</th><th className="px-2 py-2">Item</th><th className="px-2 py-2">Mean</th><th className="px-2 py-2">Distribution</th></tr></thead>
+              <tbody className="divide-y divide-slate-800">
+                {rows.map((row) => <StatisticsRow key={`${row.era}-${row.item_id}`} row={row} />)}
+              </tbody>
+            </table>
+            {!rows.length ? <p className="py-5 text-sm text-slate-500">No samples.</p> : null}
+          </div>
+        </section>
+      ))}
+
+      <section className="mt-4 border border-slate-800 bg-slate-900 p-4">
+        <h3 className="text-sm font-bold uppercase text-amber-100">Points by Agenda</h3>
+        <div className="mt-3 overflow-x-auto">
+          <table className="w-full min-w-[36rem] text-left text-xs">
+            <thead className="border-b border-slate-700 text-slate-500"><tr><th className="px-2 py-2">Agenda</th><th className="px-2 py-2">Mean</th><th className="px-2 py-2">Distribution</th></tr></thead>
+            <tbody className="divide-y divide-slate-800">
+              {(statistics?.agenda_points || []).map((row) => <StatisticsRow key={row.item_id} row={row} hideEra />)}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      {selectorOpen ? (
+        <div className="fixed inset-0 z-[1400] flex items-center justify-center bg-slate-950/90 p-6" onMouseDown={(event) => { if (event.target === event.currentTarget) setSelectorOpen(false); }}>
+          <section className="max-h-[82vh] w-full max-w-3xl overflow-y-auto border border-amber-900/70 bg-slate-900 p-5 shadow-2xl">
+            <div className="flex items-center justify-between gap-3"><h3 className="text-lg font-bold text-amber-50">Statistics Replay Set</h3><button className="h-8 w-8 border border-slate-700" onClick={() => setSelectorOpen(false)} type="button"><X className="mx-auto h-4 w-4" /></button></div>
+            <div className="mt-4 flex gap-2"><button className="border border-slate-700 px-3 py-1.5 text-xs" onClick={() => setSelectedIds(replays.map((entry) => entry.id))} type="button">Select all</button><button className="border border-slate-700 px-3 py-1.5 text-xs" onClick={() => setSelectedIds([])} type="button">Select none</button></div>
+            <div className="mt-3 divide-y divide-slate-800 border-y border-slate-800">
+              {replays.map((entry) => (
+                <label key={entry.id} className="flex cursor-pointer items-center gap-3 py-3">
+                  <input type="checkbox" checked={selectedIds.includes(entry.id)} onChange={() => setSelectedIds((current) => current.includes(entry.id) ? current.filter((id) => id !== entry.id) : [...current, entry.id])} />
+                  <span className="flex-1 text-sm text-slate-200">{new Date(entry.created_at).toLocaleString()}</span>
+                  <span className="text-xs text-slate-500">Era {entry.era} · {entry.player_count} bots</span>
+                </label>
+              ))}
+            </div>
+            <div className="mt-4 flex justify-end"><button className="bg-teal-400 px-4 py-2 text-sm font-bold text-slate-950 disabled:opacity-40" disabled={!selectedIds.length} onClick={applySelection} type="button">Compute statistics</button></div>
+          </section>
+        </div>
+      ) : null}
+    </>
+  );
+};
+
+const StatisticsRow = ({ row, hideEra = false }) => (
+  <tr>
+    {!hideEra ? <td className="px-2 py-2 text-slate-400">{row.era}</td> : null}
+    <td className="px-2 py-2 font-semibold text-slate-200">{row.name || row.item_id}</td>
+    <td className="px-2 py-2 text-teal-300">{row.mean}</td>
+    <td className="px-2 py-2"><div className="flex flex-wrap gap-1">{Object.entries(row.distribution || {}).map(([value, count]) => <span key={value} className="border border-slate-700 bg-slate-950 px-2 py-1 text-slate-400">{value}: {count}</span>)}</div></td>
+  </tr>
+);
 
 export default AdminPage;

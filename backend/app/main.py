@@ -9,6 +9,7 @@ from .routers import router as auth_router
 from .player_router import router as player_router
 from .admin_router import router as admin_router
 from .game_router import router as game_router
+from .replay_router import router as replay_router
 from .database import init_database, SessionLocal
 from .config import settings
 from .firebase_auth import initialize_firebase_admin
@@ -39,6 +40,7 @@ app.include_router(auth_router, prefix="/api")
 app.include_router(player_router, prefix="/api")
 app.include_router(admin_router, prefix="/api")
 app.include_router(game_router, prefix="/api")
+app.include_router(replay_router, prefix="/api")
 
 connection_manager = ConnectionManager()
 presence_service = PresenceService(ttl_seconds=settings.PRESENCE_TTL_SECONDS)

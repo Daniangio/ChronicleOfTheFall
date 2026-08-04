@@ -49,7 +49,7 @@ TOKEN_VALUES = {
 
 
 def advance_bot_players(state: dict[str, Any]) -> dict[str, Any]:
-    if state.get("mode") != "solo_bots":
+    if state.get("mode") not in {"solo_bots", "bots_only"}:
         return state
     next_state = state
     for _ in range(MAX_BOT_STEPS):
@@ -75,9 +75,13 @@ def _automatic_system_action(state: dict[str, Any]) -> dict[str, Any] | None:
 
 
 def public_game_state(state: dict[str, Any]) -> dict[str, Any]:
-    if state.get("mode") != "solo_bots":
+    if state.get("mode") not in {"solo_bots", "bots_only"}:
         return state
     public = deepcopy(state)
+    public.pop("replay_frames", None)
+    public.pop("replay_enabled", None)
+    if state.get("mode") == "bots_only":
+        return public
     human_player_id = str(state.get("human_player_id") or "player-1")
     reveal_agendas = bool(state.get("agendas_revealed"))
     for source, player in zip(state.get("players", []), public.get("players", [])):
@@ -103,6 +107,10 @@ def public_game_state(state: dict[str, Any]) -> dict[str, Any]:
 
 
 def require_human_action(state: dict[str, Any], payload: dict[str, Any]) -> None:
+    if state.get("mode") == "bots_only":
+        if payload.get("player_id"):
+            raise ValueError("Bot-only games do not accept player actions.")
+        return
     if state.get("mode") != "solo_bots":
         return
     player_id = str(payload.get("player_id") or "")

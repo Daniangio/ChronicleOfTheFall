@@ -103,11 +103,12 @@ def build_goldfishing_state(
     token_entries: list[dict[str, Any]] | None = None,
     effect_icon_entries: list[dict[str, Any]] | None = None,
     image_entries: list[dict[str, Any]] | None = None,
+    selected_agenda_ids: list[str] | None = None,
 ) -> dict[str, Any]:
     if player_count not in {3, 4, 5}:
         raise ValueError("Player count must be between 3 and 5.")
-    if mode not in {"goldfishing", "solo_bots"}:
-        raise ValueError("Game mode must be goldfishing or solo_bots.")
+    if mode not in {"goldfishing", "solo_bots", "bots_only"}:
+        raise ValueError("Game mode must be goldfishing, solo_bots, or bots_only.")
     card_entries = deepcopy(card_entries)
     tag_entries = deepcopy(tag_entries)
     events = deepcopy(event_entries or [])
@@ -170,7 +171,14 @@ def build_goldfishing_state(
     players: list[dict[str, Any]] = []
     agenda_deck = Deck([entry["id"] for entry in agendas])
     agenda_deck.shuffle(f"{room_id}:agendas")
-    if agendas and len(agendas) < player_count * 2:
+    selected_agendas = [str(agenda_id) for agenda_id in (selected_agenda_ids or []) if agenda_id]
+    if mode == "bots_only":
+        if len(selected_agendas) != player_count:
+            raise ValueError("Bot-only games require one selected Agenda per player.")
+        known_agenda_ids = {entry["id"] for entry in agendas}
+        if any(agenda_id not in known_agenda_ids for agenda_id in selected_agendas):
+            raise ValueError("A selected bot Agenda does not exist.")
+    elif agendas and len(agendas) < player_count * 2:
         raise ValueError("The Hidden Agenda pool requires at least two cards per player.")
     for index in range(player_count):
         base_cards = base_deck.draw(BASE_HAND_SIZE, seed=f"{room_id}:base:{index}")
@@ -186,16 +194,17 @@ def build_goldfishing_state(
                 )
             )
         starting_crisis = crisis_deck.draw(1)
-        agenda_options = agenda_deck.draw(2)
+        agenda_options = [] if mode == "bots_only" else agenda_deck.draw(2)
+        bot_only = mode == "bots_only"
         players.append(
             {
                 "id": f"player-{index + 1}",
                 "name": (
                     human_player_name
                     if mode == "solo_bots" and index == 0
-                    else f"Bot {index}" if mode == "solo_bots" else f"Player {index + 1}"
+                    else f"Bot {index + 1}" if mode in {"solo_bots", "bots_only"} else f"Player {index + 1}"
                 ),
-                "controller": "bot" if mode == "solo_bots" and index > 0 else "human",
+                "controller": "bot" if bot_only or (mode == "solo_bots" and index > 0) else "human",
                 "hand": [*base_cards, *foundation_cards, *starting_crisis],
                 "scheme_slots": [None] * SCHEME_SLOTS,
                 "ministry_ids": [],
@@ -203,7 +212,7 @@ def build_goldfishing_state(
                 "committed": False,
                 "selected_commitment": None,
                 "pending_draws": 0,
-                "hidden_agenda_id": "",
+                "hidden_agenda_id": selected_agendas[index] if bot_only else "",
                 "agenda_options": agenda_options,
             }
         )
@@ -221,6 +230,8 @@ def build_goldfishing_state(
         "room_id": room_id,
         "player_count": player_count,
         "human_player_id": "player-1" if mode == "solo_bots" else "",
+        "replay_enabled": mode == "bots_only",
+        "replay_frames": [],
         "era": 1,
         "epoch": 1,
         "suspicion_start_era": max(1, int(suspicion_start_era)),
@@ -302,7 +313,10 @@ def build_goldfishing_state(
     if state_holder:
         _player(state, state_holder)["hand"].extend(_draw_foundation(state, 1))
     _begin_agenda_selection(state)
-    return _prepare_state(state)
+    prepared = _prepare_state(state)
+    if prepared.get("replay_enabled"):
+        prepared["replay_frames"] = [_replay_frame(prepared, "setup", {})]
+    return prepared
 
 
 def perform_action(state: dict[str, Any], action: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -331,7 +345,46 @@ def perform_action(state: dict[str, Any], action: str, payload: dict[str, Any] |
     if not handler:
         raise ValueError("Unknown game action.")
     handler(next_state, data)
-    return _prepare_state(next_state)
+    prepared = _prepare_state(next_state)
+    if prepared.get("replay_enabled"):
+        prepared.setdefault("replay_frames", []).append(_replay_frame(prepared, action, data))
+    return prepared
+
+
+def _replay_frame(state: dict[str, Any], action: str, payload: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "sequence": len(state.get("replay_frames", [])),
+        "action": action,
+        "payload": deepcopy(payload),
+        "era": int(state.get("era", 1)),
+        "phase": str(state.get("phase") or ""),
+        "pillars": deepcopy(state.get("pillars", {})),
+        "resources": deepcopy(state.get("global_resource_pool", {})),
+        "tags": deepcopy(state.get("empire_tags", {})),
+        "global_tokens": deepcopy(state.get("condition_tokens", {})),
+        "cities": [
+            {
+                "id": city.get("id", ""),
+                "name": city.get("name", ""),
+                "city_card_id": city.get("city_card_id", ""),
+                "cards": list(city.get("cards", [])),
+                "condition_tokens": deepcopy(city.get("condition_tokens", {})),
+            }
+            for city in state.get("cities", [])
+        ],
+        "players": [
+            {
+                "id": player.get("id", ""),
+                "name": player.get("name", ""),
+                "agenda_id": player.get("hidden_agenda_id", ""),
+                "suspicion": int(player.get("suspicion", 0)),
+            }
+            for player in state.get("players", [])
+        ],
+        "docket_resolution": deepcopy(state.get("docket_resolution", [])),
+        "agenda_results": deepcopy(state.get("agenda_results", {})),
+        "winner_player_ids": list(state.get("winner_player_ids", [])),
+    }
 
 
 def card_by_id(state: dict[str, Any], card_id: str) -> dict[str, Any]:

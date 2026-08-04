@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, JSON, String, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, JSON, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .database import Base
@@ -118,3 +118,16 @@ class GameCatalogEntryRecord(Base):
         nullable=False,
         default=utc_now,
     )
+
+
+class GameReplayRecord(Base):
+    __tablename__ = "game_replays"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=lambda: uuid.uuid4().hex)
+    room_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
+    owner_user_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    mode: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    level_id: Mapped[str] = mapped_column(String(128), nullable=False, default="", index=True)
+    player_count: Mapped[int] = mapped_column(Integer, nullable=False, default=4)
+    replay: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now, index=True)

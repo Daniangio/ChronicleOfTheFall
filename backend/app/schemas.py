@@ -65,6 +65,11 @@ class GameRoomCreateRequest(BaseModel):
     game_type: str = "chronicle_solo"
     level_id: Optional[str] = None
     player_count: int = Field(default=4, ge=3, le=5)
+    agenda_ids: List[str] = Field(default_factory=list)
+
+
+class ReplayStatisticsRequest(BaseModel):
+    replay_ids: List[str] = Field(default_factory=list)
 
 
 class GameRoomResponse(BaseModel):

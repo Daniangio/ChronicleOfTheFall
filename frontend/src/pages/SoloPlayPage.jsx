@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { PageSubnavigation } from "../components/AuthenticatedLayout.jsx";
 import { useStore } from "../store.js";
+import { authenticatedFetch } from "../utils/authenticatedFetch.js";
 import { buildApiUrl } from "../utils/connection.js";
 
 const playSubnavItems = [{ label: "Solo Play", to: "/play/solo" }];
@@ -14,18 +15,28 @@ const SoloPlayPage = () => {
   const [levels, setLevels] = useState([]);
   const [levelId, setLevelId] = useState("");
   const [playerCount, setPlayerCount] = useState(4);
+  const [agendas, setAgendas] = useState([]);
+  const [botAgendaIds, setBotAgendaIds] = useState([]);
 
   useEffect(() => {
     if (!token) return;
     const loadLevels = async () => {
       try {
-        const response = await fetch(buildApiUrl("/api/game/levels"), {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const payload = await response.json().catch(() => []);
-        if (!response.ok) throw new Error(payload.detail || "Failed to load levels.");
-        setLevels(payload);
-        setLevelId((current) => current || payload[0]?.id || "");
+        const [levelsResponse, agendasResponse] = await Promise.all([
+          authenticatedFetch(buildApiUrl("/api/game/levels")),
+          authenticatedFetch(buildApiUrl("/api/game/agendas")),
+        ]);
+        const levelPayload = await levelsResponse.json().catch(() => []);
+        const agendaPayload = await agendasResponse.json().catch(() => []);
+        if (!levelsResponse.ok) throw new Error(levelPayload.detail || "Failed to load levels.");
+        if (!agendasResponse.ok) throw new Error(agendaPayload.detail || "Failed to load Agendas.");
+        setLevels(levelPayload);
+        setLevelId((current) => current || levelPayload[0]?.id || "");
+        setAgendas(agendaPayload);
+        setBotAgendaIds((current) => Array.from(
+          { length: playerCount },
+          (_, index) => current[index] || agendaPayload[index]?.id || agendaPayload[0]?.id || ""
+        ));
       } catch (loadError) {
         setError(loadError.message || "Failed to load levels.");
       }
@@ -40,10 +51,9 @@ const SoloPlayPage = () => {
     setCreatingMode(mode);
     setError("");
     try {
-      const response = await fetch(buildApiUrl("/api/game/rooms"), {
+      const response = await authenticatedFetch(buildApiUrl("/api/game/rooms"), {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
@@ -51,6 +61,7 @@ const SoloPlayPage = () => {
           game_type: "chronicle_solo",
           level_id: levelId,
           player_count: playerCount,
+          agenda_ids: mode === "bots_only" ? botAgendaIds.slice(0, playerCount) : [],
         }),
       });
       const payload = await response.json().catch(() => ({}));
@@ -61,6 +72,14 @@ const SoloPlayPage = () => {
     } finally {
       setCreatingMode("");
     }
+  };
+
+  const updatePlayerCount = (count) => {
+    setPlayerCount(count);
+    setBotAgendaIds((current) => Array.from(
+      { length: count },
+      (_, index) => current[index] || agendas[index]?.id || agendas[0]?.id || ""
+    ));
   };
 
   return (
@@ -79,7 +98,7 @@ const SoloPlayPage = () => {
       <section className="mb-4 grid gap-4 border border-slate-800 bg-slate-900 p-4 lg:grid-cols-[minmax(14rem,20rem)_minmax(18rem,1fr)]">
         <div className="space-y-4">
           <LevelSelect value={levelId} levels={levels} onChange={setLevelId} />
-          <PlayerCountControl value={playerCount} onChange={setPlayerCount} />
+          <PlayerCountControl value={playerCount} onChange={updatePlayerCount} />
         </div>
         {selectedLevel ? (
           <div className="border-l-0 border-slate-800 text-left text-xs text-slate-400 lg:border-l lg:pl-4">
@@ -92,7 +111,7 @@ const SoloPlayPage = () => {
         ) : null}
       </section>
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         <ModeCard title="Campaign" description="A connected sequence of empire chronicles. Prepared for future content." disabled />
         <ModeCard title="Missions" description="Standalone crisis scenarios with specific constraints. Prepared for future content." disabled />
         <ModeCard
@@ -102,6 +121,37 @@ const SoloPlayPage = () => {
           onClick={() => createChronicleRoom("goldfishing")}
           disabled={Boolean(creatingMode) || !levelId}
         />
+        <ModeCard
+          title="Bots Only"
+          description={`Watch ${playerCount} Agenda-driven bots play a complete chronicle. The replay is saved for review and statistics.`}
+          actionLabel={creatingMode === "bots_only" ? "Creating..." : "Start simulation"}
+          onClick={() => createChronicleRoom("bots_only")}
+          disabled={
+            Boolean(creatingMode)
+            || !levelId
+            || botAgendaIds.slice(0, playerCount).some((agendaId) => !agendaId)
+          }
+        >
+          <div className="mt-4 space-y-2">
+            {Array.from({ length: playerCount }, (_, index) => (
+              <label key={index} className="block">
+                <span className="text-[0.65rem] font-bold uppercase text-slate-500">Bot {index + 1}</span>
+                <select
+                  className="mt-1 w-full border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-slate-200"
+                  value={botAgendaIds[index] || ""}
+                  onChange={(event) => setBotAgendaIds((current) => {
+                    const next = [...current];
+                    next[index] = event.target.value;
+                    return next;
+                  })}
+                >
+                  {agendas.map((agenda) => <option key={agenda.id} value={agenda.id}>{agenda.name}</option>)}
+                  {!agendas.length ? <option value="">No Agendas available</option> : null}
+                </select>
+              </label>
+            ))}
+          </div>
+        </ModeCard>
         <ModeCard
           title="Versus Bots"
           description={`Control one seat against ${playerCount - 1} bots guided by their private Agendas and Ministry rotation.`}
