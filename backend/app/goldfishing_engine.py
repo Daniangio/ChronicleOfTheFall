@@ -1338,6 +1338,8 @@ def _legal_placements(state: dict[str, Any], card: dict[str, Any]) -> list[str]:
     for city in state.get("cities", []):
         if len(city.get("cards", [])) >= int(city.get("building_slots", 0)):
             continue
+        if _city_has_structure_with_name(state, city, card.get("name")):
+            continue
         city_tags = _city_tag_counts(state, city)
         missing_tags = sum(
             max(0, amount - int(city_tags.get(tag_id, 0)))
@@ -1365,6 +1367,8 @@ def _build_card(state: dict[str, Any], card: dict[str, Any], city_id: str) -> No
         city = next((entry for entry in state["cities"] if entry["id"] == city_id), None)
         if not city:
             raise ValueError("City not found.")
+        if _city_has_structure_with_name(state, city, card.get("name")):
+            raise ValueError("A City cannot contain two Structures with the same name.")
         city["cards"].append(card["id"])
         state["log"].append(f"{card['name']} was built in {city['name']}.")
         if int(state.get("structure_tag_requirement_waivers", 0)) > 0:
@@ -2330,6 +2334,21 @@ def _city_tag_counts(state: dict[str, Any], city: dict[str, Any]) -> dict[str, i
         if card_id:
             tags.update(_counts((card_by_id(state, card_id).get("data") or {}).get("tags")))
     return _positive_counts(tags)
+
+
+def _city_has_structure_with_name(
+    state: dict[str, Any],
+    city: dict[str, Any],
+    structure_name: Any,
+) -> bool:
+    normalized_name = " ".join(str(structure_name or "").split()).casefold()
+    if not normalized_name:
+        return False
+    return any(
+        " ".join(str(card_by_id(state, card_id).get("name") or "").split()).casefold()
+        == normalized_name
+        for card_id in city.get("cards", [])
+    )
 
 
 def _counts(value: Any) -> dict[str, int]:

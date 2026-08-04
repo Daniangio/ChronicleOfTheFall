@@ -7,15 +7,22 @@ Administration, Event Queue, Pitch, Exhaustion, mana-allocation, and Decay rules
 
 The implemented Era sequence is:
 
-1. Ministry Assignment
-2. Suspicion
+1. Office Rotation
+2. Council Vote and Suspicion
 3. Production
-4. Queued Project Resolution
-5. Plotting
-6. Anonymous Reveal
-7. Stalled Project Vote
-8. Crisis
-9. Storage
-10. Scheme, Draw, and Cleanup
+4. Plotting
+5. Hand Reset
+6. Council Docket
+7. Condition
+8. Storage
+9. Crisis Intake
+10. Hand Refill
+11. End-of-Era Cleanup
+
+## Structure Uniqueness
+
+A City cannot contain two Structures with the same printed name. Distinct card
+variants with the same name are considered the same Structure for this rule.
+The same Structure name may be present in different Cities.
 
 The Empire collapses immediately when any configured Pillar reaches zero.

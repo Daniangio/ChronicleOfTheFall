@@ -1992,7 +1992,22 @@ const EventGuidedFields = ({ data, setField, tagEntries, ministryEntries, pillar
   );
 };
 
-const UnifiedDeckGuidedFields = ({ data, setField, items }) => {
+const UnifiedDeckGuidedFields = ({
+  data,
+  setField,
+  items,
+  cardEntries,
+  tagEntries,
+  ministryEntries,
+  imageEntries,
+  pillarEntries,
+  tokenEntries,
+  effectIconEntries,
+  deckEntries,
+  currentDeckId,
+}) => {
+  const [preview, setPreview] = useState(null);
+  const [excludedDeckId, setExcludedDeckId] = useState("");
   const deckType = ["foundation", "institution", "crisis"].includes(data.deck_type)
     ? data.deck_type
     : "foundation";
@@ -2010,6 +2025,21 @@ const UnifiedDeckGuidedFields = ({ data, setField, items }) => {
   const deckCounts = repeatedListToCounts(itemIds);
   const tierCounts = Object.fromEntries(["3", "4", "5"].map((tier) => [tier, repeatedListToCounts(setup[tier] || [])]));
   const tierTargets = { "3": 6, "4": 2, "5": 2 };
+  const exclusionDecks = (deckEntries || []).filter((deck) => deck.id !== currentDeckId);
+  const excludedDeck = exclusionDecks.find((deck) => deck.id === excludedDeckId);
+  const excludedItemIds = new Set(excludedDeck?.data?.item_ids || []);
+
+  const showPreview = (item, target) => {
+    const rect = target.getBoundingClientRect();
+    const previewWidth = item.kind === "events" ? 272 : 248;
+    const previewHeight = item.kind === "events" ? 360 : 330;
+    const rightPosition = rect.right + 12;
+    const left = rightPosition + previewWidth <= window.innerWidth - 12
+      ? rightPosition
+      : Math.max(12, rect.left - previewWidth - 12);
+    const top = Math.max(12, Math.min(rect.top - 12, window.innerHeight - previewHeight - 12));
+    setPreview({ item, left, top });
+  };
 
   const setDeckCopies = (itemId, copies) => {
     const normalized = Math.max(0, Math.min(99, Number(copies) || 0));
@@ -2041,6 +2071,22 @@ const UnifiedDeckGuidedFields = ({ data, setField, items }) => {
     });
   };
 
+  const selectExclusionDeck = (deckId) => {
+    setExcludedDeckId(deckId);
+    const selectedDeck = exclusionDecks.find((deck) => deck.id === deckId);
+    if (!selectedDeck) return;
+    const excludedIds = new Set(selectedDeck.data?.item_ids || []);
+    setField("item_ids", itemIds.filter((itemId) => !excludedIds.has(itemId)));
+    if (isFoundation) {
+      setField("initial_setup", Object.fromEntries(
+        ["3", "4", "5"].map((tier) => [
+          tier,
+          (setup[tier] || []).filter((itemId) => !excludedIds.has(itemId)),
+        ])
+      ));
+    }
+  };
+
   return (
     <div className="space-y-4">
       <SelectField
@@ -2052,6 +2098,7 @@ const UnifiedDeckGuidedFields = ({ data, setField, items }) => {
           { value: "crisis", label: "Crisis" },
         ]}
         onChange={(value) => {
+          setExcludedDeckId("");
           const defaultItems = items.filter((item) => (
             value === "crisis"
               ? item.kind === "events" && item.data?.subtype === "crisis"
@@ -2063,22 +2110,46 @@ const UnifiedDeckGuidedFields = ({ data, setField, items }) => {
           setField("initial_setup", value === "foundation" ? defaultFoundationInitialSetup(defaultItems) : {});
         }}
       />
+      <SelectField
+        label="Exclude Cards Already In"
+        value={excludedDeckId}
+        options={[
+          { value: "", label: "Do not exclude another deck" },
+          ...exclusionDecks.map((deck) => ({
+            value: deck.id,
+            label: `${deck.name} (${deck.data?.deck_type || "deck"})`,
+          })),
+        ]}
+        onChange={selectExclusionDeck}
+      />
       <div className={`grid gap-2 px-3 text-xs font-semibold text-slate-500 ${isFoundation ? "grid-cols-[minmax(0,1fr)_5rem_repeat(3,5.5rem)]" : "grid-cols-[minmax(0,1fr)_5rem]"}`}>
         <span>Card</span><span>Deck</span>
         {isFoundation ? <><span>Initial 3+</span><span>Initial 4+</span><span>Initial 5</span></> : null}
       </div>
-      {eligibleItems.map((item) => (
-        <div key={item.id} className={`grid items-center gap-2 rounded-md border border-slate-800 bg-slate-950 p-3 ${isFoundation ? "grid-cols-[minmax(0,1fr)_5rem_repeat(3,5.5rem)]" : "grid-cols-[minmax(0,1fr)_5rem]"}`}>
-          <span className="min-w-0">
-            <span className="block truncate text-sm font-semibold text-slate-200">{item.name}</span>
-            <span className="block text-xs text-slate-500">{item.kind === "events" ? `Event - ${item.data?.subtype || "event"}` : item.category}</span>
-          </span>
-          <input className="h-8 rounded border border-slate-700 bg-slate-900 px-1 text-center text-sm text-white" min="0" max="99" type="number" value={deckCounts[item.id] || 0} onChange={(event) => setDeckCopies(item.id, event.target.value)} />
-          {isFoundation ? ["3", "4", "5"].map((tier) => (
-            <input key={tier} className="h-8 rounded border border-slate-700 bg-slate-900 px-1 text-center text-sm text-white disabled:opacity-40" disabled={!deckCounts[item.id]} min="0" max={deckCounts[item.id] || 0} type="number" value={tierCounts[tier][item.id] || 0} onChange={(event) => setTierCopies(tier, item.id, event.target.value)} />
-          )) : null}
-        </div>
-      ))}
+      {eligibleItems.map((item) => {
+        const excluded = excludedItemIds.has(item.id);
+        return (
+          <div key={item.id} className={`grid items-center gap-2 rounded-md border border-slate-800 bg-slate-950 p-3 ${excluded ? "opacity-40" : ""} ${isFoundation ? "grid-cols-[minmax(0,1fr)_5rem_repeat(3,5.5rem)]" : "grid-cols-[minmax(0,1fr)_5rem]"}`}>
+            <span className="min-w-0">
+              <span
+                className="block cursor-help truncate text-sm font-semibold text-slate-200 outline-none hover:text-amber-200 focus:text-amber-200"
+                onBlur={() => setPreview(null)}
+                onFocus={(event) => showPreview(item, event.currentTarget)}
+                onMouseEnter={(event) => showPreview(item, event.currentTarget)}
+                onMouseLeave={() => setPreview(null)}
+                tabIndex={0}
+              >
+                {item.name}
+              </span>
+              <span className="block text-xs text-slate-500">{item.kind === "events" ? `Event - ${item.data?.subtype || "event"}` : item.category}</span>
+            </span>
+            <input className="h-8 rounded border border-slate-700 bg-slate-900 px-1 text-center text-sm text-white" disabled={excluded} min="0" max="99" type="number" value={excluded ? 0 : deckCounts[item.id] || 0} onChange={(event) => setDeckCopies(item.id, event.target.value)} />
+            {isFoundation ? ["3", "4", "5"].map((tier) => (
+              <input key={tier} className="h-8 rounded border border-slate-700 bg-slate-900 px-1 text-center text-sm text-white disabled:opacity-40" disabled={excluded || !deckCounts[item.id]} min="0" max={deckCounts[item.id] || 0} type="number" value={excluded ? 0 : tierCounts[tier][item.id] || 0} onChange={(event) => setTierCopies(tier, item.id, event.target.value)} />
+            )) : null}
+          </div>
+        );
+      })}
       {isFoundation ? <div className="grid gap-2 sm:grid-cols-3">
         {["3", "4", "5"].map((tier) => {
           const total = (setup[tier] || []).length;
@@ -2089,6 +2160,23 @@ const UnifiedDeckGuidedFields = ({ data, setField, items }) => {
           );
         })}
       </div> : null}
+      {preview ? (
+        <div
+          className="pointer-events-none fixed z-[1500] drop-shadow-2xl"
+          style={{ left: preview.left, top: preview.top }}
+        >
+          <CatalogItemVisual
+            entry={preview.item}
+            tags={tagEntries}
+            cards={cardEntries}
+            ministries={ministryEntries}
+            images={imageEntries}
+            pillars={pillarEntries}
+            tokens={tokenEntries}
+            effectIcons={effectIconEntries}
+          />
+        </div>
+      ) : null}
     </div>
   );
 };
@@ -2188,6 +2276,8 @@ const GuidedMetadataEditor = ({
   imageEntries,
   pillarEntries,
   tokenEntries,
+  effectIconEntries,
+  editingEntryId,
 }) => {
   const data = dataForForm(catalogForm);
   if (readOnlyCatalogSections.has(activeSection)) return null;
@@ -2272,6 +2362,15 @@ const GuidedMetadataEditor = ({
           data={data}
           setField={setField}
           items={[...cardEntries, ...eventEntries]}
+          cardEntries={cardEntries}
+          tagEntries={tagEntries}
+          ministryEntries={ministryEntries}
+          imageEntries={imageEntries}
+          pillarEntries={pillarEntries}
+          tokenEntries={tokenEntries}
+          effectIconEntries={effectIconEntries}
+          deckEntries={deckEntries}
+          currentDeckId={editingEntryId}
         />
       ) : null}
       {hasLevelGuidance ? (
@@ -3665,6 +3764,8 @@ const AdminPage = () => {
                 imageEntries={imageEntries}
                 pillarEntries={pillarEntries}
                 tokenEntries={tokenEntries}
+                effectIconEntries={effectIconEntries}
+                editingEntryId={editingEntry?.id || ""}
               />
 
               <label className="block">

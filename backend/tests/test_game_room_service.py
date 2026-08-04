@@ -10,6 +10,7 @@ from backend.app.goldfishing_engine import (
     _apply_on_build_effects,
     _assign_ministries,
     _end_era,
+    _legal_placements,
     _plotting_resolution_preview,
     build_goldfishing_state,
     perform_action,
@@ -209,6 +210,29 @@ def finish_ministry_draft(state: dict) -> dict:
 
 
 class TestAnonymousCouncilEngine(unittest.TestCase):
+    def test_structure_with_same_name_can_only_be_built_in_another_city(self):
+        alternate_farm = catalog_entry(
+            "alternate-farm",
+            "  FARM ",
+            "cards",
+            category="structure",
+            data={"cost": {"labor": 1}},
+        )
+        state = build_state(card_entries=[*CARDS, alternate_farm])
+        state["cities"][0]["cards"] = ["farm"]
+        state["cities"].append(
+            {
+                "id": "second-city",
+                "name": "Second City",
+                "city_card_id": "capital",
+                "building_slots": 4,
+                "cards": [],
+                "condition_tokens": {},
+            }
+        )
+
+        self.assertEqual(_legal_placements(state, alternate_farm), ["second-city"])
+
     def test_level_city_pool_draws_public_charters_at_setup(self):
         frontier = catalog_entry(
             "frontier-city",

@@ -1007,7 +1007,12 @@ The chosen City must:
 
 * satisfy the Structure's requirements;
 * have an open slot;
+* not already contain a Structure with the same name;
 * obey all card-specific placement rules.
+
+Different Structure cards or variants that share the same printed name count as
+the same Structure for this rule. Structures with that name may still be built
+in different Cities.
 
 If no legal City exists, discard the Structure face up immediately.
 
