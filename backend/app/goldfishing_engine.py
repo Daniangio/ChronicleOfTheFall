@@ -386,8 +386,8 @@ def _cast_council_vote(state: dict[str, Any], payload: dict[str, Any]) -> None:
             f"{_player(state, player_id)['name']} supported "
             f"{card_by_id(state, target_id)['name']} for founding."
         )
-    elif target_type == "abstain" and not _council_vote_targets(state, player_id):
-        state["log"].append(f"{_player(state, player_id)['name']} had no legal Council vote.")
+    elif target_type == "abstain":
+        state["log"].append(f"{_player(state, player_id)['name']} did not support a City or place Suspicion.")
     else:
         raise ValueError("Council vote target not found.")
     state["council_votes"][player_id] = {"target_type": target_type, "target_id": target_id}
@@ -431,11 +431,6 @@ def _queue_supported_cities(state: dict[str, Any]) -> None:
         for city_id in supported_ids
     ]
     if supported_ids:
-        state["available_city_card_ids"] = [
-            city_id
-            for city_id in state.get("available_city_card_ids", [])
-            if city_id not in supported_ids
-        ]
         names = ", ".join(card_by_id(state, city_id)["name"] for city_id in supported_ids)
         state["log"].append(f"City charters entered the Council Docket: {names}.")
 
@@ -714,9 +709,14 @@ def _place_revealed_card(state: dict[str, Any], payload: dict[str, Any]) -> None
         raise ValueError("That placement is not legal.")
     item = card_by_id(state, pending["card_id"])
     _pay_cost(state, item)
-    _build_card(state, item, city_id)
+    built_city_id = _build_card(state, item, city_id)
     state["current_reveal"]["status"] = "built"
-    _mark_docket_resolution(state, state["current_reveal"]["id"], "built")
+    _mark_docket_resolution(
+        state,
+        state["current_reveal"]["id"],
+        "built",
+        city_id=built_city_id,
+    )
     state["pending_placement"] = None
 
 
@@ -912,18 +912,25 @@ def _resolve_buildable_item(
 ) -> None:
     placements = _legal_placements(state, card)
     if not _requirements_satisfied(state, card) or not _can_pay_cost(state, card) or not placements:
-        _discard_item(state, card["id"])
+        founding_attempt = (
+            source == "reveal"
+            and (state.get("current_reveal") or {}).get("priority_kind") == "founding"
+        )
         if state.get("current_reveal"):
-            state["current_reveal"]["status"] = "discarded"
-        _mark_docket_resolution(state, reference_id, "discarded")
-        state["log"].append(f"{card['name']} could not be built and was discarded.")
+            state["current_reveal"]["status"] = "not_founded" if founding_attempt else "discarded"
+        _mark_docket_resolution(state, reference_id, "not_founded" if founding_attempt else "discarded")
+        if founding_attempt:
+            state["log"].append(f"{card['name']} could not be founded and remains available.")
+        else:
+            _discard_item(state, card["id"])
+            state["log"].append(f"{card['name']} could not be built and was discarded.")
         return
     if len(placements) == 1:
         _pay_cost(state, card)
-        _build_card(state, card, placements[0])
+        built_city_id = _build_card(state, card, placements[0])
         if state.get("current_reveal"):
             state["current_reveal"]["status"] = "built"
-        _mark_docket_resolution(state, reference_id, "built")
+        _mark_docket_resolution(state, reference_id, "built", city_id=built_city_id)
         return
     state["pending_placement"] = _placement_payload(state, card, placements, source, reference_id)
 
@@ -1046,8 +1053,7 @@ def _possible_actions(state: dict[str, Any]) -> list[dict[str, Any]]:
         ]
     if phase == "council_vote":
         targets = _council_vote_targets(state, active)
-        if not targets:
-            targets = [{"target_type": "abstain", "target_id": ""}]
+        targets = [*targets, {"target_type": "abstain", "target_id": ""}]
         return [
             {
                 "type": "cast_council_vote",
@@ -1351,7 +1357,7 @@ def _legal_placements(state: dict[str, Any], card: dict[str, Any]) -> list[str]:
     return placements
 
 
-def _build_card(state: dict[str, Any], card: dict[str, Any], city_id: str) -> None:
+def _build_card(state: dict[str, Any], card: dict[str, Any], city_id: str) -> str:
     if _is_city_card(card):
         city = {
             "id": f"city-{uuid.uuid4().hex[:8]}",
@@ -1362,6 +1368,11 @@ def _build_card(state: dict[str, Any], card: dict[str, Any], city_id: str) -> No
             "condition_tokens": {},
         }
         state["cities"].append(city)
+        state["available_city_card_ids"] = [
+            card_id
+            for card_id in state.get("available_city_card_ids", [])
+            if card_id != card["id"]
+        ]
         state["log"].append(f"{card['name']} entered the Empire as a new City.")
     else:
         city = next((entry for entry in state["cities"] if entry["id"] == city_id), None)
@@ -1380,6 +1391,7 @@ def _build_card(state: dict[str, Any], card: dict[str, Any], city_id: str) -> No
                 0, int((effect.get("payload") or {}).get("amount", 0))
             )
     _apply_on_build_effects(state, card, city)
+    return str(city["id"])
 
 
 def _placement_payload(
@@ -2014,10 +2026,16 @@ def _complete_event_resolution(
     raise ValueError("Unknown event resolution continuation.")
 
 
-def _mark_docket_resolution(state: dict[str, Any], commitment_id: str, status: str) -> None:
+def _mark_docket_resolution(
+    state: dict[str, Any],
+    commitment_id: str,
+    status: str,
+    **details: Any,
+) -> None:
     for entry in state.get("docket_resolution", []):
         if entry.get("id") == commitment_id:
             entry["status"] = status
+            entry.update(details)
             return
 
 

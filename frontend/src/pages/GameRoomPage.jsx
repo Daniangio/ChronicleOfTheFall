@@ -19,7 +19,7 @@ import {
   Users,
   X,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import CardVisual from "../components/CardVisual.jsx";
 import CatalogItemVisual from "../components/CatalogItemVisual.jsx";
@@ -30,6 +30,24 @@ import { buildApiUrl, buildAssetUrl } from "../utils/connection.js";
 const normalize = (value) => String(value || "").trim().toLowerCase().replace(/[\s_]+/g, "-");
 const lookup = (entries = []) => Object.fromEntries(entries.map((entry) => [normalize(entry.id), entry]));
 const titleCase = (value) => String(value || "").replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+
+const PHASE_TIMELINE = [
+  { id: "agenda_selection", label: "Agenda" },
+  { id: "council_vote", label: "Council" },
+  { id: "production", label: "Production" },
+  { id: "plotting", label: "Plotting" },
+  { id: "docket_ordering", label: "Docket", phases: ["hand_reset", "docket_ordering"] },
+  { id: "reveal", label: "Resolution" },
+  { id: "condition", label: "Conditions" },
+  { id: "storage", label: "Storage" },
+  { id: "crisis_intake", label: "Crisis" },
+  { id: "hand_refill", label: "Refill" },
+  { id: "cleanup", label: "Cleanup" },
+];
+
+const phaseTimelineIndex = (phase) => Math.max(0, PHASE_TIMELINE.findIndex(
+  (entry) => entry.id === phase || entry.phases?.includes(phase)
+));
 
 const withResolvedTagIcon = (tag, imageLookup = {}) => {
   const imageSrc = imageLookup?.[tag?.data?.icon_image_id]?.data?.src;
@@ -90,7 +108,65 @@ const slotPosition = (index, total) => {
   return { x: Math.cos(angle), y: Math.sin(angle) };
 };
 
-const CityZone = ({ city, cardLookup, tagLookup, pillarLookup, tokenLookup, storageIconSrc }) => {
+const TokenCounts = ({ counts = {}, tokenLookup, emptyLabel = "None", className = "" }) => {
+  const tokens = Object.entries(counts).filter(([, amount]) => Number(amount) > 0);
+  if (!tokens.length) {
+    return emptyLabel ? <span className={`text-xs text-slate-600 ${className}`}>{emptyLabel}</span> : null;
+  }
+  return (
+    <div className={`flex flex-wrap items-center gap-1.5 ${className}`}>
+      {tokens.map(([tokenId, amount]) => (
+        <span key={tokenId} className="relative inline-flex h-9 min-w-9 items-center justify-center bg-stone-950/95 px-1 shadow-lg">
+          <TagIcon tag={tokenLookup[normalize(tokenId)]} label={tokenId} size="sm" />
+          {Number(amount) > 1 ? (
+            <strong className="absolute -right-1 -top-1 min-w-4 border border-rose-800 bg-rose-950 px-0.5 text-center text-[0.6rem] leading-4 text-rose-50">
+              {amount}
+            </strong>
+          ) : null}
+        </span>
+      ))}
+    </div>
+  );
+};
+
+const CityTokenRing = ({ counts = {}, tokenLookup }) => {
+  const tokens = Object.entries(counts).flatMap(([tokenId, amount]) => (
+    Array.from({ length: Math.max(0, Number(amount) || 0) }, (_, index) => ({ tokenId, index }))
+  ));
+  if (!tokens.length) return null;
+  const radius = Math.min(88, 62 + Math.max(0, tokens.length - 6) * 3);
+  return (
+    <div className="pointer-events-none absolute inset-0 z-30" aria-label="City tokens">
+      {tokens.map(({ tokenId, index }, position) => {
+        const angle = (position / tokens.length) * Math.PI * 2 - Math.PI / 2;
+        const token = tokenLookup[normalize(tokenId)];
+        return (
+          <span
+            key={`${tokenId}-${index}`}
+            className="pointer-events-auto absolute left-1/2 top-1/2 inline-flex h-12 w-12 items-center justify-center rounded-full border-2 bg-stone-950/95 shadow-xl"
+            style={{
+              borderColor: token?.color || "#9f1239",
+              transform: `translate(calc(-50% + ${Math.cos(angle) * radius}px), calc(-50% + ${Math.sin(angle) * radius}px))`,
+            }}
+          >
+            <TagIcon tag={token} label={tokenId} size="md" />
+          </span>
+        );
+      })}
+    </div>
+  );
+};
+
+const CityZone = ({
+  city,
+  cardLookup,
+  tagLookup,
+  pillarLookup,
+  tokenLookup,
+  storageIconSrc,
+  registerBuildTarget,
+  hiddenBuildTargets,
+}) => {
   const cityCard = cardLookup[normalize(city.city_card_id)];
   const buildings = (city.cards || []).map((cardId) => cardLookup[normalize(cardId)]).filter(Boolean);
   const slots = Math.max(1, Number(city.building_slots || 0), buildings.length);
@@ -104,7 +180,13 @@ const CityZone = ({ city, cardLookup, tagLookup, pillarLookup, tokenLookup, stor
         <p className="mt-1 text-xs text-amber-800">{buildings.length}/{city.building_slots || 0} building slots</p>
       </div>
       <div className="absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2">
-        <CardVisual card={cityCard} tagLookup={tagLookup} pillarLookup={pillarLookup} tokenLookup={tokenLookup} storageIconSrc={storageIconSrc} />
+        <div
+          className={`relative transition-opacity duration-200 ${hiddenBuildTargets.has(`${city.id}:${cityCard?.id}`) ? "opacity-0" : ""}`}
+          ref={(node) => registerBuildTarget(city.id, cityCard?.id, node)}
+        >
+          <CardVisual card={cityCard} tagLookup={tagLookup} pillarLookup={pillarLookup} tokenLookup={tokenLookup} storageIconSrc={storageIconSrc} />
+          <CityTokenRing counts={city.condition_tokens} tokenLookup={tokenLookup} />
+        </div>
       </div>
       {Array.from({ length: slots }).map((_, index) => {
         const position = slotPosition(index, slots);
@@ -116,7 +198,12 @@ const CityZone = ({ city, cardLookup, tagLookup, pillarLookup, tokenLookup, stor
             style={{ transform: `translate(calc(-50% + ${position.x * 190}px), calc(-50% + ${position.y * 265}px))` }}
           >
             {building ? (
-              <CardVisual card={building} tagLookup={tagLookup} pillarLookup={pillarLookup} tokenLookup={tokenLookup} storageIconSrc={storageIconSrc} />
+              <div
+                className={`transition-opacity duration-200 ${hiddenBuildTargets.has(`${city.id}:${building.id}`) ? "opacity-0" : ""}`}
+                ref={(node) => registerBuildTarget(city.id, building.id, node)}
+              >
+                <CardVisual card={building} tagLookup={tagLookup} pillarLookup={pillarLookup} tokenLookup={tokenLookup} storageIconSrc={storageIconSrc} />
+              </div>
             ) : (
               <span className="text-[0.65rem] font-semibold uppercase text-amber-900">Building slot</span>
             )}
@@ -148,9 +235,23 @@ const GameRoomPage = () => {
   const [resolutionOpen, setResolutionOpen] = useState(false);
   const [discardOpen, setDiscardOpen] = useState(false);
   const [empireFallOpen, setEmpireFallOpen] = useState(false);
+  const [displayedPhase, setDisplayedPhase] = useState("");
+  const [phaseTransition, setPhaseTransition] = useState(null);
+  const [resolutionClosing, setResolutionClosing] = useState(false);
+  const [flyingBuilds, setFlyingBuilds] = useState([]);
   const [busy, setBusy] = useState(false);
   const [ending, setEnding] = useState(false);
   const [error, setError] = useState("");
+  const buildTargetRefs = useRef(new Map());
+  const animatedResolutionIds = useRef(new Set());
+  const closedResolutionBatch = useRef("");
+
+  const registerBuildTarget = useCallback((cityId, itemId, node) => {
+    if (!cityId || !itemId) return;
+    const key = `${cityId}:${itemId}`;
+    if (node) buildTargetRefs.current.set(key, node);
+    else buildTargetRefs.current.delete(key);
+  }, []);
 
   const loadGame = useCallback(async () => {
     if (!token || !roomId) return;
@@ -182,6 +283,22 @@ const GameRoomPage = () => {
   }, [gameState?.phase, gameState?.era]);
 
   useEffect(() => {
+    const nextPhase = gameState?.phase;
+    if (!nextPhase) return undefined;
+    if (!displayedPhase) {
+      setDisplayedPhase(nextPhase);
+      return undefined;
+    }
+    if (nextPhase === displayedPhase) return undefined;
+    setPhaseTransition({ from: displayedPhase, to: nextPhase });
+    const timer = window.setTimeout(() => {
+      setDisplayedPhase(nextPhase);
+      setPhaseTransition(null);
+    }, 560);
+    return () => window.clearTimeout(timer);
+  }, [displayedPhase, gameState?.phase]);
+
+  useEffect(() => {
     setSelectedHandCardIndex(null);
     setSelectedHandCardAnchor(null);
     setSelectedSchemeSlotIndex(null);
@@ -190,23 +307,23 @@ const GameRoomPage = () => {
   }, [focusedPlayerId, gameState?.phase]);
 
   useEffect(() => {
-    if (gameState?.phase === "docket_ordering") setDocketOpen(true);
-  }, [gameState?.phase]);
+    if (displayedPhase === "docket_ordering") setDocketOpen(true);
+  }, [displayedPhase]);
 
   useEffect(() => {
-    setCityChartersOpen(gameState?.phase === "council_vote");
-  }, [gameState?.phase]);
+    setCityChartersOpen(displayedPhase === "council_vote");
+  }, [displayedPhase]);
 
   useEffect(() => {
-    if (gameState?.phase === "reveal" && gameState?.docket_resolution?.length) {
+    if (displayedPhase === "reveal" && gameState?.docket_resolution?.length) {
       setDocketOpen(false);
       setResolutionOpen(true);
     }
-  }, [gameState?.phase]);
+  }, [displayedPhase, gameState?.docket_resolution?.length]);
 
   useEffect(() => {
-    if (gameState?.phase === "game_over") setEmpireFallOpen(true);
-  }, [gameState?.phase]);
+    if (displayedPhase === "game_over") setEmpireFallOpen(true);
+  }, [displayedPhase]);
 
   const catalogs = {
     cards: gameState?.catalog?.cards || [],
@@ -237,7 +354,9 @@ const GameRoomPage = () => {
   const activePlayer = players.find((player) => player.id === gameState?.active_player_id);
   const focusedPlayer = players.find((player) => player.id === focusedPlayerId) || activePlayer || players[0];
   const actions = gameState?.possible_actions || [];
-  const phase = gameState?.phase || "council_vote";
+  const authoritativePhase = gameState?.phase || "council_vote";
+  const phase = displayedPhase || authoritativePhase;
+  const phaseChanging = Boolean(phaseTransition);
   const isBotMode = gameState?.mode === "solo_bots";
   const focusedPrivateBot = isBotMode && focusedPlayer?.controller === "bot" && !focusedPlayer?.hand_revealed;
   const agendaSelectionActions = phase === "agenda_selection"
@@ -256,6 +375,10 @@ const GameRoomPage = () => {
     (entry) => entry.type === "confirm_plotting" && entry.player_id === focusedPlayer?.id
   );
   const discardCount = (gameState?.foundation_discard?.length || 0) + (gameState?.crisis_discard?.length || 0);
+  const hiddenBuildTargets = useMemo(
+    () => new Set(flyingBuilds.map((flight) => flight.targetKey)),
+    [flyingBuilds]
+  );
 
   const perform = async (action, payload = {}) => {
     if (!token || busy) return null;
@@ -300,6 +423,70 @@ const GameRoomPage = () => {
     }, 500);
     return () => window.clearTimeout(timer);
   }, [busy, gameState, resolutionOpen]);
+
+  useEffect(() => {
+    const refillAction = authoritativePhase === "hand_refill"
+      ? actions.find((entry) => entry.type === "refill_hand")
+      : null;
+    if (!refillAction || busy) return undefined;
+    const timer = window.setTimeout(() => {
+      void performAction(refillAction);
+    }, 280);
+    return () => window.clearTimeout(timer);
+  }, [actions, authoritativePhase, busy]);
+
+  useEffect(() => {
+    const resolutions = gameState?.docket_resolution || [];
+    if (authoritativePhase === "reveal" || !resolutions.length || !resolutionOpen) return undefined;
+    const batchKey = `${gameState?.era}:${resolutions.map((entry) => `${entry.id}:${entry.status}`).join("|")}`;
+    if (closedResolutionBatch.current === batchKey) return undefined;
+    closedResolutionBatch.current = batchKey;
+    const builds = resolutions.filter(
+      (entry) => entry.status === "built" && entry.city_id && !animatedResolutionIds.current.has(entry.id)
+    );
+    builds.forEach((entry) => animatedResolutionIds.current.add(entry.id));
+    const flights = builds.map((entry, index) => {
+      const source = document.querySelector(`[data-resolution-id="${entry.id}"]`)?.getBoundingClientRect();
+      const targetKey = `${entry.city_id}:${entry.item_id}`;
+      const target = buildTargetRefs.current.get(targetKey)?.getBoundingClientRect();
+      const fallbackLeft = window.innerWidth / 2 - 80;
+      const fallbackTop = window.innerHeight / 2 - 110;
+      const left = source?.left ?? fallbackLeft;
+      const top = source?.top ?? fallbackTop;
+      const targetLeft = target?.left ?? left;
+      const targetTop = target?.top ?? top;
+      return {
+        id: entry.id,
+        itemId: entry.item_id,
+        targetKey,
+        left,
+        top,
+        width: source?.width || 176,
+        deltaX: targetLeft - left,
+        deltaY: targetTop - top,
+        scale: target && source?.width ? target.width / source.width : 0.72,
+        delay: index * 180,
+      };
+    });
+    setResolutionClosing(true);
+    const closeTimer = window.setTimeout(() => {
+      setResolutionOpen(false);
+      setResolutionClosing(false);
+      setFlyingBuilds(flights);
+    }, 300);
+    return () => {
+      window.clearTimeout(closeTimer);
+    };
+  }, [authoritativePhase, gameState?.docket_resolution, gameState?.era, resolutionOpen]);
+
+  useEffect(() => {
+    if (!flyingBuilds.length) return undefined;
+    const timer = window.setTimeout(
+      () => setFlyingBuilds([]),
+      1050 + Math.max(0, flyingBuilds.length - 1) * 180
+    );
+    return () => window.clearTimeout(timer);
+  }, [flyingBuilds]);
 
   const endGame = async () => {
     if (!token || ending) return;
@@ -560,11 +747,7 @@ const GameRoomPage = () => {
     }
     if (phase === "hand_refill") {
       const drawAction = actions.find((entry) => entry.type === "refill_hand");
-      return drawAction ? (
-        <button className="rounded-md border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800 disabled:opacity-50" disabled={busy} onClick={() => performAction(drawAction)} type="button">
-          Draw {drawAction.draw_amount}
-        </button>
-      ) : null;
+      return drawAction ? <span className="text-xs font-semibold text-teal-300">Drawing {drawAction.draw_amount} automatically...</span> : null;
     }
     if (["crisis_intake", "hand_reset", "cleanup"].includes(phase)) {
       return <button className="rounded-md border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800 disabled:opacity-50" disabled={busy} onClick={() => perform("continue_phase")} type="button">Resolve phase</button>;
@@ -651,7 +834,28 @@ const GameRoomPage = () => {
                       : "The Empire has fallen"}
                 </p>
               </div>
-              <div className="shrink-0">{renderPhaseControls()}</div>
+              <div className="shrink-0">
+                {phaseChanging ? <span className="text-xs font-semibold text-amber-300">Advancing phase...</span> : renderPhaseControls()}
+              </div>
+            </div>
+            <div className="relative mx-2 mt-1 h-8" aria-label="Era phase timeline">
+              <div className="absolute left-0 right-0 top-2 h-px bg-slate-700" />
+              <span
+                className="absolute top-0 z-10 h-4 w-4 -translate-x-1/2 rounded-full border-2 border-amber-200 bg-amber-500 shadow-lg transition-[left] duration-500 ease-in-out"
+                style={{ left: `${(phaseTimelineIndex(authoritativePhase) / (PHASE_TIMELINE.length - 1)) * 100}%` }}
+              />
+              {PHASE_TIMELINE.map((entry, index) => {
+                const active = phaseTimelineIndex(phase) === index;
+                return (
+                  <span
+                    key={entry.id}
+                    className={`absolute top-0 -translate-x-1/2 pt-4 text-[0.55rem] font-bold uppercase ${active ? "text-amber-200" : "text-slate-600"}`}
+                    style={{ left: `${(index / (PHASE_TIMELINE.length - 1)) * 100}%` }}
+                  >
+                    {entry.label}
+                  </span>
+                );
+              })}
             </div>
           </header>
 
@@ -666,7 +870,19 @@ const GameRoomPage = () => {
                 <div className="h-full overflow-y-scroll bg-stone-950/60 p-5 lg:min-h-0 lg:flex-1">
                   <div className="relative" style={{ width: boardWidth * boardZoom, height: 760 * boardZoom }}>
                     <div className="absolute left-0 top-0 flex origin-top-left gap-8" style={{ width: boardWidth, height: 760, transform: `scale(${boardZoom})` }}>
-                      {(gameState.cities || []).map((city) => <CityZone key={city.id} city={city} cardLookup={cardLookup} tagLookup={tagLookup} pillarLookup={pillarLookup} tokenLookup={tokenLookup} storageIconSrc={storageIconSrc} />)}
+                      {(gameState.cities || []).map((city) => (
+                        <CityZone
+                          key={city.id}
+                          city={city}
+                          cardLookup={cardLookup}
+                          tagLookup={tagLookup}
+                          pillarLookup={pillarLookup}
+                          tokenLookup={tokenLookup}
+                          storageIconSrc={storageIconSrc}
+                          registerBuildTarget={registerBuildTarget}
+                          hiddenBuildTargets={hiddenBuildTargets}
+                        />
+                      ))}
                     </div>
                   </div>
                 </div>
@@ -712,6 +928,13 @@ const GameRoomPage = () => {
                     {Object.entries(resourcePool).map(([tagId, amount]) => <TagIcon key={tagId} tag={tagLookup[normalize(tagId)]} label={tagId} count={amount} size="sm" />)}
                     {!Object.keys(resourcePool).length ? <span className="text-xs text-slate-600">Empty</span> : null}
                   </div>
+                </div>
+                <div className="mt-3 border-t border-slate-800 pt-2">
+                  <div className="mb-1.5 flex items-center gap-1.5 text-[0.65rem] font-bold uppercase text-slate-500">
+                    <Shield className="h-3.5 w-3.5 text-rose-400" aria-hidden="true" />
+                    Global Tokens
+                  </div>
+                  <TokenCounts counts={gameState.condition_tokens} tokenLookup={tokenLookup} />
                 </div>
                 <div className="mt-3 border-t border-slate-800 pt-2">
                   <div className="mb-1.5 flex items-center gap-1.5 text-[0.65rem] font-bold uppercase text-slate-500"><Users className="h-3.5 w-3.5 text-rose-400" />Empire Tags</div>
@@ -1131,6 +1354,30 @@ const GameRoomPage = () => {
         </section>
       </div>
 
+      {phaseChanging ? <div className="fixed inset-0 z-[1400] cursor-wait" aria-hidden="true" /> : null}
+
+      {flyingBuilds.map((flight) => (
+        <div
+          key={flight.id}
+          className="built-card-flight pointer-events-none fixed z-[1450]"
+          style={{
+            left: flight.left,
+            top: flight.top,
+            "--flight-x": `${flight.deltaX}px`,
+            "--flight-y": `${flight.deltaY}px`,
+            "--flight-scale": flight.scale,
+            animationDelay: `${flight.delay}ms`,
+          }}
+        >
+          <ItemVisual
+            item={itemLookup[normalize(flight.itemId)]}
+            catalogs={catalogs}
+            tagLookup={tagLookup}
+            storageIconSrc={storageIconSrc}
+          />
+        </div>
+      ))}
+
       {agendaSelectionActions.length ? (
         <div className="fixed inset-0 z-[1300] flex items-center justify-center overflow-y-auto bg-slate-950/90 p-6">
           <section className="w-full max-w-6xl border border-amber-900/70 bg-slate-900 p-5 shadow-2xl">
@@ -1168,12 +1415,12 @@ const GameRoomPage = () => {
 
       {cityChartersOpen ? (
         <div
-          className="fixed inset-0 z-[1240] flex items-center justify-center overflow-y-auto bg-slate-950/90 p-6"
+          className="overlay-backdrop fixed inset-0 z-[1240] flex items-center justify-center overflow-y-auto bg-slate-950/90 p-6"
           onMouseDown={(event) => {
             if (event.target === event.currentTarget) setCityChartersOpen(false);
           }}
         >
-          <section className="w-full max-w-6xl border border-amber-900/70 bg-slate-900 p-5 shadow-2xl">
+          <section className="overlay-panel-from-right w-full max-w-6xl border border-amber-900/70 bg-slate-900 p-5 shadow-2xl">
             <div className="mb-5 flex items-start justify-between gap-3">
               <div>
                 <p className="text-xs font-bold uppercase text-amber-600">Public Charters</p>
@@ -1223,7 +1470,7 @@ const GameRoomPage = () => {
                       onClick={() => performAction(entry)}
                       type="button"
                     >
-                      Continue
+                      Do not support a City
                     </button>
                   ))}
               </div>
@@ -1275,12 +1522,12 @@ const GameRoomPage = () => {
 
       {docketOpen ? (
         <div
-          className="fixed inset-0 z-[1250] flex items-center justify-center overflow-y-auto bg-slate-950/90 p-6"
+          className="overlay-backdrop fixed inset-0 z-[1250] flex items-center justify-center overflow-y-auto bg-slate-950/90 p-6"
           onMouseDown={(event) => {
             if (event.target === event.currentTarget) setDocketOpen(false);
           }}
         >
-          <section className="w-full max-w-7xl border border-amber-900/70 bg-slate-900 p-5 shadow-2xl">
+          <section className="overlay-panel-from-right w-full max-w-7xl border border-amber-900/70 bg-slate-900 p-5 shadow-2xl">
             <div className="mb-5 flex items-start justify-between gap-3">
               <div>
                 <p className="text-xs font-bold uppercase text-amber-600">Resolution Queue</p>
@@ -1377,8 +1624,6 @@ const GameRoomPage = () => {
                     const confirmAction = actions.find((entry) => entry.type === "confirm_docket_order");
                     if (confirmAction) {
                       await performAction(confirmAction);
-                      setDocketOpen(false);
-                      setResolutionOpen(true);
                     }
                   }}
                   type="button"
@@ -1394,12 +1639,12 @@ const GameRoomPage = () => {
 
       {resolutionOpen && gameState.docket_resolution?.length ? (
         <div
-          className="fixed inset-0 z-[1275] flex items-center justify-center bg-slate-950/90 p-6"
+          className={`overlay-backdrop fixed inset-0 z-[1275] flex items-center justify-center bg-slate-950/90 p-6 ${resolutionClosing ? "overlay-backdrop-out" : ""}`}
           onMouseDown={(event) => {
             if (event.target === event.currentTarget) setResolutionOpen(false);
           }}
         >
-          <section className="flex max-h-[92vh] w-full max-w-[96rem] flex-col border border-amber-900/70 bg-slate-900 p-5 shadow-2xl">
+          <section className={`overlay-panel-from-right flex max-h-[92vh] w-full max-w-[96rem] flex-col border border-amber-900/70 bg-slate-900 p-5 shadow-2xl ${resolutionClosing ? "overlay-panel-to-right" : ""}`}>
             <div className="mb-4 flex items-start justify-between gap-3">
               <div>
                 <p className="text-xs font-bold uppercase text-amber-600">Ordered Resolution</p>
@@ -1426,14 +1671,14 @@ const GameRoomPage = () => {
                   const status = resolution.status || "queued";
                   const succeeded = ["built", "succeeded"].includes(status);
                   const failed = status === "failed";
-                  const discarded = status === "discarded";
+                  const discarded = ["discarded", "not_founded"].includes(status);
                   const resolving = status === "resolving";
                   const statusLabel = succeeded
                     ? status === "built" ? "Built" : "Succeeded"
                     : failed
                       ? resolution.is_crisis ? "Crisis consequence" : "Alternative effect"
                       : discarded
-                        ? "No effect"
+                        ? status === "not_founded" ? "Remains available" : "No effect"
                         : resolving
                           ? "Resolving"
                           : "Queued";
@@ -1449,6 +1694,7 @@ const GameRoomPage = () => {
                   return (
                     <div
                       key={resolution.id}
+                      data-resolution-id={resolution.id}
                       className={`docket-resolution-card relative shrink-0 border p-2 transition-all duration-500 ${toneClass}`}
                       style={{ animationDelay: `${index * 110}ms` }}
                     >
@@ -1514,12 +1760,12 @@ const GameRoomPage = () => {
 
       {discardOpen ? (
         <div
-          className="fixed inset-0 z-[1250] flex items-center justify-center overflow-y-auto bg-slate-950/90 p-6"
+          className="overlay-backdrop fixed inset-0 z-[1250] flex items-center justify-center overflow-y-auto bg-slate-950/90 p-6"
           onMouseDown={(event) => {
             if (event.target === event.currentTarget) setDiscardOpen(false);
           }}
         >
-          <section className="max-h-[90vh] w-full max-w-7xl overflow-y-auto border border-amber-900/70 bg-slate-900 p-5 shadow-2xl">
+          <section className="overlay-panel-from-right max-h-[90vh] w-full max-w-7xl overflow-y-auto border border-amber-900/70 bg-slate-900 p-5 shadow-2xl">
             <div className="mb-5 flex items-center justify-between gap-3">
               <div>
                 <p className="text-xs font-bold uppercase text-amber-600">Public Information</p>
@@ -1560,12 +1806,12 @@ const GameRoomPage = () => {
 
       {agendaOverlayEntry ? (
         <div
-          className="fixed inset-0 z-[1300] flex items-center justify-center overflow-y-auto bg-slate-950/90 p-6"
+          className="overlay-backdrop fixed inset-0 z-[1300] flex items-center justify-center overflow-y-auto bg-slate-950/90 p-6"
           onMouseDown={(event) => {
             if (event.target === event.currentTarget) setAgendaOverlayPlayerId("");
           }}
         >
-          <section className="w-full max-w-[32rem] border border-amber-900/70 bg-slate-900 p-4 shadow-2xl">
+          <section className="overlay-panel-from-right w-full max-w-[32rem] border border-amber-900/70 bg-slate-900 p-4 shadow-2xl">
             <div className="mb-3 flex items-center justify-between gap-3">
               <h2 className="text-sm font-bold uppercase text-amber-100">Secret Agenda</h2>
               <button
@@ -1593,12 +1839,12 @@ const GameRoomPage = () => {
 
       {ministryOverlayEntry ? (
         <div
-          className="fixed inset-0 z-[1300] flex items-center justify-center overflow-y-auto bg-slate-950/90 p-6"
+          className="overlay-backdrop fixed inset-0 z-[1300] flex items-center justify-center overflow-y-auto bg-slate-950/90 p-6"
           onMouseDown={(event) => {
             if (event.target === event.currentTarget) setMinistryOverlayId("");
           }}
         >
-          <section className="w-full max-w-[28rem] border border-amber-900/70 bg-slate-900 p-4 shadow-2xl">
+          <section className="overlay-panel-from-right w-full max-w-[28rem] border border-amber-900/70 bg-slate-900 p-4 shadow-2xl">
             <div className="mb-3 flex items-center justify-between gap-3">
               <h2 className="text-sm font-bold uppercase text-amber-100">Ministry</h2>
               <button

@@ -769,12 +769,13 @@ Era 5. Before that Era, players may support City Charters but may not place
 Suspicion.
 
 Starting with the Minister of the Empire and proceeding clockwise, each player
-casts exactly one public vote by placing their Council token on:
+may cast one public vote by placing their Council token on:
 
 * one available City Charter; or
 * another player, if Suspicion is active.
 
-If there is no legal vote, continue without placing a token.
+A player may instead decline to place their Council token. Supporting a City is
+always optional.
 
 A player may not place Suspicion on themselves.
 
@@ -787,12 +788,13 @@ Suspicion tokens are public.
 ## 12.1 Founding Support
 
 After all players vote, each City Charter with 2 or more Council tokens is
-removed from the Charter Row and queued in the Council Docket for that Era.
+queued in the Council Docket for that Era. It remains in the Charter Row until
+it is successfully founded.
 
 City founding cards resolve before every Crisis. If more than one City qualifies,
 the Minister of the Empire orders those Cities among themselves. A queued City
 must still satisfy its Tag requirements and resource cost when it resolves. If
-it cannot be founded, discard it face up.
+it cannot be founded, it remains available in the Charter Row for a later Era.
 
 ---
 

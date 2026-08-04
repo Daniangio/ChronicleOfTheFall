@@ -279,6 +279,9 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
             available_city_count=1,
             suspicion_start_era=5,
         )
+        self.assertTrue(
+            any(action.get("target_type") == "abstain" for action in state["possible_actions"])
+        )
         for _ in state["players"]:
             action = next(
                 entry
@@ -288,7 +291,7 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
             state = perform_action(state, action["type"], action)
 
         self.assertEqual(state["phase"], "plotting")
-        self.assertEqual(state["available_city_card_ids"], [])
+        self.assertEqual(state["available_city_card_ids"], ["frontier-city"])
         self.assertEqual(state["founding_commitments"][0]["item_id"], "frontier-city")
 
         state["phase"] = "hand_reset"
@@ -302,6 +305,39 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
             [entry.get("priority_kind") or entry["kind"] for entry in state["council_stack"]],
             ["founding", "events", "cards"],
         )
+
+    def test_unaffordable_supported_city_remains_available(self):
+        frontier = catalog_entry(
+            "frontier-city",
+            "Frontier City",
+            "cards",
+            category="city",
+            data={"building_slots": 3, "cost": {"wealth": 99}},
+        )
+        state = build_state(
+            card_entries=[*CARDS, frontier],
+            city_pool_card_ids=["frontier-city"],
+            available_city_count=1,
+            suspicion_start_era=5,
+        )
+        for _ in state["players"]:
+            action = next(
+                entry for entry in state["possible_actions"]
+                if entry.get("target_type") == "city"
+            )
+            state = perform_action(state, action["type"], action)
+
+        state["phase"] = "hand_reset"
+        state["council_stack"] = list(state["founding_commitments"])
+        state = perform_action(state, "continue_phase", {})
+        confirm = next(action for action in state["possible_actions"] if action["type"] == "confirm_docket_order")
+        state = perform_action(state, confirm["type"], confirm)
+        reveal = next(action for action in state["possible_actions"] if action["type"] == "reveal_next")
+        state = perform_action(state, reveal["type"], reveal)
+
+        self.assertEqual(state["current_reveal"]["status"], "not_founded")
+        self.assertEqual(state["available_city_card_ids"], ["frontier-city"])
+        self.assertNotIn("frontier-city", state["foundation_discard"])
 
     def test_institution_deck_merges_before_era_four_hand_refill(self):
         state = build_state(institution_deck_ids=["garrison", "garrison"])
@@ -944,6 +980,7 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
         self.assertEqual(state["pillars"]["morale"], 6)
         self.assertEqual(state["current_reveal"]["status"], "built")
         self.assertEqual(state["docket_resolution"][0]["status"], "built")
+        self.assertEqual(state["docket_resolution"][0]["city_id"], state["cities"][0]["id"])
 
     def test_event_requirements_choose_main_or_alternative_effects(self):
         state = build_state()
