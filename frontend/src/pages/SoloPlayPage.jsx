@@ -17,6 +17,14 @@ const SoloPlayPage = () => {
   const [playerCount, setPlayerCount] = useState(4);
   const [agendas, setAgendas] = useState([]);
   const [botAgendaIds, setBotAgendaIds] = useState([]);
+  const [simulations, setSimulations] = useState([]);
+
+  const loadSimulations = async () => {
+    const response = await authenticatedFetch(buildApiUrl("/api/game/simulations"));
+    const payload = await response.json().catch(() => []);
+    if (!response.ok) throw new Error(payload.detail || "Failed to load simulations.");
+    setSimulations(payload);
+  };
 
   useEffect(() => {
     if (!token) return;
@@ -44,6 +52,15 @@ const SoloPlayPage = () => {
     void loadLevels();
   }, [token]);
 
+  useEffect(() => {
+    if (!token) return undefined;
+    void loadSimulations().catch((loadError) => setError(loadError.message));
+    const timer = window.setInterval(() => {
+      void loadSimulations().catch(() => {});
+    }, 2000);
+    return () => window.clearInterval(timer);
+  }, [token]);
+
   const selectedLevel = levels.find((level) => level.id === levelId);
 
   const createChronicleRoom = async (mode) => {
@@ -66,7 +83,11 @@ const SoloPlayPage = () => {
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.detail || "Failed to create game room.");
-      navigate(`/games/${payload.id}`);
+      if (mode === "bots_only") {
+        await loadSimulations();
+      } else {
+        navigate(`/games/${payload.id}`);
+      }
     } catch (createError) {
       setError(createError.message || "Failed to create game room.");
     } finally {
@@ -160,9 +181,52 @@ const SoloPlayPage = () => {
           disabled={Boolean(creatingMode) || !levelId}
         />
       </section>
+
+      <SimulationQueue simulations={simulations} onOpenReplay={(id) => navigate(`/replays/${id}`)} />
     </>
   );
 };
+
+const simulationLabels = {
+  QUEUED: "Queued",
+  RUNNING: "Running",
+  FINISHED: "Completed",
+  FAILED: "Failed",
+};
+
+const SimulationQueue = ({ simulations, onOpenReplay }) => (
+  <section className="mt-6 border-t border-slate-800 pt-5">
+    <div className="mb-3 flex items-center justify-between">
+      <div>
+        <h2 className="text-lg font-semibold text-white">Bot Simulations</h2>
+        <p className="text-xs text-slate-500">Queued games continue on the backend after leaving this page.</p>
+      </div>
+      <span className="text-xs font-semibold text-slate-400">
+        {simulations.filter((simulation) => ["QUEUED", "RUNNING"].includes(simulation.state)).length} active
+      </span>
+    </div>
+    <div className="overflow-hidden border border-slate-800">
+      {!simulations.length ? <p className="bg-slate-900 px-4 py-5 text-sm text-slate-500">No bot simulations yet.</p> : null}
+      {simulations.map((simulation) => (
+        <div key={simulation.id} className="flex min-h-12 items-center gap-3 border-b border-slate-800 bg-slate-900 px-4 py-2 last:border-b-0">
+          <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${simulation.state === "FINISHED" ? "bg-emerald-400" : simulation.state === "FAILED" ? "bg-rose-400" : simulation.state === "RUNNING" ? "animate-pulse bg-amber-300" : "bg-slate-500"}`} />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium text-slate-200">{simulation.id}</p>
+            <p className="text-xs text-slate-500">
+              {simulationLabels[simulation.state] || simulation.state} · {simulation.player_count} bots
+              {simulation.error ? ` · ${simulation.error}` : ""}
+            </p>
+          </div>
+          {simulation.state === "FINISHED" && simulation.result_id ? (
+            <button className="rounded-md bg-teal-400 px-3 py-1.5 text-xs font-semibold text-slate-950 hover:bg-teal-300" onClick={() => onOpenReplay(simulation.result_id)} type="button">
+              View replay
+            </button>
+          ) : null}
+        </div>
+      ))}
+    </div>
+  </section>
+);
 
 const LevelSelect = ({ value, levels, onChange }) => (
   <label className="block text-left">

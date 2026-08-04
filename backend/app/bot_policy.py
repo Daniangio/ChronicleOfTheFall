@@ -30,6 +30,7 @@ from .goldfishing_engine import (
 
 
 MAX_BOT_STEPS = 128
+MAX_SIMULATION_STEPS = 25000
 SCHEME_HORIZON_ERAS = 3
 MINISTER_CONTROL_BONUS = 2.0
 RESOURCE_VALUES = {
@@ -63,6 +64,30 @@ def advance_bot_players(state: dict[str, Any]) -> dict[str, Any]:
             player = _player(next_state, str(payload.get("player_id") or ""))
             player["bot_scheme_adjusted_era"] = int(next_state.get("era", 1))
     raise RuntimeError("Bot action loop exceeded its safety limit.")
+
+
+def run_bot_simulation(state: dict[str, Any]) -> dict[str, Any]:
+    if state.get("mode") != "bots_only":
+        raise ValueError("Only bot-only games can run as backend simulations.")
+    next_state = state
+    for _ in range(MAX_SIMULATION_STEPS):
+        if next_state.get("phase") == "game_over":
+            return next_state
+        actions = list(next_state.get("possible_actions") or [])
+        action = None
+        if len(actions) == 1 and not actions[0].get("player_id"):
+            action = actions[0]
+        else:
+            action = choose_next_bot_action(next_state)
+        if action is None:
+            raise RuntimeError("Bot simulation reached a state with no automated action.")
+        action_type = str(action.get("type") or "")
+        payload = {key: value for key, value in action.items() if key != "type"}
+        next_state = perform_action(next_state, action_type, payload)
+        if action_type == "plotting_scheme" and payload.get("player_id"):
+            player = _player(next_state, str(payload["player_id"]))
+            player["bot_scheme_adjusted_era"] = int(next_state.get("era", 1))
+    raise RuntimeError(f"Bot simulation exceeded {MAX_SIMULATION_STEPS} actions.")
 
 
 def _automatic_system_action(state: dict[str, Any]) -> dict[str, Any] | None:

@@ -82,6 +82,9 @@ class GameRoomResponse(BaseModel):
     started_at: str
     ended_at: Optional[str] = None
     result_id: Optional[str] = None
+    level_id: str = ""
+    player_count: int = 0
+    error: Optional[str] = None
 
 
 class GameResultResponse(BaseModel):

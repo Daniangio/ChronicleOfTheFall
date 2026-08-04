@@ -7,13 +7,16 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Optional
 
-from .bot_policy import advance_bot_players, public_game_state, require_human_action
+from .bot_policy import advance_bot_players, public_game_state, require_human_action, run_bot_simulation
 from .server_models import User
 from .goldfishing_engine import perform_action
 
 
 ROOM_STATE_IN_GAME = "IN_GAME"
 ROOM_STATE_FINISHED = "FINISHED"
+ROOM_STATE_QUEUED = "QUEUED"
+ROOM_STATE_RUNNING = "RUNNING"
+ROOM_STATE_FAILED = "FAILED"
 COMMAND_STREAM_KEY = "game:commands"
 DEFAULT_GAME_TYPE = "chronicle_solo"
 
@@ -34,6 +37,10 @@ def _history_key(user_id: str) -> str:
     return f"game:user:{user_id}:history"
 
 
+def _simulation_history_key(user_id: str) -> str:
+    return f"game:user:{user_id}:simulations"
+
+
 def _public_room(room: dict[str, Any]) -> dict[str, Any]:
     return {
         "id": room.get("id", ""),
@@ -45,6 +52,9 @@ def _public_room(room: dict[str, Any]) -> dict[str, Any]:
         "started_at": room.get("started_at", ""),
         "ended_at": room.get("ended_at") or None,
         "result_id": room.get("result_id") or None,
+        "level_id": room.get("level_id", ""),
+        "player_count": int(room.get("player_count") or 0),
+        "error": room.get("error") or None,
     }
 
 
@@ -54,6 +64,7 @@ class GameRoomService:
         self._memory_rooms: dict[str, dict[str, Any]] = {}
         self._memory_results: dict[str, dict[str, Any]] = {}
         self._memory_history: dict[str, list[str]] = {}
+        self._memory_simulations: dict[str, list[str]] = {}
 
     def configure_redis(self, redis_client) -> None:
         self.redis = redis_client
@@ -74,25 +85,83 @@ class GameRoomService:
             raise ValueError("Only Chronicle solo rooms are available right now.")
         room_id = room_id or self.new_room_id()
         now = _now_iso()
-        resolved_game_state = advance_bot_players(game_state or {})
+        bot_only = (game_state or {}).get("mode") == "bots_only"
+        resolved_game_state = (game_state or {}) if bot_only else advance_bot_players(game_state or {})
         room = {
             "id": room_id,
             "owner_user_id": user.id,
             "owner_username": user.username or user.email or user.id,
             "mode": resolved_game_state.get("mode", "solo"),
             "game_type": normalized_game_type,
-            "state": ROOM_STATE_IN_GAME,
+            "state": ROOM_STATE_QUEUED if bot_only else ROOM_STATE_IN_GAME,
             "created_at": now,
             "started_at": now,
             "ended_at": "",
             "result_id": "",
+            "level_id": str(resolved_game_state.get("level_id") or ""),
+            "player_count": len(resolved_game_state.get("players") or []),
+            "error": "",
             "game_state": json.dumps(resolved_game_state),
         }
         if self.redis is None:
             self._memory_rooms[room_id] = room
+            if bot_only:
+                self._memory_simulations.setdefault(user.id, []).append(room_id)
+                await self.run_bot_simulation_job(room_id=room_id, user_id=user.id)
+                room = self._memory_rooms[room_id]
             return _public_room(room)
         await self.redis.hset(_room_key(room_id), mapping=room)
+        if bot_only:
+            await self.redis.zadd(_simulation_history_key(user.id), {room_id: time.time()})
+            await self.redis.xadd(
+                COMMAND_STREAM_KEY,
+                {"action": "simulate_bot_room", "room_id": room_id, "user_id": user.id},
+                maxlen=1000,
+                approximate=True,
+            )
         return _public_room(room)
+
+    async def list_simulations(self, *, user_id: str, limit: int = 50) -> list[dict[str, Any]]:
+        if self.redis is None:
+            room_ids = list(reversed(self._memory_simulations.get(user_id, [])))[:limit]
+        else:
+            room_ids = await self.redis.zrevrange(_simulation_history_key(user_id), 0, max(0, limit - 1))
+        rooms = [await self._load_room(str(room_id)) for room_id in room_ids]
+        return [_public_room(room) for room in rooms if room]
+
+    async def run_bot_simulation_job(self, *, room_id: str, user_id: str) -> None:
+        room = await self._load_room(room_id)
+        if not room or room.get("owner_user_id") != user_id or room.get("state") not in {
+            ROOM_STATE_QUEUED,
+            ROOM_STATE_RUNNING,
+        }:
+            return
+        room["state"] = ROOM_STATE_RUNNING
+        room["started_at"] = _now_iso()
+        await self._store_room(room)
+        try:
+            state = await asyncio.to_thread(run_bot_simulation, _decode_state(room.get("game_state")))
+            from .database import SessionLocal
+            from .replay_service import save_bot_replay
+
+            with SessionLocal() as db:
+                replay = save_bot_replay(db, state=state, owner_user_id=user_id)
+            room["game_state"] = json.dumps(state)
+            room["state"] = ROOM_STATE_FINISHED
+            room["ended_at"] = _now_iso()
+            room["result_id"] = replay.id if replay else ""
+            room["error"] = ""
+        except Exception as exc:
+            room["state"] = ROOM_STATE_FAILED
+            room["ended_at"] = _now_iso()
+            room["error"] = str(exc)
+        await self._store_room(room)
+
+    async def _store_room(self, room: dict[str, Any]) -> None:
+        if self.redis is None:
+            self._memory_rooms[str(room["id"])] = room
+        else:
+            await self.redis.hset(_room_key(str(room["id"])), mapping=room)
 
     async def get_game_state(self, *, room_id: str, user: User) -> dict[str, Any] | None:
         room = await self._load_room(room_id)
@@ -117,6 +186,8 @@ class GameRoomService:
         room = await self._load_room(room_id)
         if not room or room.get("owner_user_id") != user.id:
             raise LookupError("Game room not found.")
+        if room.get("mode") == "bots_only":
+            raise ValueError("Bot-only simulations run on the backend and do not accept browser actions.")
         if room.get("state") == ROOM_STATE_FINISHED:
             raise ValueError("Game room is finished.")
         state = _decode_state(room.get("game_state"))
@@ -281,6 +352,11 @@ class GameWorker:
         action = str(fields.get("action") or "")
         if action == "finish_room":
             await self.service.finish_room(
+                room_id=str(fields.get("room_id") or ""),
+                user_id=str(fields.get("user_id") or ""),
+            )
+        elif action == "simulate_bot_room":
+            await self.service.run_bot_simulation_job(
                 room_id=str(fields.get("room_id") or ""),
                 user_id=str(fields.get("user_id") or ""),
             )

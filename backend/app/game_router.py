@@ -103,9 +103,6 @@ async def create_game_room(
             game_state=game_state,
             room_id=room_id,
         )
-        internal_state = await service.get_internal_game_state(room_id=room_id, user_id=current_user.id)
-        if internal_state and internal_state.get("phase") == "game_over":
-            save_bot_replay(db, state=internal_state, owner_user_id=current_user.id)
         return room
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -117,6 +114,11 @@ async def get_game_room(room_id: str, current_user: User = Depends(get_current_u
     if room is None:
         raise HTTPException(status_code=404, detail="Game room not found.")
     return room
+
+
+@router.get("/game/simulations", response_model=list[GameRoomResponse])
+async def list_bot_simulations(current_user: User = Depends(get_current_user)):
+    return await _service().list_simulations(user_id=current_user.id)
 
 
 @router.get("/game/levels")
