@@ -1300,6 +1300,24 @@ const GameRoomPage = () => {
                 <X className="h-4 w-4" aria-hidden="true" />
               </button>
             </div>
+            <div className="mb-5 flex min-h-11 items-center gap-3 border-y border-slate-800 bg-slate-950/50 px-3 py-2">
+              <div className="flex shrink-0 items-center gap-1.5 text-[0.65rem] font-bold uppercase text-slate-500">
+                <Archive className="h-3.5 w-3.5 text-teal-400" aria-hidden="true" />
+                Available Resources
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {Object.entries(resourcePool).map(([resourceId, amount]) => (
+                  <TagIcon
+                    key={resourceId}
+                    tag={tagLookup[normalize(resourceId)]}
+                    label={resourceId}
+                    count={amount}
+                    size="sm"
+                  />
+                ))}
+                {!Object.keys(resourcePool).length ? <span className="text-xs text-slate-600">Empty</span> : null}
+              </div>
+            </div>
             <div className="flex flex-wrap items-start justify-center gap-4">
               {(gameState.council_stack || []).map((commitment, index) => {
                 const moveLeft = actions.find((entry) =>
