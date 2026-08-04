@@ -198,11 +198,10 @@ function AppContent() {
   useEffect(() => {
     if (authBootstrapped && token) {
       void fetchSessionState();
+      disconnect();
       connect(token);
     }
-    return () => {
-      if (!token) disconnect();
-    };
+    return disconnect;
   }, [authBootstrapped, connect, disconnect, fetchSessionState, token]);
 
   const handleLogout = async () => {

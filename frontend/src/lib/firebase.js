@@ -42,6 +42,11 @@ export const ensureFirebasePersistence = async () => {
 export const subscribeToIdTokenChanges = (callback) =>
   onIdTokenChanged(getFirebaseAuth(), callback);
 
+export const refreshFirebaseIdToken = async () => {
+  const user = getFirebaseAuth().currentUser;
+  return user ? user.getIdToken(true) : null;
+};
+
 export const signInWithEmail = (email, password) =>
   signInWithEmailAndPassword(getFirebaseAuth(), email, password);
 

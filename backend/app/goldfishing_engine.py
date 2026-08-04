@@ -643,7 +643,7 @@ def _confirm_docket_order(state: dict[str, Any], payload: dict[str, Any]) -> Non
     _require_phase(state, "docket_ordering")
     _require_active_player(state, payload)
     if not _docket_priority_is_valid(state, state.get("council_stack", [])):
-        raise ValueError("City founding must resolve before Crises, and Crises before other cards.")
+        raise ValueError("The Docket must keep Crises before other cards.")
     state["phase"] = "reveal"
     state["current_reveal"] = None
     state["revealed_cards"] = []
@@ -998,7 +998,10 @@ def _run_hand_reset(state: dict[str, Any]) -> None:
         player["hand"] = crises
     state["council_stack"] = sorted(
         state.get("council_stack", []),
-        key=lambda commitment: _commitment_priority(state, commitment),
+        key=lambda commitment: (
+            _commitment_priority(state, commitment),
+            0 if commitment.get("priority_kind") == "founding" else 1,
+        ),
     )
     state["phase"] = "docket_ordering"
     state["active_player_id"] = state["minister_of_empire_player_id"]
@@ -2432,9 +2435,7 @@ def _commitment_is_crisis(state: dict[str, Any], commitment: dict[str, Any]) -> 
 
 
 def _commitment_priority(state: dict[str, Any], commitment: dict[str, Any]) -> int:
-    if commitment.get("priority_kind") == "founding":
-        return 0
-    return 1 if _commitment_is_crisis(state, commitment) else 2
+    return 0 if _commitment_is_crisis(state, commitment) else 1
 
 
 def _docket_priority_is_valid(state: dict[str, Any], docket: list[dict[str, Any]]) -> bool:

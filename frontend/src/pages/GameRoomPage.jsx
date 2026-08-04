@@ -25,6 +25,7 @@ import CardVisual from "../components/CardVisual.jsx";
 import CatalogItemVisual from "../components/CatalogItemVisual.jsx";
 import TagIcon from "../components/TagIcon.jsx";
 import { useStore } from "../store.js";
+import { authenticatedFetch } from "../utils/authenticatedFetch.js";
 import { buildApiUrl, buildAssetUrl } from "../utils/connection.js";
 
 const normalize = (value) => String(value || "").trim().toLowerCase().replace(/[\s_]+/g, "-");
@@ -234,6 +235,7 @@ const GameRoomPage = () => {
   const [docketOpen, setDocketOpen] = useState(false);
   const [resolutionOpen, setResolutionOpen] = useState(false);
   const [discardOpen, setDiscardOpen] = useState(false);
+  const [storageOpen, setStorageOpen] = useState(false);
   const [empireFallOpen, setEmpireFallOpen] = useState(false);
   const [displayedPhase, setDisplayedPhase] = useState("");
   const [phaseTransition, setPhaseTransition] = useState(null);
@@ -258,8 +260,8 @@ const GameRoomPage = () => {
     setError("");
     try {
       const [roomResponse, stateResponse] = await Promise.all([
-        fetch(buildApiUrl(`/api/game/rooms/${roomId}`), { headers: { Authorization: `Bearer ${token}` } }),
-        fetch(buildApiUrl(`/api/game/rooms/${roomId}/state`), { headers: { Authorization: `Bearer ${token}` } }),
+        authenticatedFetch(buildApiUrl(`/api/game/rooms/${roomId}`)),
+        authenticatedFetch(buildApiUrl(`/api/game/rooms/${roomId}/state`)),
       ]);
       const roomPayload = await roomResponse.json().catch(() => ({}));
       const statePayload = await stateResponse.json().catch(() => ({}));
@@ -313,6 +315,12 @@ const GameRoomPage = () => {
   useEffect(() => {
     setCityChartersOpen(displayedPhase === "council_vote");
   }, [displayedPhase]);
+
+  useEffect(() => {
+    setStorageOpen(displayedPhase === "storage" && Boolean(
+      gameState?.possible_actions?.some((entry) => entry.type === "store_resources")
+    ));
+  }, [displayedPhase, gameState?.possible_actions]);
 
   useEffect(() => {
     if (displayedPhase === "reveal" && gameState?.docket_resolution?.length) {
@@ -385,9 +393,9 @@ const GameRoomPage = () => {
     setBusy(true);
     setError("");
     try {
-      const response = await fetch(buildApiUrl(`/api/game/rooms/${roomId}/actions`), {
+      const response = await authenticatedFetch(buildApiUrl(`/api/game/rooms/${roomId}/actions`), {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action, payload }),
       });
       const nextState = await response.json().catch(() => ({}));
@@ -492,9 +500,8 @@ const GameRoomPage = () => {
     if (!token || ending) return;
     setEnding(true);
     try {
-      const response = await fetch(buildApiUrl(`/api/game/rooms/${roomId}/end`), {
+      const response = await authenticatedFetch(buildApiUrl(`/api/game/rooms/${roomId}/end`), {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.detail || "Failed to end game.");
@@ -538,6 +545,21 @@ const GameRoomPage = () => {
   const storageAction = actions.find((entry) => entry.type === "store_resources");
   const resourcePool = gameState.global_resource_pool || {};
   const selectedStorageTotal = Object.values(storageSelection).reduce((total, amount) => total + Number(amount || 0), 0);
+  const storageGenericNeeded = (selection) => Object.entries(selection).reduce(
+    (total, [resourceId, amount]) => total + Math.max(
+      0,
+      Number(amount || 0) - Number(storageAction?.specific_capacity?.[resourceId] || 0)
+    ),
+    0
+  );
+  const storageSelectionIsLegal = (selection) => {
+    if (!storageAction) return false;
+    if (Object.entries(selection).some(
+      ([resourceId, amount]) => Number(amount || 0) < 0 || Number(amount || 0) > Number(resourcePool[resourceId] || 0)
+    )) return false;
+    return storageGenericNeeded(selection) <= Number(storageAction.generic_capacity || 0);
+  };
+  const selectedGenericStorage = storageGenericNeeded(storageSelection);
   const boardWidth = Math.max(760, (gameState.cities?.length || 1) * 610);
 
   const renderPhaseControls = () => {
@@ -724,25 +746,14 @@ const GameRoomPage = () => {
         return <button className="rounded-md bg-amber-300 px-4 py-2 text-sm font-bold text-stone-950 hover:bg-amber-200 disabled:opacity-50" disabled={busy} onClick={() => perform("continue_phase")} type="button">Discard leftovers</button>;
       }
       return (
-        <div className="space-y-3">
-          <div className="flex flex-wrap gap-2">
-            {Object.entries(resourcePool).map(([resourceId, available]) => {
-              const selected = Number(storageSelection[resourceId] || 0);
-              return (
-                <div key={resourceId} className="flex items-center gap-2 border border-slate-700 bg-slate-950 px-2 py-1.5">
-                  <TagIcon tag={tagLookup[normalize(resourceId)]} label={resourceId} size="sm" />
-                  <button className="h-7 w-7 border border-slate-700 text-slate-300 disabled:opacity-30" disabled={selected <= 0} onClick={() => setStorageSelection((current) => ({ ...current, [resourceId]: Math.max(0, selected - 1) }))} type="button"><Minus className="mx-auto h-3 w-3" /></button>
-                  <span className="w-10 text-center text-xs">{selected}/{available}</span>
-                  <button className="h-7 w-7 border border-slate-700 text-slate-300 disabled:opacity-30" disabled={selected >= Number(available)} onClick={() => setStorageSelection((current) => ({ ...current, [resourceId]: selected + 1 }))} type="button"><Plus className="mx-auto h-3 w-3" /></button>
-                </div>
-              );
-            })}
-          </div>
-          <div className="flex items-center gap-3">
-            <p className="text-xs text-slate-400">Selected {selectedStorageTotal}. Generic capacity {storageAction.generic_capacity}; specific capacity {Object.entries(storageAction.specific_capacity || {}).map(([id, value]) => `${id} ${value}`).join(", ") || "none"}.</p>
-            <button className="rounded-md bg-teal-400 px-3 py-2 text-sm font-bold text-slate-950 hover:bg-teal-300 disabled:opacity-50" disabled={busy} onClick={() => performAction(storageAction, { resources: storageSelection })} type="button">Store selection</button>
-          </div>
-        </div>
+        <button
+          className="inline-flex items-center gap-2 border border-teal-800 bg-teal-950/50 px-3 py-2 text-sm font-bold text-teal-100 hover:bg-teal-900/60"
+          onClick={() => setStorageOpen(true)}
+          type="button"
+        >
+          <Archive className="h-4 w-4" aria-hidden="true" />
+          Choose stored resources
+        </button>
       );
     }
     if (phase === "hand_refill") {
@@ -1408,6 +1419,94 @@ const GameRoomPage = () => {
                   </button>
                 </div>
               ))}
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      {storageOpen && phase === "storage" && storageAction ? (
+        <div
+          className="overlay-backdrop fixed inset-0 z-[1260] flex items-center justify-center overflow-y-auto bg-slate-950/90 p-6"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setStorageOpen(false);
+          }}
+        >
+          <section className="overlay-panel-from-right w-full max-w-3xl border border-teal-900/70 bg-slate-900 p-5 shadow-2xl">
+            <div className="mb-5 flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-bold uppercase text-teal-500">Storage Phase</p>
+                <h2 className="mt-1 text-lg font-bold text-amber-50">Store Resources</h2>
+                <p className="mt-1 text-xs text-slate-500">
+                  {selectedStorageTotal} selected · Generic capacity {selectedGenericStorage}/{storageAction.generic_capacity || 0}
+                </p>
+              </div>
+              <button
+                className="inline-flex h-8 w-8 items-center justify-center border border-slate-700 text-slate-300 hover:bg-slate-800"
+                onClick={() => setStorageOpen(false)}
+                title="Close Storage"
+                type="button"
+              >
+                <X className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </div>
+
+            <div className="grid gap-2 sm:grid-cols-2">
+              {Object.entries(resourcePool).map(([resourceId, available]) => {
+                const selected = Number(storageSelection[resourceId] || 0);
+                const specificCapacity = Number(storageAction.specific_capacity?.[resourceId] || 0);
+                const incremented = { ...storageSelection, [resourceId]: selected + 1 };
+                const canIncrement = selected < Number(available) && storageSelectionIsLegal(incremented);
+                return (
+                  <div key={resourceId} className="flex min-h-14 items-center gap-3 border border-slate-700 bg-slate-950 px-3 py-2">
+                    <TagIcon tag={tagLookup[normalize(resourceId)]} label={resourceId} size="md" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-bold text-slate-200">{tagLookup[normalize(resourceId)]?.name || titleCase(resourceId)}</p>
+                      <p className="text-[0.65rem] text-slate-500">Available {available} · Specific capacity {specificCapacity}</p>
+                    </div>
+                    <button
+                      className="h-8 w-8 border border-slate-700 text-slate-300 hover:bg-slate-800 disabled:opacity-25"
+                      disabled={selected <= 0}
+                      onClick={() => setStorageSelection((current) => ({ ...current, [resourceId]: Math.max(0, selected - 1) }))}
+                      title={`Store one less ${resourceId}`}
+                      type="button"
+                    >
+                      <Minus className="mx-auto h-4 w-4" aria-hidden="true" />
+                    </button>
+                    <span className="w-9 text-center text-sm font-bold text-teal-200">{selected}</span>
+                    <button
+                      className="h-8 w-8 border border-teal-800 text-teal-200 hover:bg-teal-950 disabled:opacity-25"
+                      disabled={!canIncrement}
+                      onClick={() => setStorageSelection((current) => ({ ...current, [resourceId]: selected + 1 }))}
+                      title={`Store one more ${resourceId}`}
+                      type="button"
+                    >
+                      <Plus className="mx-auto h-4 w-4" aria-hidden="true" />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="mt-5 flex items-center justify-between gap-3 border-t border-slate-800 pt-4">
+              <button
+                className="px-3 py-2 text-sm text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+                onClick={() => setStorageSelection({})}
+                type="button"
+              >
+                Clear selection
+              </button>
+              <button
+                className="inline-flex items-center gap-2 bg-teal-400 px-4 py-2 text-sm font-bold text-slate-950 hover:bg-teal-300 disabled:opacity-50"
+                disabled={busy || !storageSelectionIsLegal(storageSelection)}
+                onClick={async () => {
+                  const nextState = await performAction(storageAction, { resources: storageSelection });
+                  if (nextState) setStorageOpen(false);
+                }}
+                type="button"
+              >
+                <Check className="h-4 w-4" aria-hidden="true" />
+                Store {selectedStorageTotal}
+              </button>
             </div>
           </section>
         </div>

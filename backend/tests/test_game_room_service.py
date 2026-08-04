@@ -265,7 +265,7 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
         )
         self.assertTrue(city_action["buildable"])
 
-    def test_two_city_votes_queue_founding_before_crisis(self):
+    def test_supported_city_queues_after_crisis_and_moves_with_normal_cards(self):
         frontier = catalog_entry(
             "frontier-city",
             "Frontier City",
@@ -303,7 +303,18 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
         state = perform_action(state, "continue_phase", {})
         self.assertEqual(
             [entry.get("priority_kind") or entry["kind"] for entry in state["council_stack"]],
-            ["founding", "events", "cards"],
+            ["events", "founding", "cards"],
+        )
+        move_city_later = next(
+            action for action in state["possible_actions"]
+            if action["type"] == "move_docket_card"
+            and action["commitment_id"] == state["founding_commitments"][0]["id"]
+            and action["direction"] == 1
+        )
+        state = perform_action(state, move_city_later["type"], move_city_later)
+        self.assertEqual(
+            [entry.get("priority_kind") or entry["kind"] for entry in state["council_stack"]],
+            ["events", "cards", "founding"],
         )
 
     def test_unaffordable_supported_city_remains_available(self):

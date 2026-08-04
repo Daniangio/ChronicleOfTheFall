@@ -791,10 +791,11 @@ After all players vote, each City Charter with 2 or more Council tokens is
 queued in the Council Docket for that Era. It remains in the Charter Row until
 it is successfully founded.
 
-City founding cards resolve before every Crisis. If more than one City qualifies,
-the Minister of the Empire orders those Cities among themselves. A queued City
-must still satisfy its Tag requirements and resource cost when it resolves. If
-it cannot be founded, it remains available in the Charter Row for a later Era.
+Supported City cards enter the normal, non-Crisis part of the Council Docket.
+The Minister of the Empire may order them freely among Structures and Edicts.
+A queued City must still satisfy its Tag requirements and resource cost when it
+resolves. If it cannot be founded, it remains available in the Charter Row for
+a later Era.
 
 ---
 
@@ -952,17 +953,16 @@ After every player has committed or declared that they cannot commit:
 1. Reveal all committed cards into the **Council Docket**.
 2. Keep each normal contributor anonymous.
 3. Keep any face-up Suspicion commitments associated with their contributor.
-4. Move every supported City founding card to the front of the Docket.
-5. Move every Crisis immediately after the City founding cards.
-6. The Minister of the Empire orders City cards among themselves, Crisis cards
-   among themselves, then all remaining cards among themselves.
+4. Move every Crisis to the front of the Docket.
+5. Place supported City cards in the normal range after all Crisis cards.
+6. The Minister of the Empire orders Crisis cards among themselves, then freely
+   orders supported Cities, Edicts, and Structures together in the normal range.
 7. Lock the chosen order.
 8. Resolve the first card, then continue through the Docket from left to right.
 
 The Docket is not shuffled and its resolution order is not random.
 
-Every queued City founding must finish before any Crisis. Every Crisis must then
-finish before any Edict or Structure.
+Every Crisis must finish before any supported City, Edict, or Structure.
 
 Resolve each card fully before resolving the next card.
 
