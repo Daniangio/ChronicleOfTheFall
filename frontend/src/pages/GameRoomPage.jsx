@@ -8,6 +8,7 @@ import {
   CircleX,
   Crown,
   Hand,
+  Info,
   ListOrdered,
   LogOut,
   Minus,
@@ -130,6 +131,94 @@ const TokenCounts = ({ counts = {}, tokenLookup, emptyLabel = "None", className 
   );
 };
 
+const TOKEN_RULES = {
+  "plague-token": "Placed on Cities. During the Condition Phase, a City with more Plague than Sanitary loses 1 Morale. Plague remains after the check.",
+  "unrest-token": "City Unrest triggers an immediate Revolt at 2. Global Unrest triggers an Imperial Unrest Crisis at 3. The Minister of War resolves either crisis.",
+  "fortified-token": "A City can have at most 1. It provides +1 Military and is removed to prevent one Structure in that City from being destroyed.",
+};
+
+const IngredientReferenceRow = ({ entry, resolvedEntry, detail }) => (
+  <div className="flex min-h-20 items-center gap-4 border-b border-slate-800 py-3 last:border-b-0">
+    <span className="flex h-14 w-14 shrink-0 items-center justify-center">
+      <TagIcon tag={resolvedEntry} label={entry.id} size="lg" />
+    </span>
+    <div className="min-w-0">
+      <h4 className="text-sm font-bold text-amber-50">{entry.name}</h4>
+      <p className="mt-1 text-xs leading-5 text-slate-400">{detail}</p>
+    </div>
+  </div>
+);
+
+const GameInfoOverlay = ({ tags, tokens, tagLookup, tokenLookup, onClose }) => {
+  const permanentTags = tags
+    .filter((entry) => entry.data?.resource_type !== "volatile")
+    .sort((left, right) => left.name.localeCompare(right.name));
+  const resources = tags
+    .filter((entry) => entry.data?.resource_type === "volatile")
+    .sort((left, right) => left.name.localeCompare(right.name));
+  const sortedTokens = [...tokens].sort((left, right) => left.name.localeCompare(right.name));
+  return (
+    <div
+      className="overlay-backdrop fixed inset-0 z-[1400] flex items-center justify-center overflow-y-auto bg-slate-950/90 p-6"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <section className="overlay-panel-from-right flex max-h-[90vh] w-full max-w-7xl flex-col border border-amber-900/70 bg-slate-900 p-5 shadow-2xl">
+        <div className="flex items-start justify-between gap-4 border-b border-slate-800 pb-4">
+          <div>
+            <p className="text-xs font-bold uppercase text-amber-600">Game Reference</p>
+            <h2 className="mt-1 text-xl font-bold text-amber-50">Tags, Resources and Tokens</h2>
+          </div>
+          <button
+            className="inline-flex h-8 w-8 items-center justify-center border border-slate-700 text-slate-300 hover:bg-slate-800"
+            onClick={onClose}
+            title="Close information"
+            type="button"
+          >
+            <X className="h-4 w-4" aria-hidden="true" />
+          </button>
+        </div>
+        <div className="mt-4 grid min-h-0 gap-6 overflow-y-auto lg:grid-cols-3">
+          <section>
+            <h3 className="sticky top-0 z-10 border-b border-amber-900/60 bg-slate-900 pb-2 text-xs font-bold uppercase text-amber-300">Permanent Tags</h3>
+            {permanentTags.map((entry) => (
+              <IngredientReferenceRow
+                key={entry.id}
+                entry={entry}
+                resolvedEntry={tagLookup[normalize(entry.id)]}
+                detail={entry.summary || "A permanent capability provided by Cities and Structures. Tags satisfy local building and card requirements."}
+              />
+            ))}
+          </section>
+          <section>
+            <h3 className="sticky top-0 z-10 border-b border-teal-900/60 bg-slate-900 pb-2 text-xs font-bold uppercase text-teal-300">Volatile Resources</h3>
+            {resources.map((entry) => (
+              <IngredientReferenceRow
+                key={entry.id}
+                entry={entry}
+                resolvedEntry={tagLookup[normalize(entry.id)]}
+                detail={entry.summary || "Generated during Production and spent to pay card and Event costs. Unstored resources do not persist between Eras."}
+              />
+            ))}
+          </section>
+          <section>
+            <h3 className="sticky top-0 z-10 border-b border-rose-900/60 bg-slate-900 pb-2 text-xs font-bold uppercase text-rose-300">Condition Tokens</h3>
+            {sortedTokens.map((entry) => (
+              <IngredientReferenceRow
+                key={entry.id}
+                entry={entry}
+                resolvedEntry={tokenLookup[normalize(entry.id)]}
+                detail={TOKEN_RULES[normalize(entry.id)] || entry.summary || "A persistent condition affecting a City or the Empire."}
+              />
+            ))}
+          </section>
+        </div>
+      </section>
+    </div>
+  );
+};
+
 const CityTokenRing = ({ counts = {}, tokenLookup }) => {
   const tokens = Object.entries(counts).flatMap(([tokenId, amount]) => (
     Array.from({ length: Math.max(0, Number(amount) || 0) }, (_, index) => ({ tokenId, index }))
@@ -235,6 +324,7 @@ const GameRoomPage = () => {
   const [docketOpen, setDocketOpen] = useState(false);
   const [resolutionOpen, setResolutionOpen] = useState(false);
   const [discardOpen, setDiscardOpen] = useState(false);
+  const [infoOpen, setInfoOpen] = useState(false);
   const [storageOpen, setStorageOpen] = useState(false);
   const [empireFallOpen, setEmpireFallOpen] = useState(false);
   const [displayedPhase, setDisplayedPhase] = useState("");
@@ -845,7 +935,15 @@ const GameRoomPage = () => {
                       : "The Empire has fallen"}
                 </p>
               </div>
-              <div className="shrink-0">
+              <div className="flex shrink-0 items-center gap-2">
+                <button
+                  className="inline-flex h-8 items-center gap-1.5 border border-slate-700 px-2 text-xs font-semibold text-slate-300 hover:border-amber-700 hover:bg-slate-800 hover:text-amber-100"
+                  onClick={() => setInfoOpen(true)}
+                  type="button"
+                >
+                  <Info className="h-4 w-4" aria-hidden="true" />
+                  Info
+                </button>
                 {phaseChanging ? <span className="text-xs font-semibold text-amber-300">Advancing phase...</span> : renderPhaseControls()}
               </div>
             </div>
@@ -1855,6 +1953,16 @@ const GameRoomPage = () => {
             </div>
           </section>
         </div>
+      ) : null}
+
+      {infoOpen ? (
+        <GameInfoOverlay
+          tags={catalogs.tags}
+          tokens={catalogs.tokens}
+          tagLookup={tagLookup}
+          tokenLookup={tokenLookup}
+          onClose={() => setInfoOpen(false)}
+        />
       ) : null}
 
       {discardOpen ? (

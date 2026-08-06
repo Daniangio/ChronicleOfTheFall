@@ -6,6 +6,7 @@ from collections import Counter, defaultdict
 from copy import deepcopy
 from typing import Any
 
+from .build_path_solver import find_build_distances
 from .goldfishing_engine import (
     MINISTRY_ROTATION_ORDER,
     _agenda_condition_met,
@@ -33,6 +34,10 @@ MAX_BOT_STEPS = 128
 MAX_SIMULATION_STEPS = 25000
 SCHEME_HORIZON_ERAS = 3
 MINISTER_CONTROL_BONUS = 2.0
+UNLOCK_LOOKAHEAD_DEPTH = 3
+UNLOCK_TARGET_LIMIT = 3
+UNLOCK_VALUE_FACTOR = 0.4
+MIN_UNLOCK_TARGET_VALUE = 3.0
 RESOURCE_VALUES = {
     "labor": 1.0,
     "food": 1.0,
@@ -442,6 +447,7 @@ def _item_value(
     *,
     eras_ahead: int = 0,
     assume_ready: bool = False,
+    include_unlocks: bool = True,
 ) -> float:
     profile = _agenda_profile(state, bot_id)
     data = item.get("data") or {}
@@ -491,10 +497,90 @@ def _item_value(
         value -= sum(_counts(data.get("required_tags")).values()) * 0.25
         if _is_city_card(item):
             value += int(data.get("building_slots") or 0) * 0.5
+        elif include_unlocks:
+            value += _structure_unlock_value(state, item, bot_id)
     value += _minister_control_value(state, item, bot_id, eras_ahead)
     if _item_playable_now(state, item):
         value += 1.5
     return value
+
+
+def _structure_unlock_value(state: dict[str, Any], item: dict[str, Any], bot_id: str) -> float:
+    legal_city_ids = set(_legal_placements(state, item))
+    if not legal_city_ids:
+        return 0.0
+    structures = [
+        card
+        for card in state.get("catalog", {}).get("cards", [])
+        if card.get("category") == "structure" and card.get("id") != item.get("id")
+    ]
+    if not structures:
+        return 0.0
+
+    current_resources = set(_production_counts(state)) | {
+        resource_id
+        for resource_id, amount in _counts(state.get("global_resource_pool")).items()
+        if amount > 0
+    }
+    candidate_resources = set(_counts((item.get("data") or {}).get("production")))
+    candidate_tags = _counts((item.get("data") or {}).get("tags"))
+    before_by_city = {
+        str(city.get("id") or ""): find_build_distances(
+            structures,
+            starting_resource_ids=current_resources,
+            starting_tags=_city_tag_counts(state, city),
+            max_buildings=UNLOCK_LOOKAHEAD_DEPTH,
+        )
+        for city in state.get("cities", [])
+    }
+    before = {
+        str(target.get("id") or ""): min(
+            (distances.get(str(target.get("id") or ""), UNLOCK_LOOKAHEAD_DEPTH + 1) for distances in before_by_city.values()),
+            default=UNLOCK_LOOKAHEAD_DEPTH + 1,
+        )
+        for target in structures
+    }
+
+    best_bonus = 0.0
+    for placement_id in legal_city_ids:
+        after_by_city = {}
+        for city in state.get("cities", []):
+            tags = Counter(_city_tag_counts(state, city))
+            if city.get("id") == placement_id:
+                tags.update(candidate_tags)
+            after_by_city[str(city.get("id") or "")] = find_build_distances(
+                structures,
+                starting_resource_ids=current_resources | candidate_resources,
+                starting_tags=dict(tags),
+                max_buildings=UNLOCK_LOOKAHEAD_DEPTH,
+                excluded_card_ids={str(item.get("id") or "")},
+            )
+
+        unlocks: list[float] = []
+        for target in structures:
+            target_id = str(target.get("id") or "")
+            after_distance = min(
+                (distances.get(target_id, UNLOCK_LOOKAHEAD_DEPTH + 1) for distances in after_by_city.values()),
+                default=UNLOCK_LOOKAHEAD_DEPTH + 1,
+            )
+            before_distance = before[target_id]
+            if after_distance >= before_distance or after_distance > UNLOCK_LOOKAHEAD_DEPTH:
+                continue
+            target_value = _item_value(
+                state,
+                target,
+                bot_id,
+                eras_ahead=after_distance + 1,
+                assume_ready=True,
+                include_unlocks=False,
+            )
+            if target_value < MIN_UNLOCK_TARGET_VALUE:
+                continue
+            distance_discount = 1.0 / (after_distance + 1)
+            unlocks.append(target_value * UNLOCK_VALUE_FACTOR * distance_discount)
+        unlocks.sort(reverse=True)
+        best_bonus = max(best_bonus, sum(unlocks[:UNLOCK_TARGET_LIMIT]))
+    return best_bonus
 
 
 def _effects_value(

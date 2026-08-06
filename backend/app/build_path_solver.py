@@ -18,6 +18,66 @@ class BuildPathResult:
     paths: tuple[BuildPath, ...]
 
 
+def find_build_distances(
+    cards: Iterable[dict[str, Any]],
+    *,
+    starting_resource_ids: Iterable[str],
+    starting_tags: dict[str, int],
+    max_buildings: int = 3,
+    excluded_card_ids: Iterable[str] = (),
+) -> dict[str, int]:
+    """Return the fewest prerequisite Structures needed before each card is buildable."""
+    structures = sorted(
+        (
+            card
+            for card in cards
+            if isinstance(card, dict)
+            and card.get("category") == "structure"
+            and str(card.get("id") or "")
+        ),
+        key=lambda card: str(card["id"]),
+    )
+    excluded = {str(card_id) for card_id in excluded_card_ids}
+    tag_caps: dict[str, int] = {}
+    for card in structures:
+        for tag_id, count in _requirements(card)[1].items():
+            tag_caps[tag_id] = max(tag_caps.get(tag_id, 0), count)
+
+    initial_resources = frozenset(str(resource_id) for resource_id in starting_resource_ids if resource_id)
+    initial_tags = dict(_tag_state(_positive_counts(starting_tags), tag_caps))
+    frontier: list[tuple[frozenset[str], dict[str, int]]] = [(initial_resources, initial_tags)]
+    seen = {(initial_resources, _tag_state(initial_tags, tag_caps))}
+    distances: dict[str, int] = {}
+
+    for depth in range(max(0, int(max_buildings)) + 1):
+        next_frontier: list[tuple[frozenset[str], dict[str, int]]] = []
+        for resources, tags in frontier:
+            buildable = [card for card in structures if _can_build(card, resources, tags)]
+            for card in buildable:
+                distances.setdefault(str(card["id"]), depth)
+            if depth >= max_buildings:
+                continue
+            for card in buildable:
+                if str(card["id"]) in excluded:
+                    continue
+                contributed_resources, contributed_tags = _contributions(card)
+                next_resources = resources | contributed_resources
+                uncapped_tags = Counter(tags)
+                uncapped_tags.update(contributed_tags)
+                next_tags = dict(_tag_state(dict(uncapped_tags), tag_caps))
+                if next_resources == resources and next_tags == tags:
+                    continue
+                state_key = (next_resources, _tag_state(next_tags, tag_caps))
+                if state_key in seen:
+                    continue
+                seen.add(state_key)
+                next_frontier.append((next_resources, next_tags))
+        frontier = next_frontier
+        if not frontier:
+            break
+    return distances
+
+
 def _positive_counts(value: Any) -> dict[str, int]:
     if not isinstance(value, dict):
         return {}

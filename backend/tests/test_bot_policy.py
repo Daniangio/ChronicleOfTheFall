@@ -163,6 +163,53 @@ class TestBotPolicy(unittest.TestCase):
         self.assertEqual(action["type"], "select_commit_card")
         self.assertEqual(action["item_id"], "garrison")
 
+    def test_bot_plays_prerequisite_tag_that_unlocks_high_value_card(self):
+        industry_seed = catalog_entry(
+            "industry-seed",
+            "Industry Seed",
+            "cards",
+            category="structure",
+            data={
+                "required_tags": {},
+                "cost": {"labor": 1},
+                "tags": {"industry": 1},
+                "production": {},
+            },
+        )
+        academy = catalog_entry(
+            "industrial-academy",
+            "Industrial Academy",
+            "cards",
+            category="structure",
+            data={
+                "required_tags": {"industry": 1},
+                "cost": {"labor": 1},
+                "tags": {"science": 2},
+                "production": {"knowledge": 1},
+            },
+        )
+        science_agenda = agenda_for_tag("science", resource_id="knowledge")
+        state = prepare_bot_state()
+        state["catalog"]["cards"].extend([industry_seed, academy])
+        state["catalog"]["agendas"].append(science_agenda)
+        bot = state["players"][1]
+        bot["hidden_agenda_id"] = science_agenda["id"]
+        bot["hand"] = ["farm", "industry-seed"]
+        bot["scheme_slots"] = [None, None]
+        bot["committed"] = False
+        state["phase"] = "plotting"
+        state["active_player_id"] = ""
+        state["global_resource_pool"] = {"labor": 2}
+        for player in state["players"]:
+            if player["id"] != bot["id"]:
+                player["committed"] = True
+        state = _prepare_state(state)
+
+        action = choose_next_bot_action(state)
+
+        self.assertEqual(action["type"], "select_commit_card")
+        self.assertEqual(action["item_id"], "industry-seed")
+
     def test_bot_schemes_valuable_card_expected_within_three_eras(self):
         academy = catalog_entry(
             "academy",

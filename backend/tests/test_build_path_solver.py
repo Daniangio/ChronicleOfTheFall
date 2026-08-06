@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from backend.app.build_path_solver import find_minimal_build_paths
+from backend.app.build_path_solver import find_build_distances, find_minimal_build_paths
 
 
 def card(
@@ -119,3 +119,36 @@ def test_repeated_structure_copies_can_satisfy_tag_counts():
 
     assert result.minimum_buildings == 2
     assert result.paths[0].building_card_ids == ("chapel", "chapel")
+
+
+def test_build_distances_expose_bounded_unlock_tree():
+    cards = [
+        card("workshop", cost={"labor": 1}, tags={"industry": 1}),
+        card("academy", required_tags={"industry": 1}, tags={"science": 1}),
+        card("observatory", required_tags={"science": 1}),
+    ]
+
+    distances = find_build_distances(
+        cards,
+        starting_resource_ids={"labor"},
+        starting_tags={},
+        max_buildings=2,
+    )
+
+    assert distances == {"workshop": 0, "academy": 1, "observatory": 2}
+
+
+def test_build_distances_can_start_after_a_candidate_is_added():
+    cards = [
+        card("academy", required_tags={"industry": 1}, tags={"science": 1}),
+        card("observatory", required_tags={"science": 1}),
+    ]
+
+    distances = find_build_distances(
+        cards,
+        starting_resource_ids={"labor"},
+        starting_tags={"industry": 1},
+        max_buildings=1,
+    )
+
+    assert distances == {"academy": 0, "observatory": 1}
