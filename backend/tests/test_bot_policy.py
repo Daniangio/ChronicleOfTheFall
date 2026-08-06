@@ -50,6 +50,23 @@ def prepare_bot_state(*, player_count: int = 4) -> dict:
     return advance_bot_players(state)
 
 
+def advance_bot_until_selection(state: dict) -> tuple[dict, dict, list[dict]]:
+    actions = []
+    for _ in range(8):
+        action = choose_next_bot_action(state)
+        if action is None:
+            raise AssertionError("Bot stopped before selecting a commitment.")
+        actions.append(action)
+        if action["type"] == "select_commit_card":
+            return state, action, actions
+        payload = {key: value for key, value in action.items() if key != "type"}
+        state = perform_action(state, action["type"], payload)
+        if action["type"] == "plotting_scheme" and action.get("mode") == "swap":
+            player = next(player for player in state["players"] if player["id"] == action["player_id"])
+            player["bot_scheme_adjusted_era"] = state["era"]
+    raise AssertionError("Bot did not select a commitment within the action limit.")
+
+
 class TestBotPolicy(unittest.TestCase):
     def test_variable_player_setup_creates_one_human_and_remaining_bots(self):
         for player_count in (3, 4, 5):
@@ -158,7 +175,7 @@ class TestBotPolicy(unittest.TestCase):
                 player["committed"] = True
         state = _prepare_state(state)
 
-        action = choose_next_bot_action(state)
+        _, action, _ = advance_bot_until_selection(state)
 
         self.assertEqual(action["type"], "select_commit_card")
         self.assertEqual(action["item_id"], "garrison")
@@ -205,10 +222,62 @@ class TestBotPolicy(unittest.TestCase):
                 player["committed"] = True
         state = _prepare_state(state)
 
-        action = choose_next_bot_action(state)
+        _, action, _ = advance_bot_until_selection(state)
 
         self.assertEqual(action["type"], "select_commit_card")
         self.assertEqual(action["item_id"], "industry-seed")
+
+    def test_bot_fills_both_scheme_slots_and_prioritizes_a_crisis(self):
+        military_agenda = agenda_for_tag("military")
+        state = prepare_bot_state()
+        state["catalog"]["agendas"].append(military_agenda)
+        bot = state["players"][1]
+        bot["hidden_agenda_id"] = military_agenda["id"]
+        bot["hand"] = ["farm", "garrison", "tax-riots", "border-raid"]
+        bot["scheme_slots"] = [None, None]
+        bot["committed"] = False
+        state["phase"] = "plotting"
+        state["active_player_id"] = ""
+        state["global_resource_pool"] = {"labor": 2}
+        for player in state["players"]:
+            if player["id"] != bot["id"]:
+                player["committed"] = True
+        state = _prepare_state(state)
+
+        state, action, actions = advance_bot_until_selection(state)
+        updated_bot = next(player for player in state["players"] if player["id"] == bot["id"])
+
+        self.assertEqual(action["item_id"], "garrison")
+        self.assertTrue(all(updated_bot["scheme_slots"]))
+        self.assertIn("border-raid", updated_bot["scheme_slots"])
+        self.assertGreaterEqual(
+            sum(candidate["type"] == "plotting_scheme" for candidate in actions),
+            2,
+        )
+
+    def test_bot_prefers_crisis_for_the_last_empty_scheme_slot(self):
+        military_agenda = agenda_for_tag("military")
+        state = prepare_bot_state()
+        state["catalog"]["agendas"].append(military_agenda)
+        bot = state["players"][1]
+        bot["hidden_agenda_id"] = military_agenda["id"]
+        bot["hand"] = ["garrison", "tax-riots", "border-raid"]
+        bot["scheme_slots"] = ["farm", None]
+        bot["committed"] = False
+        state["phase"] = "plotting"
+        state["active_player_id"] = ""
+        state["global_resource_pool"] = {"labor": 2}
+        for player in state["players"]:
+            if player["id"] != bot["id"]:
+                player["committed"] = True
+        state = _prepare_state(state)
+
+        action = choose_next_bot_action(state)
+
+        self.assertEqual(action["type"], "plotting_scheme")
+        self.assertEqual(action["mode"], "to_scheme")
+        self.assertEqual(action["hand_index"], 2)
+        self.assertEqual(action["slot_index"], 1)
 
     def test_bot_schemes_valuable_card_expected_within_three_eras(self):
         academy = catalog_entry(

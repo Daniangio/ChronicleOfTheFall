@@ -33,6 +33,10 @@ from .goldfishing_engine import (
 MAX_BOT_STEPS = 128
 MAX_SIMULATION_STEPS = 25000
 SCHEME_HORIZON_ERAS = 3
+CRISIS_SCHEME_BONUS = 6.0
+EVENT_SCHEME_BONUS = 1.0
+FUTURE_SCHEME_BONUS = 3.0
+SCHEME_REPLACEMENT_MARGIN = 1.0
 MINISTER_CONTROL_BONUS = 2.0
 UNLOCK_LOOKAHEAD_DEPTH = 3
 UNLOCK_TARGET_LIMIT = 3
@@ -65,7 +69,7 @@ def advance_bot_players(state: dict[str, Any]) -> dict[str, Any]:
         action_type = str(action.get("type") or "")
         payload = {key: value for key, value in action.items() if key != "type"}
         next_state = perform_action(next_state, action_type, payload)
-        if action_type == "plotting_scheme":
+        if action_type == "plotting_scheme" and payload.get("mode") == "swap":
             player = _player(next_state, str(payload.get("player_id") or ""))
             player["bot_scheme_adjusted_era"] = int(next_state.get("era", 1))
     raise RuntimeError("Bot action loop exceeded its safety limit.")
@@ -89,7 +93,11 @@ def run_bot_simulation(state: dict[str, Any]) -> dict[str, Any]:
         action_type = str(action.get("type") or "")
         payload = {key: value for key, value in action.items() if key != "type"}
         next_state = perform_action(next_state, action_type, payload)
-        if action_type == "plotting_scheme" and payload.get("player_id"):
+        if (
+            action_type == "plotting_scheme"
+            and payload.get("mode") == "swap"
+            and payload.get("player_id")
+        ):
             player = _player(next_state, str(payload["player_id"]))
             player["bot_scheme_adjusted_era"] = int(next_state.get("era", 1))
     raise RuntimeError(f"Bot simulation exceeded {MAX_SIMULATION_STEPS} actions.")
@@ -227,24 +235,40 @@ def _choose_plotting_action(
         (action for action in actions if action["type"] == "confirm_plotting"),
         None,
     )
-    if player.get("selected_commitment") and confirm_action:
-        return confirm_action
     already_adjusted = int(player.get("bot_scheme_adjusted_era", 0)) == int(state.get("era", 1))
     select_actions = [action for action in actions if action["type"] == "select_commit_card"]
-    if not already_adjusted:
-        scheme_action = _choose_scheme_action(state, bot_id, actions)
-        if scheme_action is not None:
-            return scheme_action
-    playable = [
-        action
-        for action in select_actions
-        if _item_playable_now(state, item_by_id(state, str(action.get("item_id") or "")))
-    ]
-    candidates = playable or select_actions
-    if not candidates:
+    preferred_commitment = _preferred_plotting_commitment(state, bot_id, select_actions)
+    scheme_action = _choose_scheme_action(
+        state,
+        bot_id,
+        actions,
+        preferred_commitment=preferred_commitment,
+        allow_replacement=not already_adjusted,
+    )
+    if scheme_action is not None:
+        return scheme_action
+    if player.get("selected_commitment") and confirm_action:
+        return confirm_action
+    if preferred_commitment is None:
         if confirm_action:
             return confirm_action
         raise ValueError("Bot has no Plotting action.")
+    return preferred_commitment
+
+
+def _preferred_plotting_commitment(
+    state: dict[str, Any],
+    bot_id: str,
+    actions: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    playable = [
+        action
+        for action in actions
+        if _item_playable_now(state, item_by_id(state, str(action.get("item_id") or "")))
+    ]
+    candidates = playable or actions
+    if not candidates:
+        return None
     return max(
         candidates,
         key=lambda action: (
@@ -259,22 +283,26 @@ def _choose_scheme_action(
     state: dict[str, Any],
     bot_id: str,
     actions: list[dict[str, Any]],
+    *,
+    preferred_commitment: dict[str, Any] | None,
+    allow_replacement: bool,
 ) -> dict[str, Any] | None:
     player = _player(state, bot_id)
-    legal_commit_count = sum(action["type"] == "select_commit_card" for action in actions)
-    if legal_commit_count < 2:
-        return None
+    selected = player.get("selected_commitment") or {}
+    reserved_source = selected.get("source")
+    reserved_index = int(selected.get("index", -1))
+    if not selected and preferred_commitment:
+        reserved_source = preferred_commitment.get("source")
+        reserved_index = int(preferred_commitment.get("index", -1))
+
     hand_candidates: list[tuple[float, int, str, int]] = []
     for index, item_id in enumerate(player.get("hand", [])):
+        if reserved_source == "hand" and reserved_index == index:
+            continue
         item = item_by_id(state, item_id)
-        if _item_playable_now(state, item):
-            continue
         readiness = _readiness_turns(state, item)
-        if not 1 <= readiness <= SCHEME_HORIZON_ERAS:
-            continue
-        score = _item_value(state, item, bot_id, eras_ahead=readiness, assume_ready=True)
-        if score > 2.0:
-            hand_candidates.append((score, readiness, item_id, index))
+        score = _scheme_card_value(state, item, bot_id, readiness)
+        hand_candidates.append((score, readiness, item_id, index))
     if not hand_candidates:
         return None
     candidate_score, _, _, hand_index = max(
@@ -297,18 +325,25 @@ def _choose_scheme_action(
             ),
             None,
         )
+    if not allow_replacement:
+        return None
     existing = [
         (
-            _item_value(state, item_by_id(state, item_id), bot_id, assume_ready=True),
+            _scheme_card_value(
+                state,
+                item_by_id(state, item_id),
+                bot_id,
+                _readiness_turns(state, item_by_id(state, item_id)),
+            ),
             index,
         )
         for index, item_id in enumerate(player.get("scheme_slots", []))
-        if item_id
+        if item_id and not (reserved_source == "scheme" and reserved_index == index)
     ]
     if not existing:
         return None
     lowest_score, slot_index = min(existing)
-    if candidate_score <= lowest_score + 1.0:
+    if candidate_score <= lowest_score + SCHEME_REPLACEMENT_MARGIN:
         return None
     return next(
         (
@@ -321,6 +356,33 @@ def _choose_scheme_action(
         ),
         None,
     )
+
+
+def _scheme_card_value(
+    state: dict[str, Any],
+    item: dict[str, Any],
+    bot_id: str,
+    readiness: int,
+) -> float:
+    within_horizon = 1 <= readiness <= SCHEME_HORIZON_ERAS
+    score = _item_value(
+        state,
+        item,
+        bot_id,
+        eras_ahead=readiness if within_horizon else 0,
+        assume_ready=within_horizon,
+    )
+    if within_horizon:
+        score += FUTURE_SCHEME_BONUS * (
+            (SCHEME_HORIZON_ERAS - readiness + 1) / SCHEME_HORIZON_ERAS
+        )
+    elif readiness > SCHEME_HORIZON_ERAS:
+        score -= min(readiness, 10) * 0.5
+    if _is_crisis(item):
+        score += CRISIS_SCHEME_BONUS
+    elif _is_event(item):
+        score += EVENT_SCHEME_BONUS
+    return score
 
 
 def _choose_docket_action(
