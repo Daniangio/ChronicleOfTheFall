@@ -56,6 +56,24 @@ const DataPill = ({ children }) => (
   </span>
 );
 
+const CatalogFilterSelect = ({ label, value, options, onChange }) => (
+  <label className="block min-w-[9rem] text-left">
+    <span className="block text-[0.65rem] font-semibold uppercase text-slate-500">{label}</span>
+    <select
+      className="mt-1 w-full rounded-md border border-slate-700 bg-slate-950 px-2 py-2 text-xs text-slate-200 outline-none focus:border-teal-400"
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+    >
+      <option value="">Any</option>
+      {options.map((option) => (
+        <option key={option.value || option.id} value={option.value || option.id}>
+          {option.label || option.name}
+        </option>
+      ))}
+    </select>
+  </label>
+);
+
 const emptyCatalogForm = {
   id: "",
   name: "",
@@ -64,6 +82,22 @@ const emptyCatalogForm = {
   color: "#64748b",
   dataText: "{}",
 };
+
+const filterableCardSections = new Set(["structures", "cities", "edicts", "crises"]);
+
+const entryEffects = (entry) => {
+  const data = entry?.data || {};
+  return [
+    ...(Array.isArray(data.on_build_effects) ? data.on_build_effects : []),
+    ...(Array.isArray(data.persistent_effects) ? data.persistent_effects : []),
+    ...(Array.isArray(data.main_effects) ? data.main_effects : []),
+    ...(Array.isArray(data.alternative_effects) ? data.alternative_effects : []),
+  ];
+};
+
+const effectTypeLabel = (effectType) => eventEffectOptions.find((option) => option.value === effectType)?.label
+  || ({ storage: "Add storage", add_building_slots: "Add building slots", modify_token: "Modify token" }[effectType])
+  || String(effectType || "").replaceAll("_", " ");
 
 const defaultAgendaData = {
   max_points: 8,
@@ -2479,6 +2513,10 @@ const AdminPage = () => {
   const [catalogForm, setCatalogForm] = useState(emptyCatalogForm);
   const [editorOpen, setEditorOpen] = useState(false);
   const [tagCategoryFilter, setTagCategoryFilter] = useState("all");
+  const [providedTagFilter, setProvidedTagFilter] = useState("");
+  const [producedResourceFilter, setProducedResourceFilter] = useState("");
+  const [effectTypeFilter, setEffectTypeFilter] = useState("");
+  const [modifiedPillarFilter, setModifiedPillarFilter] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -2496,6 +2534,14 @@ const AdminPage = () => {
       : activeSection;
   const isCatalogSection = catalogSections.has(activeCatalogKind);
   const isReadOnlyCatalogSection = readOnlyCatalogSections.has(activeCatalogKind);
+  const showsCardFilters = filterableCardSections.has(activeSection);
+
+  useEffect(() => {
+    setProvidedTagFilter("");
+    setProducedResourceFilter("");
+    setEffectTypeFilter("");
+    setModifiedPillarFilter("");
+  }, [activeSection]);
 
   const request = async (path, options = {}) => {
     const response = await fetch(buildApiUrl(path), {
@@ -2734,6 +2780,43 @@ const AdminPage = () => {
     [cardEntries]
   );
 
+  const cardFilterOptions = useMemo(() => {
+    const pageEntries = catalogEntries.filter((entry) => {
+      const matchesSubtype = !activeEventSubtype || String(entry.data?.subtype || "edict") === activeEventSubtype;
+      const matchesCategory = !activeCardCategory || entry.category === activeCardCategory;
+      return matchesSubtype && matchesCategory;
+    });
+    const providedTagIds = new Set();
+    const producedResourceIds = new Set();
+    const effectTypes = new Set();
+    const modifiedPillarIds = new Set();
+    pageEntries.forEach((entry) => {
+      Object.entries(entry.data?.tags || {}).forEach(([id, count]) => {
+        if (Number(count) > 0) providedTagIds.add(id);
+      });
+      Object.entries(entry.data?.production || {}).forEach(([id, count]) => {
+        if (Number(count) > 0) producedResourceIds.add(id);
+      });
+      entryEffects(entry).forEach((effect) => {
+        if (effect?.effect_type) effectTypes.add(effect.effect_type);
+        if (effect?.effect_type === "modify_pillar" && effect.payload?.pillar_id) {
+          modifiedPillarIds.add(effect.payload.pillar_id);
+        }
+        if (effect?.effect_type === "modify_resources" && Number(effect.payload?.amount || 0) > 0 && effect.payload?.resource_id) {
+          producedResourceIds.add(effect.payload.resource_id);
+        }
+      });
+    });
+    const byName = (left, right) => left.name.localeCompare(right.name);
+    return {
+      tags: tagEntries.filter((entry) => providedTagIds.has(entry.id)).sort(byName),
+      resources: tagEntries.filter((entry) => producedResourceIds.has(entry.id)).sort(byName),
+      effects: Array.from(effectTypes).map((value) => ({ value, label: effectTypeLabel(value) }))
+        .sort((left, right) => left.label.localeCompare(right.label)),
+      pillars: pillarEntries.filter((entry) => modifiedPillarIds.has(entry.id)).sort(byName),
+    };
+  }, [activeCardCategory, activeEventSubtype, catalogEntries, pillarEntries, tagEntries]);
+
   const filteredCatalogEntries = useMemo(() => {
     const normalized = query.trim().toLowerCase();
     return catalogEntries.filter((entry) => {
@@ -2748,9 +2831,32 @@ const AdminPage = () => {
         !activeEventSubtype ||
         String(entry.data?.subtype || "edict") === activeEventSubtype;
       const matchesCardCategory = !activeCardCategory || entry.category === activeCardCategory;
-      return matchesQuery && matchesCategory && matchesEventSubtype && matchesCardCategory;
+      const effects = entryEffects(entry);
+      const matchesProvidedTag = !providedTagFilter || Number(entry.data?.tags?.[providedTagFilter] || 0) > 0;
+      const matchesProducedResource = !producedResourceFilter
+        || Number(entry.data?.production?.[producedResourceFilter] || 0) > 0
+        || effects.some((effect) => effect.effect_type === "modify_resources"
+          && effect.payload?.resource_id === producedResourceFilter
+          && Number(effect.payload?.amount || 0) > 0);
+      const matchesEffectType = !effectTypeFilter || effects.some((effect) => effect.effect_type === effectTypeFilter);
+      const matchesModifiedPillar = !modifiedPillarFilter || effects.some((effect) => (
+        effect.effect_type === "modify_pillar" && effect.payload?.pillar_id === modifiedPillarFilter
+      ));
+      return matchesQuery && matchesCategory && matchesEventSubtype && matchesCardCategory
+        && matchesProvidedTag && matchesProducedResource && matchesEffectType && matchesModifiedPillar;
     });
-  }, [activeCardCategory, activeCatalogKind, activeEventSubtype, catalogEntries, query, tagCategoryFilter]);
+  }, [
+    activeCardCategory,
+    activeCatalogKind,
+    activeEventSubtype,
+    catalogEntries,
+    effectTypeFilter,
+    modifiedPillarFilter,
+    producedResourceFilter,
+    providedTagFilter,
+    query,
+    tagCategoryFilter,
+  ]);
 
   const tagCategories = useMemo(
     () => Array.from(new Set(catalogEntries.map((entry) => entry.category || "uncategorized"))).sort(),
@@ -3536,6 +3642,47 @@ const AdminPage = () => {
                   ))}
                 </select>
               </label>
+            ) : showsCardFilters ? (
+              <div className="flex flex-wrap items-end gap-2">
+                <CatalogFilterSelect
+                  label="Provides tag"
+                  value={providedTagFilter}
+                  options={cardFilterOptions.tags}
+                  onChange={setProvidedTagFilter}
+                />
+                <CatalogFilterSelect
+                  label="Produces"
+                  value={producedResourceFilter}
+                  options={cardFilterOptions.resources}
+                  onChange={setProducedResourceFilter}
+                />
+                <CatalogFilterSelect
+                  label="Effect"
+                  value={effectTypeFilter}
+                  options={cardFilterOptions.effects}
+                  onChange={setEffectTypeFilter}
+                />
+                <CatalogFilterSelect
+                  label="Modifies pillar"
+                  value={modifiedPillarFilter}
+                  options={cardFilterOptions.pillars}
+                  onChange={setModifiedPillarFilter}
+                />
+                {(providedTagFilter || producedResourceFilter || effectTypeFilter || modifiedPillarFilter) ? (
+                  <button
+                    className="mb-px rounded-md border border-slate-700 px-3 py-2 text-xs font-semibold text-slate-300 hover:bg-slate-800"
+                    onClick={() => {
+                      setProvidedTagFilter("");
+                      setProducedResourceFilter("");
+                      setEffectTypeFilter("");
+                      setModifiedPillarFilter("");
+                    }}
+                    type="button"
+                  >
+                    Clear filters
+                  </button>
+                ) : null}
+              </div>
             ) : (
               <span />
             )}
