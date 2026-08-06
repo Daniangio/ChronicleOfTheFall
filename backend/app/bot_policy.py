@@ -448,7 +448,29 @@ def _action_value(state: dict[str, Any], bot_id: str, action: dict[str, Any]) ->
         successor = perform_action(state, action_type, payload)
     except (KeyError, TypeError, ValueError):
         return float("-inf")
+    if action_type == "choose_unrest_resolution":
+        successor = _simulate_revolt_destructions(successor, bot_id)
     return _board_value(successor, bot_id)
+
+
+def _simulate_revolt_destructions(state: dict[str, Any], bot_id: str) -> dict[str, Any]:
+    successor = state
+    while successor.get("pending_unrest_resolution"):
+        actions = [
+            action
+            for action in successor.get("possible_actions", [])
+            if action.get("type") == "choose_revolt_destroy_building"
+            and action.get("player_id") == bot_id
+        ]
+        if not actions:
+            break
+        candidates: list[tuple[float, str, dict[str, Any]]] = []
+        for action in actions:
+            payload = {key: value for key, value in action.items() if key != "type"}
+            candidate = perform_action(successor, action["type"], payload)
+            candidates.append((_board_value(candidate, bot_id), _stable_action_key(action), candidate))
+        successor = max(candidates, key=lambda entry: (entry[0], entry[1]))[2]
+    return successor
 
 
 def _choose_storage(state: dict[str, Any], bot_id: str) -> dict[str, int]:
@@ -498,7 +520,7 @@ def _board_value(state: dict[str, Any], bot_id: str) -> float:
                 score += weight
         forbidden = ((agenda.get("data") or {}).get("forbidden") or {}).get("conditions") or []
         if forbidden and all(_agenda_condition_met(state, condition) for condition in forbidden):
-            score -= 12.0
+            score -= 1.0
     return score
 
 
@@ -719,7 +741,7 @@ def _agenda_profile(state: dict[str, Any], player_id: str) -> dict[str, defaultd
     if not agenda:
         return profile
     data = agenda.get("data") or {}
-    for section_name, section_weight in (("primary", 4.0), ("secondary", 2.0), ("collapse", 2.0), ("forbidden", -4.0)):
+    for section_name, section_weight in (("primary", 4.0), ("secondary", 2.0), ("collapse", 2.0), ("forbidden", -1.0)):
         conditions = (data.get(section_name) or {}).get("conditions") or []
         for condition in conditions:
             met = _agenda_condition_met(state, condition)
@@ -787,7 +809,7 @@ def _agenda_potential(state: dict[str, Any], agenda_id: str) -> float:
             value += weight * sum(_condition_progress(state, condition) for condition in conditions) / len(conditions)
     forbidden = (data.get("forbidden") or {}).get("conditions") or []
     if forbidden:
-        value += 3.0 * (1.0 - sum(_condition_progress(state, condition) for condition in forbidden) / len(forbidden))
+        value += 1.0 * (1.0 - sum(_condition_progress(state, condition) for condition in forbidden) / len(forbidden))
     return value
 
 

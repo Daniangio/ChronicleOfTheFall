@@ -60,7 +60,7 @@ def agenda_data(**extra):
         "max_points": 8,
         "win_threshold": 6,
         "primary_mandatory": True,
-        "forbidden_is_veto": True,
+        "forbidden_is_veto": False,
         "primary": {
             "name": "Primary",
             "points": 4,
@@ -81,7 +81,7 @@ def agenda_data(**extra):
         },
         "forbidden": {
             "name": "Forbidden",
-            "points": 0,
+            "points": -1,
             "text": "Military is highest.",
             "conditions": [{"type": "tag_is_highest", "tag": "military"}],
         },

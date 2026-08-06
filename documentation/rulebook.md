@@ -8,7 +8,7 @@ Administration, Event Queue, Pitch, Exhaustion, mana-allocation, and Decay rules
 The implemented Era sequence is:
 
 1. Office Rotation
-2. Council Vote and Suspicion
+2. Council Vote for City Charters; skip it when no Charters remain
 3. Production
 4. Plotting
 5. Hand Reset
@@ -26,3 +26,11 @@ variants with the same name are considered the same Structure for this rule.
 The same Structure name may be present in different Cities.
 
 The Empire collapses immediately when any configured Pillar reaches zero.
+
+At collapse, Hidden Agendas score 4 points for the Primary, 2 points for each
+Secondary objective, and -1 point when the Forbidden condition is true. Players
+need at least 6 points to qualify. The highest qualifying score wins, with all
+players tied at that score sharing victory.
+
+Suspicion is disabled in the current prototype. Plague, Unrest, Revolts, and
+Fortified resolve according to Sections 20-23 of the canonical rules.

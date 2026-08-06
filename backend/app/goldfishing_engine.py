@@ -13,6 +13,7 @@ EMPIRE_HAND_SIZE = 1
 NORMAL_REFILL_SIZE = 3
 STATE_REFILL_SIZE = 4
 SCHEME_SLOTS = 2
+SUSPICION_ENABLED = False
 MINISTRY_ROTATION_ORDER = ("cities", "state", "war", "health")
 AGENDA_SCORING_TAGS = ("culture", "diplomacy", "faith", "industry", "military", "sanitary", "science")
 
@@ -258,6 +259,8 @@ def build_goldfishing_state(
         "pending_event_city_tokens": None,
         "pending_event_unrest_scope": None,
         "pending_event_destroy_building": None,
+        "pending_unrest_resolution": None,
+        "condition_tokens": {},
         "structure_tag_requirement_waivers": 0,
         "plague_morale_suppressed": False,
         "refill_draw_penalty": 0,
@@ -336,6 +339,8 @@ def perform_action(state: dict[str, Any], action: str, payload: dict[str, Any] |
         "choose_event_token_city": _choose_event_token_city,
         "choose_event_unrest_scope": _choose_event_unrest_scope,
         "choose_event_destroy_building": _choose_event_destroy_building,
+        "choose_unrest_resolution": _choose_unrest_resolution,
+        "choose_revolt_destroy_building": _choose_revolt_destroy_building,
         "reveal_next": _reveal_next,
         "place_revealed_card": _place_revealed_card,
         "store_resources": _store_resources,
@@ -422,6 +427,8 @@ def _cast_council_vote(state: dict[str, Any], payload: dict[str, Any]) -> None:
     if player_id in state["council_votes"]:
         raise ValueError("This player already cast a Council vote.")
     if target_type == "player":
+        if not SUSPICION_ENABLED:
+            raise ValueError("Suspicion is disabled.")
         if int(state.get("era", 1)) < int(state.get("suspicion_start_era", 5)):
             raise ValueError("Suspicion is not active yet.")
         if target_id == state.get("minister_of_empire_player_id"):
@@ -462,7 +469,7 @@ def _council_vote_targets(state: dict[str, Any], player_id: str) -> list[dict[st
         {"target_type": "city", "target_id": city_id}
         for city_id in state.get("available_city_card_ids", [])
     ]
-    if int(state.get("era", 1)) >= int(state.get("suspicion_start_era", 5)):
+    if SUSPICION_ENABLED and int(state.get("era", 1)) >= int(state.get("suspicion_start_era", 5)):
         protected_player_id = state.get("minister_of_empire_player_id")
         targets.extend(
             {"target_type": "player", "target_id": player["id"]}
@@ -1106,6 +1113,37 @@ def _possible_actions(state: dict[str, Any]) -> list[dict[str, Any]]:
     active = state.get("active_player_id")
     if phase == "game_over":
         return []
+    pending_unrest = state.get("pending_unrest_resolution")
+    if pending_unrest:
+        if int(pending_unrest.get("remaining_destructions", 0)) > 0:
+            city = next(
+                (city for city in state.get("cities", []) if city["id"] == pending_unrest.get("city_id")),
+                None,
+            )
+            return [
+                {
+                    "type": "choose_revolt_destroy_building",
+                    "player_id": pending_unrest["decision_player_id"],
+                    "city_id": city["id"],
+                    "card_id": card_id,
+                }
+                for card_id in (city or {}).get("cards", [])
+            ]
+        choices = (
+            ("suppress", "buy_peace", "let_burn")
+            if pending_unrest.get("scope") == "city"
+            else ("repression", "concessions", "fragmentation")
+        )
+        return [
+            {
+                "type": "choose_unrest_resolution",
+                "player_id": pending_unrest["decision_player_id"],
+                "scope": pending_unrest["scope"],
+                "choice": choice,
+                **({"city_id": pending_unrest["city_id"]} if pending_unrest.get("city_id") else {}),
+            }
+            for choice in choices
+        ]
     if phase == "agenda_selection":
         return [
             {"type": "choose_agenda", "player_id": player["id"], "agenda_id": agenda_id}
@@ -1516,12 +1554,8 @@ def _apply_on_build_effects(state: dict[str, Any], card: dict[str, Any], city: d
         elif effect.get("effect_type") == "modify_token":
             token_id = str(payload.get("token_id") or "")
             if token_id:
-                tokens = city.setdefault("condition_tokens", {})
-                next_amount = max(0, int(tokens.get(token_id, 0)) + int(payload.get("amount", 0)))
-                if next_amount:
-                    tokens[token_id] = next_amount
-                else:
-                    tokens.pop(token_id, None)
+                _modify_city_token_count(city, token_id, int(payload.get("amount", 0)))
+    _maybe_begin_unrest_resolution(state, city_id=city["id"])
 
 
 def _production_for_card(card: dict[str, Any]) -> Counter:
@@ -1710,6 +1744,16 @@ def _apply_event_effects(
                 return False
             if scope == "global":
                 _modify_token_count(state.setdefault("condition_tokens", {}), token_id, amount)
+                if token_id == "unrest-token" and _maybe_begin_unrest_resolution(
+                    state,
+                    resume=_event_resume(
+                        event,
+                        list(effects[index + 1:]),
+                        continuation,
+                        requirements_met,
+                    ),
+                ):
+                    return False
             elif len(state.get("cities", [])) > 1:
                 role = {
                     "modify_plague": "health",
@@ -1729,11 +1773,19 @@ def _apply_event_effects(
                 state["active_player_id"] = decision_player
                 return False
             elif state.get("cities"):
-                _modify_token_count(
-                    state["cities"][0].setdefault("condition_tokens", {}),
-                    token_id,
-                    amount,
-                )
+                city = state["cities"][0]
+                _modify_city_token_count(city, token_id, amount)
+                if token_id == "unrest-token" and _maybe_begin_unrest_resolution(
+                    state,
+                    city_id=city["id"],
+                    resume=_event_resume(
+                        event,
+                        list(effects[index + 1:]),
+                        continuation,
+                        requirements_met,
+                    ),
+                ):
+                    return False
         elif effect_type == "modify_city_tokens" and state.get("cities"):
             if len(state["cities"]) > 1:
                 decision_player = _event_choice_minister_player(state, event)
@@ -1748,7 +1800,19 @@ def _apply_event_effects(
                 }
                 state["active_player_id"] = decision_player
                 return False
-            _apply_city_token_changes(state["cities"][0], payload.get("tokens") or {})
+            city = state["cities"][0]
+            _apply_city_token_changes(city, payload.get("tokens") or {})
+            if _maybe_begin_unrest_resolution(
+                state,
+                city_id=city["id"],
+                resume=_event_resume(
+                    event,
+                    list(effects[index + 1:]),
+                    continuation,
+                    requirements_met,
+                ),
+            ):
+                return False
         elif effect_type == "waive_next_structure_tag_requirement":
             state["structure_tag_requirement_waivers"] = (
                 int(state.get("structure_tag_requirement_waivers", 0)) + 1
@@ -1770,10 +1834,138 @@ def _modify_token_count(tokens: dict[str, int], token_id: str, amount: int) -> N
         tokens.pop(token_id, None)
 
 
+def _modify_city_token_count(city: dict[str, Any], token_id: str, amount: int) -> None:
+    tokens = city.setdefault("condition_tokens", {})
+    _modify_token_count(tokens, token_id, amount)
+    if token_id == "fortified-token" and int(tokens.get(token_id, 0)) > 1:
+        tokens[token_id] = 1
+
+
 def _apply_city_token_changes(city: dict[str, Any], token_changes: dict[str, Any]) -> None:
-    city_tokens = city.setdefault("condition_tokens", {})
     for token_id, amount in token_changes.items():
-        _modify_token_count(city_tokens, str(token_id), int(amount or 0))
+        _modify_city_token_count(city, str(token_id), int(amount or 0))
+
+
+def _event_resume(
+    event: dict[str, Any],
+    remaining_effects: list[dict[str, Any]],
+    continuation: str,
+    requirements_met: bool,
+) -> dict[str, Any]:
+    return {
+        "event_id": event["id"],
+        "remaining_effects": list(remaining_effects),
+        "continuation": continuation,
+        "requirements_met": requirements_met,
+    }
+
+
+def _maybe_begin_unrest_resolution(
+    state: dict[str, Any],
+    *,
+    city_id: str = "",
+    resume: dict[str, Any] | None = None,
+) -> bool:
+    if state.get("pending_unrest_resolution"):
+        return True
+    if city_id:
+        city = next((city for city in state.get("cities", []) if city["id"] == city_id), None)
+        if not city or int(city.get("condition_tokens", {}).get("unrest-token", 0)) < 2:
+            return False
+        scope = "city"
+    else:
+        if int(state.get("condition_tokens", {}).get("unrest-token", 0)) < 3:
+            return False
+        scope = "global"
+    decision_player_id = _ministry_holder(state, "war") or state["minister_of_empire_player_id"]
+    state["pending_unrest_resolution"] = {
+        "scope": scope,
+        "city_id": city_id,
+        "decision_player_id": decision_player_id,
+        "remaining_destructions": 0,
+        "resume": resume,
+    }
+    state["active_player_id"] = decision_player_id
+    target = next((city.get("name") for city in state.get("cities", []) if city["id"] == city_id), "the Empire")
+    state["log"].append(f"Unrest triggered a Revolt in {target}.")
+    return True
+
+
+def _choose_unrest_resolution(state: dict[str, Any], payload: dict[str, Any]) -> None:
+    pending = state.get("pending_unrest_resolution")
+    if not pending:
+        raise ValueError("No Unrest resolution is pending.")
+    _require_decision_player(state, payload, pending["decision_player_id"])
+    choice = str(payload.get("choice") or "")
+    if pending["scope"] == "city":
+        city = next(city for city in state["cities"] if city["id"] == pending["city_id"])
+        if choice not in {"suppress", "buy_peace", "let_burn"}:
+            raise ValueError("Unknown City Revolt resolution.")
+        city.setdefault("condition_tokens", {}).pop("unrest-token", None)
+        if choice == "suppress":
+            _modify_pillar(state, _pillar_id_by_name(state, "morale"), -2)
+        elif choice == "buy_peace":
+            _modify_pillar(state, _pillar_id_by_name(state, "treasury"), -2)
+        else:
+            pending["remaining_destructions"] = min(2, len(city.get("cards", [])))
+            if pending["remaining_destructions"]:
+                state["log"].append(f"The Revolt in {city['name']} will destroy Structures.")
+                return
+    else:
+        if choice not in {"repression", "concessions", "fragmentation"}:
+            raise ValueError("Unknown Imperial Unrest resolution.")
+        state.setdefault("condition_tokens", {}).pop("unrest-token", None)
+        if choice == "repression":
+            _modify_pillar(state, _pillar_id_by_name(state, "morale"), -2)
+            _modify_pillar(state, _pillar_id_by_name(state, "stability"), 1)
+        elif choice == "concessions":
+            _modify_pillar(state, _pillar_id_by_name(state, "treasury"), -2)
+            _modify_pillar(state, _pillar_id_by_name(state, "morale"), 1)
+        else:
+            _modify_pillar(state, _pillar_id_by_name(state, "stability"), -2)
+            _modify_pillar(state, _pillar_id_by_name(state, "treasury"), 1)
+    state["log"].append(f"The Minister of War resolved Unrest through {choice.replace('_', ' ')}.")
+    _finish_unrest_resolution(state)
+
+
+def _choose_revolt_destroy_building(state: dict[str, Any], payload: dict[str, Any]) -> None:
+    pending = state.get("pending_unrest_resolution")
+    if not pending or int(pending.get("remaining_destructions", 0)) <= 0:
+        raise ValueError("No Revolt destruction is pending.")
+    _require_decision_player(state, payload, pending["decision_player_id"])
+    city_id = str(payload.get("city_id") or "")
+    card_id = str(payload.get("card_id") or "")
+    if city_id != pending.get("city_id"):
+        raise ValueError("That City is not resolving the Revolt.")
+    _destroy_building(state, city_id, card_id)
+    pending["remaining_destructions"] = int(pending["remaining_destructions"]) - 1
+    city = next(city for city in state["cities"] if city["id"] == city_id)
+    if pending["remaining_destructions"] > 0 and city.get("cards"):
+        return
+    _finish_unrest_resolution(state)
+
+
+def _finish_unrest_resolution(state: dict[str, Any]) -> None:
+    pending = state.get("pending_unrest_resolution") or {}
+    resume = pending.get("resume")
+    state["pending_unrest_resolution"] = None
+    if not resume or any(int(value) <= 0 for value in state.get("pillars", {}).values()):
+        return
+    event = event_by_id(state, resume["event_id"])
+    completed = _apply_event_effects(
+        state,
+        event,
+        resume["remaining_effects"],
+        continuation=resume["continuation"],
+        requirements_met=bool(resume["requirements_met"]),
+    )
+    if completed:
+        _complete_event_resolution(
+            state,
+            event,
+            continuation=resume["continuation"],
+            requirements_met=bool(resume["requirements_met"]),
+        )
 
 
 def _event_resource_choices(state: dict[str, Any], amount: int) -> list[str]:
@@ -1965,6 +2157,12 @@ def _choose_event_token_city(state: dict[str, Any], payload: dict[str, Any]) -> 
     continuation = pending["continuation"]
     requirements_met = bool(pending["requirements_met"])
     state["pending_event_city_tokens"] = None
+    if _maybe_begin_unrest_resolution(
+        state,
+        city_id=city_id,
+        resume=_event_resume(event, remaining_effects, continuation, requirements_met),
+    ):
+        return
     completed = _apply_event_effects(
         state,
         event,
@@ -1998,6 +2196,16 @@ def _choose_event_unrest_scope(state: dict[str, Any], payload: dict[str, Any]) -
             "unrest-token",
             amount,
         )
+        if _maybe_begin_unrest_resolution(
+            state,
+            resume=_event_resume(
+                event,
+                pending["remaining_effects"],
+                pending["continuation"],
+                bool(pending["requirements_met"]),
+            ),
+        ):
+            return
     elif len(state.get("cities", [])) > 1:
         state["pending_event_city_tokens"] = {
             "event_id": event["id"],
@@ -2010,11 +2218,19 @@ def _choose_event_unrest_scope(state: dict[str, Any], payload: dict[str, Any]) -
         }
         return
     elif state.get("cities"):
-        _modify_token_count(
-            state["cities"][0].setdefault("condition_tokens", {}),
-            "unrest-token",
-            amount,
-        )
+        city = state["cities"][0]
+        _modify_city_token_count(city, "unrest-token", amount)
+        if _maybe_begin_unrest_resolution(
+            state,
+            city_id=city["id"],
+            resume=_event_resume(
+                event,
+                pending["remaining_effects"],
+                pending["continuation"],
+                bool(pending["requirements_met"]),
+            ),
+        ):
+            return
     completed = _apply_event_effects(
         state,
         event,
@@ -2258,19 +2474,18 @@ def _agenda_evaluation(state: dict[str, Any], agenda_id: str) -> dict[str, Any]:
         return {"agenda_id": agenda_id, "eligible": False, "score": 0, "sections": {}}
     data = agenda.get("data") or {}
     sections: dict[str, bool] = {}
-    score = 0
+    section_points = {"primary": 4, "secondary": 2, "collapse": 2, "forbidden": -1}
     for section_name in ("primary", "secondary", "collapse", "forbidden"):
         section = data.get(section_name) or {}
         conditions = section.get("conditions") or []
         met = bool(conditions) and all(_agenda_condition_met(state, condition) for condition in conditions)
         sections[section_name] = met
-        if section_name != "forbidden" and met:
-            score += int(section.get("points") or 0)
-    eligible = (
-        sections.get("primary", False)
-        and not sections.get("forbidden", False)
-        and score >= int(data.get("win_threshold") or 6)
+    score = sum(
+        points
+        for section_name, points in section_points.items()
+        if sections.get(section_name, False)
     )
+    eligible = score >= 6
     return {
         "agenda_id": agenda_id,
         "eligible": eligible,
@@ -2294,16 +2509,10 @@ def _score_hidden_agendas(state: dict[str, Any]) -> None:
         state["winner_player_ids"] = []
         return
     highest_score = max(results[player["id"]]["score"] for player in eligible)
-    finalists = [player for player in eligible if results[player["id"]]["score"] == highest_score]
-    highest_cards = max(
-        len(player.get("hand", [])) + sum(bool(card_id) for card_id in player.get("scheme_slots", []))
-        for player in finalists
-    )
     state["winner_player_ids"] = [
         player["id"]
-        for player in finalists
-        if len(player.get("hand", [])) + sum(bool(card_id) for card_id in player.get("scheme_slots", []))
-        == highest_cards
+        for player in eligible
+        if results[player["id"]]["score"] == highest_score
     ]
 
 
@@ -2325,6 +2534,13 @@ def _destroy_building(state: dict[str, Any], city_id: str, card_id: str) -> None
     )
     if not city or card_id not in city.get("cards", []):
         raise ValueError("Structure not found.")
+    tokens = city.setdefault("condition_tokens", {})
+    if int(tokens.get("fortified-token", 0)) > 0:
+        tokens.pop("fortified-token", None)
+        state["log"].append(
+            f"Fortified protected {city.get('name', 'a City')} from Structure destruction."
+        )
+        return
     city["cards"].remove(card_id)
     _discard_item(state, card_id)
 
@@ -2405,6 +2621,8 @@ def _empire_tag_counts(state: dict[str, Any]) -> dict[str, int]:
         for card_id in [city.get("city_card_id"), *city.get("cards", [])]:
             if card_id:
                 tags.update(_counts((card_by_id(state, card_id).get("data") or {}).get("tags")))
+        if int(city.get("condition_tokens", {}).get("fortified-token", 0)) > 0:
+            tags["military"] += 1
     return _positive_counts(tags)
 
 
@@ -2413,6 +2631,8 @@ def _city_tag_counts(state: dict[str, Any], city: dict[str, Any]) -> dict[str, i
     for card_id in [city.get("city_card_id"), *city.get("cards", [])]:
         if card_id:
             tags.update(_counts((card_by_id(state, card_id).get("data") or {}).get("tags")))
+    if int(city.get("condition_tokens", {}).get("fortified-token", 0)) > 0:
+        tags["military"] += 1
     return _positive_counts(tags)
 
 

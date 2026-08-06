@@ -16,7 +16,7 @@
         "max_points": 8,
         "win_threshold": 6,
         "primary_mandatory": true,
-        "forbidden_is_veto": true,
+        "forbidden_is_veto": false,
         "primary": {
           "name": "Martial Legacy",
           "points": 4,
@@ -58,7 +58,7 @@
         },
         "forbidden": {
           "name": "No Diplomatic Capture",
-          "points": 0,
+          "points": -1,
           "text": "Diplomacy must be lower than 3.",
           "conditions": [
             {
@@ -69,7 +69,7 @@
             }
           ]
         },
-        "tie_breaker": "Highest Agenda score; if still tied, use the rulebook's remaining hand plus Scheme Slot tie-breaker; if still tied, share victory."
+        "tie_breaker": "Highest Agenda score; tied leaders share victory."
       }
     },
     {
@@ -83,7 +83,7 @@
         "max_points": 8,
         "win_threshold": 6,
         "primary_mandatory": true,
-        "forbidden_is_veto": true,
+        "forbidden_is_veto": false,
         "primary": {
           "name": "Martial Legacy",
           "points": 4,
@@ -126,7 +126,7 @@
         },
         "forbidden": {
           "name": "No Sacred Supremacy",
-          "points": 0,
+          "points": -1,
           "text": "Faith must not exceed Science.",
           "conditions": [
             {
@@ -137,7 +137,7 @@
             }
           ]
         },
-        "tie_breaker": "Highest Agenda score; if still tied, use the rulebook's remaining hand plus Scheme Slot tie-breaker; if still tied, share victory."
+        "tie_breaker": "Highest Agenda score; tied leaders share victory."
       }
     },
     {
@@ -151,7 +151,7 @@
         "max_points": 8,
         "win_threshold": 6,
         "primary_mandatory": true,
-        "forbidden_is_veto": true,
+        "forbidden_is_veto": false,
         "primary": {
           "name": "Industrial Legacy",
           "points": 4,
@@ -197,7 +197,7 @@
         },
         "forbidden": {
           "name": "No Popular Triumph",
-          "points": 0,
+          "points": -1,
           "text": "Morale must not be the highest surviving Pillar.",
           "conditions": [
             {
@@ -206,7 +206,7 @@
             }
           ]
         },
-        "tie_breaker": "Highest Agenda score; if still tied, use the rulebook's remaining hand plus Scheme Slot tie-breaker; if still tied, share victory."
+        "tie_breaker": "Highest Agenda score; tied leaders share victory."
       }
     },
     {
@@ -220,7 +220,7 @@
         "max_points": 8,
         "win_threshold": 6,
         "primary_mandatory": true,
-        "forbidden_is_veto": true,
+        "forbidden_is_veto": false,
         "primary": {
           "name": "Diplomatic Legacy",
           "points": 4,
@@ -266,7 +266,7 @@
         },
         "forbidden": {
           "name": "No Military Supremacy",
-          "points": 0,
+          "points": -1,
           "text": "Military must not be the highest scoring tag.",
           "conditions": [
             {
@@ -275,7 +275,7 @@
             }
           ]
         },
-        "tie_breaker": "Highest Agenda score; if still tied, use the rulebook's remaining hand plus Scheme Slot tie-breaker; if still tied, share victory."
+        "tie_breaker": "Highest Agenda score; tied leaders share victory."
       }
     },
     {
@@ -289,7 +289,7 @@
         "max_points": 8,
         "win_threshold": 6,
         "primary_mandatory": true,
-        "forbidden_is_veto": true,
+        "forbidden_is_veto": false,
         "primary": {
           "name": "Diplomatic Legacy",
           "points": 4,
@@ -335,7 +335,7 @@
         },
         "forbidden": {
           "name": "Treasury Must Not Collapse",
-          "points": 0,
+          "points": -1,
           "text": "Treasury must not be the collapsed Pillar.",
           "conditions": [
             {
@@ -344,7 +344,7 @@
             }
           ]
         },
-        "tie_breaker": "Highest Agenda score; if still tied, use the rulebook's remaining hand plus Scheme Slot tie-breaker; if still tied, share victory."
+        "tie_breaker": "Highest Agenda score; tied leaders share victory."
       }
     },
     {
@@ -358,7 +358,7 @@
         "max_points": 8,
         "win_threshold": 6,
         "primary_mandatory": true,
-        "forbidden_is_veto": true,
+        "forbidden_is_veto": false,
         "primary": {
           "name": "Scholarly Legacy",
           "points": 4,
@@ -404,7 +404,7 @@
         },
         "forbidden": {
           "name": "No Sacred Supremacy",
-          "points": 0,
+          "points": -1,
           "text": "Faith must not exceed Science.",
           "conditions": [
             {
@@ -415,7 +415,7 @@
             }
           ]
         },
-        "tie_breaker": "Highest Agenda score; if still tied, use the rulebook's remaining hand plus Scheme Slot tie-breaker; if still tied, share victory."
+        "tie_breaker": "Highest Agenda score; tied leaders share victory."
       }
     },
     {
@@ -429,7 +429,7 @@
         "max_points": 8,
         "win_threshold": 6,
         "primary_mandatory": true,
-        "forbidden_is_veto": true,
+        "forbidden_is_veto": false,
         "primary": {
           "name": "Scholarly Legacy",
           "points": 4,
@@ -475,7 +475,7 @@
         },
         "forbidden": {
           "name": "No Sacred Supremacy",
-          "points": 0,
+          "points": -1,
           "text": "Faith must not exceed Science.",
           "conditions": [
             {
@@ -486,7 +486,7 @@
             }
           ]
         },
-        "tie_breaker": "Highest Agenda score; if still tied, use the rulebook's remaining hand plus Scheme Slot tie-breaker; if still tied, share victory."
+        "tie_breaker": "Highest Agenda score; tied leaders share victory."
       }
     },
     {
@@ -500,7 +500,7 @@
         "max_points": 8,
         "win_threshold": 6,
         "primary_mandatory": true,
-        "forbidden_is_veto": true,
+        "forbidden_is_veto": false,
         "primary": {
           "name": "Sacred Legacy",
           "points": 4,
@@ -546,7 +546,7 @@
         },
         "forbidden": {
           "name": "No Secular Supremacy",
-          "points": 0,
+          "points": -1,
           "text": "Science must not exceed Faith.",
           "conditions": [
             {
@@ -557,7 +557,7 @@
             }
           ]
         },
-        "tie_breaker": "Highest Agenda score; if still tied, use the rulebook's remaining hand plus Scheme Slot tie-breaker; if still tied, share victory."
+        "tie_breaker": "Highest Agenda score; tied leaders share victory."
       }
     },
     {
@@ -571,7 +571,7 @@
         "max_points": 8,
         "win_threshold": 6,
         "primary_mandatory": true,
-        "forbidden_is_veto": true,
+        "forbidden_is_veto": false,
         "primary": {
           "name": "Sacred Legacy",
           "points": 4,
@@ -617,7 +617,7 @@
         },
         "forbidden": {
           "name": "No Knowledge Monopoly",
-          "points": 0,
+          "points": -1,
           "text": "Knowledge capacity must be lower than 2.",
           "conditions": [
             {
@@ -628,7 +628,7 @@
             }
           ]
         },
-        "tie_breaker": "Highest Agenda score; if still tied, use the rulebook's remaining hand plus Scheme Slot tie-breaker; if still tied, share victory."
+        "tie_breaker": "Highest Agenda score; tied leaders share victory."
       }
     },
     {
@@ -642,7 +642,7 @@
         "max_points": 8,
         "win_threshold": 6,
         "primary_mandatory": true,
-        "forbidden_is_veto": true,
+        "forbidden_is_veto": false,
         "primary": {
           "name": "Sanitary Legacy",
           "points": 4,
@@ -685,7 +685,7 @@
         },
         "forbidden": {
           "name": "No Sterile Ending",
-          "points": 0,
+          "points": -1,
           "text": "At least 1 Plague token must remain.",
           "conditions": [
             {
@@ -697,7 +697,7 @@
             }
           ]
         },
-        "tie_breaker": "Highest Agenda score; if still tied, use the rulebook's remaining hand plus Scheme Slot tie-breaker; if still tied, share victory."
+        "tie_breaker": "Highest Agenda score; tied leaders share victory."
       }
     },
     {
@@ -711,7 +711,7 @@
         "max_points": 8,
         "win_threshold": 6,
         "primary_mandatory": true,
-        "forbidden_is_veto": true,
+        "forbidden_is_veto": false,
         "primary": {
           "name": "Sanitary Legacy",
           "points": 4,
@@ -754,7 +754,7 @@
         },
         "forbidden": {
           "name": "No Iron-Industry Bloc",
-          "points": 0,
+          "points": -1,
           "text": "Industry + Military must not exceed Culture + Diplomacy.",
           "conditions": [
             {
@@ -771,7 +771,7 @@
             }
           ]
         },
-        "tie_breaker": "Highest Agenda score; if still tied, use the rulebook's remaining hand plus Scheme Slot tie-breaker; if still tied, share victory."
+        "tie_breaker": "Highest Agenda score; tied leaders share victory."
       }
     },
     {
@@ -785,7 +785,7 @@
         "max_points": 8,
         "win_threshold": 6,
         "primary_mandatory": true,
-        "forbidden_is_veto": true,
+        "forbidden_is_veto": false,
         "primary": {
           "name": "Civic Legacy",
           "points": 4,
@@ -825,7 +825,7 @@
         },
         "forbidden": {
           "name": "No Fortress State",
-          "points": 0,
+          "points": -1,
           "text": "There must not be more than 1 Fortified token.",
           "conditions": [
             {
@@ -837,7 +837,7 @@
             }
           ]
         },
-        "tie_breaker": "Highest Agenda score; if still tied, use the rulebook's remaining hand plus Scheme Slot tie-breaker; if still tied, share victory."
+        "tie_breaker": "Highest Agenda score; tied leaders share victory."
       }
     },
     {
@@ -851,7 +851,7 @@
         "max_points": 8,
         "win_threshold": 6,
         "primary_mandatory": true,
-        "forbidden_is_veto": true,
+        "forbidden_is_veto": false,
         "primary": {
           "name": "Civic Legacy",
           "points": 4,
@@ -891,7 +891,7 @@
         },
         "forbidden": {
           "name": "No Military Supremacy",
-          "points": 0,
+          "points": -1,
           "text": "Military must not be the highest scoring tag.",
           "conditions": [
             {
@@ -900,7 +900,7 @@
             }
           ]
         },
-        "tie_breaker": "Highest Agenda score; if still tied, use the rulebook's remaining hand plus Scheme Slot tie-breaker; if still tied, share victory."
+        "tie_breaker": "Highest Agenda score; tied leaders share victory."
       }
     },
     {
@@ -914,7 +914,7 @@
         "max_points": 8,
         "win_threshold": 6,
         "primary_mandatory": true,
-        "forbidden_is_veto": true,
+        "forbidden_is_veto": false,
         "primary": {
           "name": "Industrial Legacy",
           "points": 4,
@@ -960,7 +960,7 @@
         },
         "forbidden": {
           "name": "No Sacred Cultural Bloc",
-          "points": 0,
+          "points": -1,
           "text": "Faith + Culture must not exceed Science + Diplomacy.",
           "conditions": [
             {
@@ -977,7 +977,7 @@
             }
           ]
         },
-        "tie_breaker": "Highest Agenda score; if still tied, use the rulebook's remaining hand plus Scheme Slot tie-breaker; if still tied, share victory."
+        "tie_breaker": "Highest Agenda score; tied leaders share victory."
       }
     },
     {
@@ -991,7 +991,7 @@
         "max_points": 8,
         "win_threshold": 6,
         "primary_mandatory": true,
-        "forbidden_is_veto": true,
+        "forbidden_is_veto": false,
         "primary": {
           "name": "Industrial Legacy",
           "points": 4,
@@ -1037,7 +1037,7 @@
         },
         "forbidden": {
           "name": "No Popular Triumph",
-          "points": 0,
+          "points": -1,
           "text": "Morale must not be the highest surviving Pillar.",
           "conditions": [
             {
@@ -1046,7 +1046,7 @@
             }
           ]
         },
-        "tie_breaker": "Highest Agenda score; if still tied, use the rulebook's remaining hand plus Scheme Slot tie-breaker; if still tied, share victory."
+        "tie_breaker": "Highest Agenda score; tied leaders share victory."
       }
     },
     {
@@ -1060,7 +1060,7 @@
         "max_points": 8,
         "win_threshold": 6,
         "primary_mandatory": true,
-        "forbidden_is_veto": true,
+        "forbidden_is_veto": false,
         "primary": {
           "name": "Martial Legacy",
           "points": 4,
@@ -1102,7 +1102,7 @@
         },
         "forbidden": {
           "name": "No Popular Triumph",
-          "points": 0,
+          "points": -1,
           "text": "Morale must not be the highest surviving Pillar.",
           "conditions": [
             {
@@ -1111,7 +1111,7 @@
             }
           ]
         },
-        "tie_breaker": "Highest Agenda score; if still tied, use the rulebook's remaining hand plus Scheme Slot tie-breaker; if still tied, share victory."
+        "tie_breaker": "Highest Agenda score; tied leaders share victory."
       }
     },
     {
@@ -1125,7 +1125,7 @@
         "max_points": 8,
         "win_threshold": 6,
         "primary_mandatory": true,
-        "forbidden_is_veto": true,
+        "forbidden_is_veto": false,
         "primary": {
           "name": "Diplomatic Legacy",
           "points": 4,
@@ -1171,7 +1171,7 @@
         },
         "forbidden": {
           "name": "No Military Supremacy",
-          "points": 0,
+          "points": -1,
           "text": "Military must not be the highest scoring tag.",
           "conditions": [
             {
@@ -1180,7 +1180,7 @@
             }
           ]
         },
-        "tie_breaker": "Highest Agenda score; if still tied, use the rulebook's remaining hand plus Scheme Slot tie-breaker; if still tied, share victory."
+        "tie_breaker": "Highest Agenda score; tied leaders share victory."
       }
     },
     {
@@ -1194,7 +1194,7 @@
         "max_points": 8,
         "win_threshold": 6,
         "primary_mandatory": true,
-        "forbidden_is_veto": true,
+        "forbidden_is_veto": false,
         "primary": {
           "name": "Sanitary Legacy",
           "points": 4,
@@ -1237,7 +1237,7 @@
         },
         "forbidden": {
           "name": "No Sacred Supremacy",
-          "points": 0,
+          "points": -1,
           "text": "Faith must not exceed Science.",
           "conditions": [
             {
@@ -1248,7 +1248,7 @@
             }
           ]
         },
-        "tie_breaker": "Highest Agenda score; if still tied, use the rulebook's remaining hand plus Scheme Slot tie-breaker; if still tied, share victory."
+        "tie_breaker": "Highest Agenda score; tied leaders share victory."
       }
     },
     {
@@ -1262,7 +1262,7 @@
         "max_points": 8,
         "win_threshold": 6,
         "primary_mandatory": true,
-        "forbidden_is_veto": true,
+        "forbidden_is_veto": false,
         "primary": {
           "name": "Scholarly Legacy",
           "points": 4,
@@ -1308,7 +1308,7 @@
         },
         "forbidden": {
           "name": "Treasury Must Not Collapse",
-          "points": 0,
+          "points": -1,
           "text": "Treasury must not be the collapsed Pillar.",
           "conditions": [
             {
@@ -1317,7 +1317,7 @@
             }
           ]
         },
-        "tie_breaker": "Highest Agenda score; if still tied, use the rulebook's remaining hand plus Scheme Slot tie-breaker; if still tied, share victory."
+        "tie_breaker": "Highest Agenda score; tied leaders share victory."
       }
     },
     {
@@ -1331,7 +1331,7 @@
         "max_points": 8,
         "win_threshold": 6,
         "primary_mandatory": true,
-        "forbidden_is_veto": true,
+        "forbidden_is_veto": false,
         "primary": {
           "name": "Civic Legacy",
           "points": 4,
@@ -1371,7 +1371,7 @@
         },
         "forbidden": {
           "name": "No Iron-Industry Bloc",
-          "points": 0,
+          "points": -1,
           "text": "Industry + Military must not exceed Culture + Diplomacy.",
           "conditions": [
             {
@@ -1388,7 +1388,7 @@
             }
           ]
         },
-        "tie_breaker": "Highest Agenda score; if still tied, use the rulebook's remaining hand plus Scheme Slot tie-breaker; if still tied, share victory."
+        "tie_breaker": "Highest Agenda score; tied leaders share victory."
       }
     },
     {
@@ -1402,7 +1402,7 @@
         "max_points": 8,
         "win_threshold": 6,
         "primary_mandatory": true,
-        "forbidden_is_veto": true,
+        "forbidden_is_veto": false,
         "primary": {
           "name": "Sacred Legacy",
           "points": 4,
@@ -1448,7 +1448,7 @@
         },
         "forbidden": {
           "name": "No Knowledge Monopoly",
-          "points": 0,
+          "points": -1,
           "text": "Knowledge capacity must be lower than 2.",
           "conditions": [
             {
@@ -1459,7 +1459,7 @@
             }
           ]
         },
-        "tie_breaker": "Highest Agenda score; if still tied, use the rulebook's remaining hand plus Scheme Slot tie-breaker; if still tied, share victory."
+        "tie_breaker": "Highest Agenda score; tied leaders share victory."
       }
     },
     {
@@ -1473,7 +1473,7 @@
         "max_points": 8,
         "win_threshold": 6,
         "primary_mandatory": true,
-        "forbidden_is_veto": true,
+        "forbidden_is_veto": false,
         "primary": {
           "name": "Diplomatic Legacy",
           "points": 4,
@@ -1519,7 +1519,7 @@
         },
         "forbidden": {
           "name": "No Rational Bureaucratic Bloc",
-          "points": 0,
+          "points": -1,
           "text": "Science + Diplomacy must not exceed Faith + Culture.",
           "conditions": [
             {
@@ -1536,7 +1536,7 @@
             }
           ]
         },
-        "tie_breaker": "Highest Agenda score; if still tied, use the rulebook's remaining hand plus Scheme Slot tie-breaker; if still tied, share victory."
+        "tie_breaker": "Highest Agenda score; tied leaders share victory."
       }
     },
     {
@@ -1550,7 +1550,7 @@
         "max_points": 8,
         "win_threshold": 6,
         "primary_mandatory": true,
-        "forbidden_is_veto": true,
+        "forbidden_is_veto": false,
         "primary": {
           "name": "Sanitary Legacy",
           "points": 4,
@@ -1594,7 +1594,7 @@
         },
         "forbidden": {
           "name": "No Military Supremacy",
-          "points": 0,
+          "points": -1,
           "text": "Military must not be the highest scoring tag.",
           "conditions": [
             {
@@ -1603,7 +1603,7 @@
             }
           ]
         },
-        "tie_breaker": "Highest Agenda score; if still tied, use the rulebook's remaining hand plus Scheme Slot tie-breaker; if still tied, share victory."
+        "tie_breaker": "Highest Agenda score; tied leaders share victory."
       }
     },
     {
@@ -1617,7 +1617,7 @@
         "max_points": 8,
         "win_threshold": 6,
         "primary_mandatory": true,
-        "forbidden_is_veto": true,
+        "forbidden_is_veto": false,
         "primary": {
           "name": "Balanced Legacy",
           "points": 4,
@@ -1679,7 +1679,7 @@
         },
         "forbidden": {
           "name": "No Iron-Industry Bloc",
-          "points": 0,
+          "points": -1,
           "text": "Industry + Military must not exceed Culture + Diplomacy.",
           "conditions": [
             {
@@ -1696,7 +1696,7 @@
             }
           ]
         },
-        "tie_breaker": "Highest Agenda score; if still tied, use the rulebook's remaining hand plus Scheme Slot tie-breaker; if still tied, share victory."
+        "tie_breaker": "Highest Agenda score; tied leaders share victory."
       }
     },
     {
@@ -1710,7 +1710,7 @@
         "max_points": 8,
         "win_threshold": 6,
         "primary_mandatory": true,
-        "forbidden_is_veto": true,
+        "forbidden_is_veto": false,
         "primary": {
           "name": "Civic Legacy",
           "points": 4,
@@ -1750,7 +1750,7 @@
         },
         "forbidden": {
           "name": "No Sacred Supremacy",
-          "points": 0,
+          "points": -1,
           "text": "Faith must not exceed Science.",
           "conditions": [
             {
@@ -1761,7 +1761,7 @@
             }
           ]
         },
-        "tie_breaker": "Highest Agenda score; if still tied, use the rulebook's remaining hand plus Scheme Slot tie-breaker; if still tied, share victory."
+        "tie_breaker": "Highest Agenda score; tied leaders share victory."
       }
     },
     {
@@ -1775,7 +1775,7 @@
         "max_points": 8,
         "win_threshold": 6,
         "primary_mandatory": true,
-        "forbidden_is_veto": true,
+        "forbidden_is_veto": false,
         "primary": {
           "name": "Industrial Legacy",
           "points": 4,
@@ -1822,7 +1822,7 @@
         },
         "forbidden": {
           "name": "No Military Supremacy",
-          "points": 0,
+          "points": -1,
           "text": "Military must not be the highest scoring tag.",
           "conditions": [
             {
@@ -1831,7 +1831,7 @@
             }
           ]
         },
-        "tie_breaker": "Highest Agenda score; if still tied, use the rulebook's remaining hand plus Scheme Slot tie-breaker; if still tied, share victory."
+        "tie_breaker": "Highest Agenda score; tied leaders share victory."
       }
     },
     {
@@ -1845,7 +1845,7 @@
         "max_points": 8,
         "win_threshold": 6,
         "primary_mandatory": true,
-        "forbidden_is_veto": true,
+        "forbidden_is_veto": false,
         "primary": {
           "name": "Sacred Legacy",
           "points": 4,
@@ -1892,7 +1892,7 @@
         },
         "forbidden": {
           "name": "No Secular Supremacy",
-          "points": 0,
+          "points": -1,
           "text": "Science must not exceed Faith.",
           "conditions": [
             {
@@ -1903,7 +1903,7 @@
             }
           ]
         },
-        "tie_breaker": "Highest Agenda score; if still tied, use the rulebook's remaining hand plus Scheme Slot tie-breaker; if still tied, share victory."
+        "tie_breaker": "Highest Agenda score; tied leaders share victory."
       }
     },
     {
@@ -1917,7 +1917,7 @@
         "max_points": 8,
         "win_threshold": 6,
         "primary_mandatory": true,
-        "forbidden_is_veto": true,
+        "forbidden_is_veto": false,
         "primary": {
           "name": "Sanitary Legacy",
           "points": 4,
@@ -1960,7 +1960,7 @@
         },
         "forbidden": {
           "name": "Morale Must Not Collapse",
-          "points": 0,
+          "points": -1,
           "text": "Morale must not be the collapsed Pillar.",
           "conditions": [
             {
@@ -1969,7 +1969,7 @@
             }
           ]
         },
-        "tie_breaker": "Highest Agenda score; if still tied, use the rulebook's remaining hand plus Scheme Slot tie-breaker; if still tied, share victory."
+        "tie_breaker": "Highest Agenda score; tied leaders share victory."
       }
     },
     {
@@ -1983,7 +1983,7 @@
         "max_points": 8,
         "win_threshold": 6,
         "primary_mandatory": true,
-        "forbidden_is_veto": true,
+        "forbidden_is_veto": false,
         "primary": {
           "name": "Scholarly Legacy",
           "points": 4,
@@ -2029,7 +2029,7 @@
         },
         "forbidden": {
           "name": "No Sacred Supremacy",
-          "points": 0,
+          "points": -1,
           "text": "Faith must not exceed Science.",
           "conditions": [
             {
@@ -2040,7 +2040,7 @@
             }
           ]
         },
-        "tie_breaker": "Highest Agenda score; if still tied, use the rulebook's remaining hand plus Scheme Slot tie-breaker; if still tied, share victory."
+        "tie_breaker": "Highest Agenda score; tied leaders share victory."
       }
     },
     {
@@ -2054,7 +2054,7 @@
         "max_points": 8,
         "win_threshold": 6,
         "primary_mandatory": true,
-        "forbidden_is_veto": true,
+        "forbidden_is_veto": false,
         "primary": {
           "name": "Civic Legacy",
           "points": 4,
@@ -2094,7 +2094,7 @@
         },
         "forbidden": {
           "name": "No Knowledge Monopoly",
-          "points": 0,
+          "points": -1,
           "text": "Knowledge capacity must be lower than 2.",
           "conditions": [
             {
@@ -2105,7 +2105,7 @@
             }
           ]
         },
-        "tie_breaker": "Highest Agenda score; if still tied, use the rulebook's remaining hand plus Scheme Slot tie-breaker; if still tied, share victory."
+        "tie_breaker": "Highest Agenda score; tied leaders share victory."
       }
     }
   ]

@@ -636,6 +636,8 @@ const GameRoomPage = ({ replayState = null, replayControls = null, replaySpeed =
       : decisionPlayer?.name || "The responsible player";
     const choice = {
       choose_event_unrest_scope: "choose whether Unrest is placed globally or in a City",
+      choose_unrest_resolution: "choose how the Unrest crisis is resolved",
+      choose_revolt_destroy_building: "choose which Structure is destroyed by the Revolt",
       choose_event_destroy_building: "choose which eligible Structure is destroyed",
       choose_event_token_city: "choose the City receiving the token effects",
       choose_event_conversion_resource: "choose how the resource conversion is resolved",
@@ -675,6 +677,69 @@ const GameRoomPage = ({ replayState = null, replayControls = null, replaySpeed =
           <Trophy className="h-4 w-4 text-amber-300" aria-hidden="true" />
           View final results
         </button>
+      );
+    }
+    const unrestResolutionChoices = actions.filter((entry) => entry.type === "choose_unrest_resolution");
+    if (unrestResolutionChoices.length) {
+      const city = gameState.cities.find(
+        (candidate) => candidate.id === unrestResolutionChoices[0].city_id
+      );
+      const labels = {
+        suppress: "Suppress: -2 Morale",
+        buy_peace: "Buy Peace: -2 Treasury",
+        let_burn: "Let It Burn: destroy 2 Structures",
+        repression: "Repression: -2 Morale, +1 Stability",
+        concessions: "Concessions: -2 Treasury, +1 Morale",
+        fragmentation: "Fragmentation: -2 Stability, +1 Treasury",
+      };
+      return (
+        <div>
+          <p className="mb-2 text-sm font-semibold text-amber-100">
+            Minister of War: resolve {city ? `the Revolt in ${city.name}` : "the Imperial Unrest Crisis"}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {unrestResolutionChoices.map((entry) => (
+              <button
+                key={entry.choice}
+                className="rounded-md border border-rose-900 bg-stone-950 px-3 py-2 text-sm font-semibold text-rose-100 hover:bg-rose-950/50 disabled:opacity-50"
+                disabled={busy}
+                onClick={() => performAction(entry)}
+                type="button"
+              >
+                {labels[entry.choice] || entry.choice}
+              </button>
+            ))}
+          </div>
+        </div>
+      );
+    }
+    const revoltDestructionChoices = actions.filter(
+      (entry) => entry.type === "choose_revolt_destroy_building"
+    );
+    if (revoltDestructionChoices.length) {
+      return (
+        <div>
+          <p className="mb-2 text-sm font-semibold text-rose-100">
+            Minister of War: choose a Structure destroyed by the Revolt
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {revoltDestructionChoices.map((entry) => {
+              const city = gameState.cities.find((candidate) => candidate.id === entry.city_id);
+              const card = itemLookup[normalize(entry.card_id)];
+              return (
+                <button
+                  key={`${entry.city_id}-${entry.card_id}`}
+                  className="rounded-md border border-rose-900 bg-stone-950 px-3 py-2 text-sm font-semibold text-rose-100 hover:bg-rose-950/50 disabled:opacity-50"
+                  disabled={busy}
+                  onClick={() => performAction(entry)}
+                  type="button"
+                >
+                  {card?.name || entry.card_id} · {city?.name || entry.city_id}
+                </button>
+              );
+            })}
+          </div>
+        </div>
       );
     }
     const unrestScopeChoices = actions.filter((entry) => entry.type === "choose_event_unrest_scope");
@@ -1431,16 +1496,6 @@ const GameRoomPage = ({ replayState = null, replayControls = null, replaySpeed =
                       </button>
                     );
                   })}
-                  <span
-                    aria-label={`Suspicion ${focusedPlayer?.suspicion || 0}`}
-                    className="relative inline-flex h-9 w-9 items-center justify-center border border-rose-900/70 bg-stone-950 text-rose-300"
-                    title={`Suspicion ${focusedPlayer?.suspicion || 0}`}
-                  >
-                    <Shield className="h-5 w-5" aria-hidden="true" />
-                    <strong className="absolute -right-1 -top-1 min-w-4 border border-rose-800 bg-rose-950 px-0.5 text-center text-[0.6rem] leading-4 text-rose-100">
-                      {focusedPlayer?.suspicion || 0}
-                    </strong>
-                  </span>
                   {focusedPlayer?.hidden_agenda_id ? (
                     <button
                       aria-label="Open secret Agenda"
@@ -1643,7 +1698,7 @@ const GameRoomPage = ({ replayState = null, replayControls = null, replaySpeed =
                 </h2>
                 <p className="mt-1 text-xs text-slate-500">
                   {phase === "council_vote"
-                    ? `${activePlayer?.name || "The active player"} supports a City or places Suspicion. Two votes queue a City first in the Docket.`
+                    ? `${activePlayer?.name || "The active player"} may support a City. Two votes queue it in the Docket.`
                     : "These City cards remain available for a future Council vote."}
                 </p>
               </div>

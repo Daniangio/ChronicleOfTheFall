@@ -121,7 +121,7 @@ const defaultAgendaData = {
   max_points: 8,
   win_threshold: 6,
   primary_mandatory: true,
-  forbidden_is_veto: true,
+  forbidden_is_veto: false,
   primary: {
     name: "Primary Legacy",
     points: 4,
@@ -142,7 +142,7 @@ const defaultAgendaData = {
   },
   forbidden: {
     name: "Forbidden Future",
-    points: 0,
+    points: -1,
     text: "",
     conditions: [{ type: "tag_is_highest", tag: "" }],
   },
@@ -1298,7 +1298,7 @@ const AgendaGuidedFields = ({ data, setField, tagEntries, pillarEntries }) => {
     ["primary", "Primary Legacy", 4],
     ["secondary", "Secondary Legacy", 2],
     ["collapse", "Collapse Preference", 2],
-    ["forbidden", "Forbidden Future", 0],
+    ["forbidden", "Forbidden Future", -1],
   ];
   const updateSection = (sectionKey, patch) => {
     setField(sectionKey, { ...(data[sectionKey] || {}), ...patch });
@@ -2293,11 +2293,6 @@ const LevelGuidedFields = ({ data, setField, cardEntries, deckEntries }) => {
             ))}
         </div>
       </fieldset>
-      <NumberField
-        label="Suspicion Starts in Era"
-        value={data.suspicion_start_era ?? 5}
-        onChange={(value) => setField("suspicion_start_era", Math.max(1, value))}
-      />
     </>
   );
 };

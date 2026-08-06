@@ -32,16 +32,15 @@ Agenda contains:
 * a **Primary Legacy**, worth 4 points and mandatory;
 * a **Secondary Legacy**, worth 2 points;
 * a **Collapse Preference**, worth 2 points;
-* a **Forbidden Future**, which is a veto rather than a scoring objective.
+* a **Forbidden Future**, which subtracts 1 point when its condition is true.
 
-A player is eligible to win only if their Primary Legacy is satisfied, their
-Forbidden Future is false, and they score at least 6 of the Agenda's 8 points.
+A player is eligible to win if they score at least 6 points.
 Agenda conditions are evaluated after resolving the effect that caused a Pillar
 to reach 0.
 
 If multiple players are eligible, the player with the highest Agenda score wins.
-If still tied, the tied player with the most total cards in hand and Scheme Slots
-wins. If still tied, those players share the victory.
+If multiple eligible players tie for the highest score, those players share the
+victory.
 
 If no player satisfies their Hidden Agenda, all players lose.
 
@@ -157,8 +156,7 @@ Agenda conditions may evaluate:
 * the number and maximum value of selected scoring Tags.
 
 All conditions within one Agenda section must be satisfied together for that
-section to be satisfied. A true Forbidden Future prevents victory regardless of
-points.
+section to be satisfied. A true Forbidden Future subtracts 1 point.
 
 The supported condition vocabulary and initial Agenda design pool are documented
 in [agenda_system_spec.md](documentation/agenda_system_spec.md).
@@ -741,8 +739,8 @@ Each Era follows this sequence:
 10. **Hand Refill Phase**
 11. **End-of-Era Cleanup Phase**
 
-During the first Era, skip the Office Rotation Phase. The Council Vote Phase
-still occurs, even if Suspicion is not active yet.
+During the first Era, skip the Office Rotation Phase. Skip the Council Vote
+Phase as well if no City Charters remain available.
 
 ---
 
@@ -761,27 +759,19 @@ Then proceed to the Council Vote Phase.
 
 # 12. Council Vote Phase
 
-The Council Vote combines public support for founding Cities with Suspicion,
-which represents public blame, court rumors, and political distrust.
-
-Each Level defines the first Era in which Suspicion is active. The default is
-Era 5. Before that Era, players may support City Charters but may not place
-Suspicion.
+The Council Vote currently handles public support for founding Cities. Suspicion
+is disabled in the current prototype.
 
 Starting with the Minister of the Empire and proceeding clockwise, each player
 may cast one public vote by placing their Council token on:
 
-* one available City Charter; or
-* another player, if Suspicion is active.
+* one available City Charter.
 
 A player may instead decline to place their Council token. Supporting a City is
 always optional.
 
-A player may not place Suspicion on themselves.
-
-A player may not place Suspicion on the Minister of the Empire.
-
-Suspicion tokens are public.
+If no City Charters remain available, skip the Council Vote Phase and proceed
+directly to Production.
 
 ---
 
@@ -800,6 +790,9 @@ a later Era.
 ---
 
 ## 12.2 Suspicion Effects
+
+Suspicion and all effects in this subsection are disabled for the current
+prototype.
 
 After all Suspicion tokens are placed, count how many each player received.
 
@@ -917,6 +910,8 @@ Players should not know which player submitted which face-down card.
 ---
 
 ## 14.4 Face-Up Committed Cards
+
+This subsection is inactive while Suspicion is disabled.
 
 A player with 2+ Suspicion must commit face up.
 
@@ -1169,19 +1164,19 @@ The Minister of War chooses one resolution:
 ### Repression
 
 Remove all Global Unrest.
-Lose 3 Morale.
+Lose 2 Morale.
 Gain 1 Stability.
 
 ### Concessions
 
 Remove all Global Unrest.
-Lose 3 Treasury.
+Lose 2 Treasury.
 Gain 1 Morale.
 
 ### Fragmentation
 
 Remove all Global Unrest.
-Lose 3 Stability.
+Lose 2 Stability.
 Gain 1 Treasury.
 
 ---

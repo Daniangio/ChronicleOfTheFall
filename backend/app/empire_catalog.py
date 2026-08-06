@@ -476,15 +476,12 @@ def _validate_count_map(value: Any, field: str) -> None:
 
 
 def _validate_agenda(data: dict[str, Any]) -> None:
-    if int(data.get("max_points") or 0) <= 0:
-        raise ValueError("Agenda max_points must be positive.")
-    win_threshold = int(data.get("win_threshold") or 0)
-    if win_threshold <= 0 or win_threshold > int(data["max_points"]):
-        raise ValueError("Agenda win_threshold must be between 1 and max_points.")
-    if data.get("primary_mandatory") is not True:
-        raise ValueError("Agenda Primary Legacy must be mandatory.")
-    if data.get("forbidden_is_veto") is not True:
-        raise ValueError("Agenda Forbidden Future must be a veto.")
+    if int(data.get("max_points") or 0) != 8:
+        raise ValueError("Agenda max_points must be 8.")
+    if int(data.get("win_threshold") or 0) != 6:
+        raise ValueError("Agenda win_threshold must be 6.")
+    if data.get("forbidden_is_veto") is True:
+        raise ValueError("Agenda Forbidden Future is a -1 point penalty, not a veto.")
     ingredients = load_static_catalog_entries()
     permanent_tag_ids = {
         str(entry["id"])
@@ -497,7 +494,7 @@ def _validate_agenda(data: dict[str, Any]) -> None:
         if entry["kind"] == "tags" and (entry.get("data") or {}).get("resource_type") == "volatile"
     }
     pillar_ids = {str(entry["id"]) for entry in ingredients if entry["kind"] == "pillars"}
-    expected_points = {"primary": 4, "secondary": 2, "collapse": 2, "forbidden": 0}
+    expected_points = {"primary": 4, "secondary": 2, "collapse": 2, "forbidden": -1}
     for section_name, points in expected_points.items():
         section = data.get(section_name)
         if not isinstance(section, dict):

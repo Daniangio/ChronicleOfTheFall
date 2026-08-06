@@ -618,10 +618,10 @@ const AgendaCardVisual = ({ entry, actions, size = "table", result = null }) => 
   const data = entry?.data || {};
   const compact = size === "hand";
   const sections = [
-    ["primary", "Primary", "text-amber-200"],
-    ["secondary", "Secondary", "text-teal-200"],
-    ["collapse", "Collapse", "text-sky-200"],
-    ["forbidden", "Forbidden", "text-rose-200"],
+    ["primary", "Primary", "text-amber-200", 4],
+    ["secondary", "Secondary", "text-teal-200", 2],
+    ["collapse", "Collapse", "text-sky-200", 2],
+    ["forbidden", "Forbidden", "text-rose-200", -1],
   ];
   const outcomeClass = result
     ? result.eligible
@@ -636,7 +636,7 @@ const AgendaCardVisual = ({ entry, actions, size = "table", result = null }) => 
       </div>
       {!compact && entry.summary ? <p className="my-2 line-clamp-2 text-center text-[0.58rem] leading-4 text-stone-400">{entry.summary}</p> : null}
       <div className="grid min-h-0 flex-1 grid-cols-2 grid-rows-2 gap-1.5 overflow-visible pt-1.5">
-        {sections.map(([sectionKey, label, tone]) => {
+        {sections.map(([sectionKey, label, tone, points]) => {
           const section = data[sectionKey] || {};
           const conditionMet = result?.sections?.[sectionKey];
           const objectiveAchieved = sectionKey === "forbidden" ? conditionMet === false : conditionMet === true;
@@ -653,7 +653,9 @@ const AgendaCardVisual = ({ entry, actions, size = "table", result = null }) => 
               <div className="flex items-center justify-between gap-2">
                 <span className={`text-[0.52rem] font-bold uppercase ${tone}`}>{label}</span>
                 <span className={`text-[0.52rem] font-bold ${result ? objectiveAchieved ? "text-emerald-300" : "text-rose-300" : "text-slate-400"}`}>
-                  {result ? resultLabel : sectionKey !== "forbidden" ? section.points || 0 : ""}
+                  {result
+                    ? `${resultLabel} · ${sectionKey === "forbidden" ? conditionMet ? "-1" : "0" : conditionMet ? `+${points}` : "0"}`
+                    : `${points > 0 ? "+" : ""}${points}`}
                 </span>
               </div>
               <p className="truncate text-[0.6rem] font-semibold text-stone-200">{section.name || "Undefined"}</p>
@@ -663,7 +665,7 @@ const AgendaCardVisual = ({ entry, actions, size = "table", result = null }) => 
         })}
       </div>
       <p className="mt-2 text-center text-[0.55rem] font-semibold text-amber-700">
-        Win at {data.win_threshold || 0}/{data.max_points || 0}
+        Reach 6 points · highest score wins · tied leaders share victory
       </p>
       {actions ? <div className="mt-2 flex flex-wrap gap-2 border-t border-amber-900/40 pt-2">{actions}</div> : null}
     </article>

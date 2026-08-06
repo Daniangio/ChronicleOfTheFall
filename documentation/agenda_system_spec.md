@@ -10,20 +10,18 @@ Use **prebuilt complete Agenda cards**, not live-assembled module cards. You may
 
 Each Hidden Agenda has four parts:
 
-1. **Primary Legacy** — 4 points, mandatory.
+1. **Primary Legacy** — 4 points.
 2. **Secondary Legacy** — 2 points.
 3. **Collapse Preference** — 2 points.
-4. **Forbidden Future** — veto condition.
+4. **Forbidden Future** — subtracts 1 point when true.
 
 A player wins if, at collapse:
 
-- their Primary Legacy is satisfied;
-- their Forbidden Future is **not** true;
-- they score at least **6 out of 8** points.
+- they score at least **6 points**.
 
-This means a player must satisfy their Primary Legacy and at least one of the two optional scoring objectives.
+Since both 2-point objectives total only 4 points, reaching 6 still requires the Primary Legacy.
 
-If multiple players win, compare total Agenda score. If still tied, use the normal rulebook tie-breaker.
+If multiple players qualify, the highest Agenda score wins. Tied leaders share victory.
 
 ## Physical Setup Method
 

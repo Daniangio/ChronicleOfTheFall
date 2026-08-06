@@ -86,7 +86,7 @@ class TestBotPolicy(unittest.TestCase):
                 ))
                 self.assertFalse(state["players"][0]["hidden_agenda_id"])
 
-    def test_bots_cast_council_votes_and_commit_during_parallel_plotting(self):
+    def test_bots_commit_when_empty_city_row_skips_council_vote(self):
         state = prepare_bot_state()
         human_agenda = next(
             action
@@ -96,20 +96,8 @@ class TestBotPolicy(unittest.TestCase):
         state = advance_bot_players(
             perform_action(state, human_agenda["type"], human_agenda)
         )
-        human_vote = next(
-            action
-            for action in state["possible_actions"]
-            if action.get("player_id") == "player-1"
-        )
-        state = advance_bot_players(
-            perform_action(state, human_vote["type"], human_vote)
-        )
-
         self.assertEqual(state["phase"], "plotting")
-        self.assertTrue(all(
-            player["id"] in state["council_votes"]
-            for player in state["players"][1:]
-        ))
+        self.assertEqual(state["council_votes"], {})
         self.assertTrue(all(player["committed"] for player in state["players"][1:]))
         self.assertFalse(state["players"][0]["committed"])
 
@@ -122,14 +110,6 @@ class TestBotPolicy(unittest.TestCase):
         )
         state = advance_bot_players(
             perform_action(state, human_agenda["type"], human_agenda)
-        )
-        human_vote = next(
-            action
-            for action in state["possible_actions"]
-            if action.get("player_id") == "player-1"
-        )
-        state = advance_bot_players(
-            perform_action(state, human_vote["type"], human_vote)
         )
         human_commit = next(
             action
