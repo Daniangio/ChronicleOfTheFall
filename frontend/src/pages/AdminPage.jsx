@@ -99,6 +99,23 @@ const effectTypeLabel = (effectType) => eventEffectOptions.find((option) => opti
   || ({ storage: "Add storage", add_building_slots: "Add building slots", modify_token: "Modify token" }[effectType])
   || String(effectType || "").replaceAll("_", " ");
 
+const matchesCatalogEffectFilters = (
+  entry,
+  { providedTag = "", producedResource = "", effectType = "", modifiedPillar = "" }
+) => {
+  const effects = entryEffects(entry);
+  return (!providedTag || Number(entry.data?.tags?.[providedTag] || 0) > 0)
+    && (!producedResource
+      || Number(entry.data?.production?.[producedResource] || 0) > 0
+      || effects.some((effect) => effect.effect_type === "modify_resources"
+        && effect.payload?.resource_id === producedResource
+        && Number(effect.payload?.amount || 0) > 0))
+    && (!effectType || effects.some((effect) => effect.effect_type === effectType))
+    && (!modifiedPillar || effects.some((effect) => (
+      effect.effect_type === "modify_pillar" && effect.payload?.pillar_id === modifiedPillar
+    )));
+};
+
 const defaultAgendaData = {
   max_points: 8,
   win_threshold: 6,
@@ -2838,19 +2855,13 @@ const AdminPage = () => {
         !activeEventSubtype ||
         String(entry.data?.subtype || "edict") === activeEventSubtype;
       const matchesCardCategory = !activeCardCategory || entry.category === activeCardCategory;
-      const effects = entryEffects(entry);
-      const matchesProvidedTag = !providedTagFilter || Number(entry.data?.tags?.[providedTagFilter] || 0) > 0;
-      const matchesProducedResource = !producedResourceFilter
-        || Number(entry.data?.production?.[producedResourceFilter] || 0) > 0
-        || effects.some((effect) => effect.effect_type === "modify_resources"
-          && effect.payload?.resource_id === producedResourceFilter
-          && Number(effect.payload?.amount || 0) > 0);
-      const matchesEffectType = !effectTypeFilter || effects.some((effect) => effect.effect_type === effectTypeFilter);
-      const matchesModifiedPillar = !modifiedPillarFilter || effects.some((effect) => (
-        effect.effect_type === "modify_pillar" && effect.payload?.pillar_id === modifiedPillarFilter
-      ));
       return matchesQuery && matchesCategory && matchesEventSubtype && matchesCardCategory
-        && matchesProvidedTag && matchesProducedResource && matchesEffectType && matchesModifiedPillar;
+        && matchesCatalogEffectFilters(entry, {
+          providedTag: providedTagFilter,
+          producedResource: producedResourceFilter,
+          effectType: effectTypeFilter,
+          modifiedPillar: modifiedPillarFilter,
+        });
     });
   }, [
     activeCardCategory,
@@ -4013,10 +4024,10 @@ const ReplayStatisticsPanel = ({
   applySelection,
 }) => {
   const metricSections = [
-    ["Tags by Era", statistics?.tags_by_era || []],
-    ["Structures built by Era", statistics?.structures_by_era || []],
-    ["Edicts played by Era", statistics?.edicts_by_era || []],
-    ["Crises played by Era", statistics?.crises_by_era || []],
+    { title: "Tags by Era", kind: "tags", rows: statistics?.tags_by_era || [] },
+    { title: "Structures built by Era", kind: "structures", rows: statistics?.structures_by_era || [] },
+    { title: "Edicts played by Era", kind: "edicts", rows: statistics?.edicts_by_era || [] },
+    { title: "Crises played by Era", kind: "crises", rows: statistics?.crises_by_era || [] },
   ];
   return (
     <>
@@ -4030,19 +4041,14 @@ const ReplayStatisticsPanel = ({
         </div>
       </section>
 
-      {metricSections.map(([title, rows]) => (
-        <section key={title} className="mt-4 border border-slate-800 bg-slate-900 p-4">
-          <h3 className="text-sm font-bold uppercase text-amber-100">{title}</h3>
-          <div className="mt-3 overflow-x-auto">
-            <table className="w-full min-w-[42rem] text-left text-xs">
-              <thead className="border-b border-slate-700 text-slate-500"><tr><th className="px-2 py-2">Era</th><th className="px-2 py-2">Item</th><th className="px-2 py-2">Mean</th><th className="px-2 py-2">Distribution</th></tr></thead>
-              <tbody className="divide-y divide-slate-800">
-                {rows.map((row) => <StatisticsRow key={`${row.era}-${row.item_id}`} row={row} />)}
-              </tbody>
-            </table>
-            {!rows.length ? <p className="py-5 text-sm text-slate-500">No samples.</p> : null}
-          </div>
-        </section>
+      {metricSections.map(({ title, kind, rows }) => (
+        <StatisticsDistributionSection
+          key={kind}
+          title={title}
+          kind={kind}
+          rows={rows}
+          catalog={statistics?.catalog || {}}
+        />
       ))}
 
       <section className="mt-4 border border-slate-800 bg-slate-900 p-4">
@@ -4076,6 +4082,183 @@ const ReplayStatisticsPanel = ({
         </div>
       ) : null}
     </>
+  );
+};
+
+const STATISTICS_COLORS = [
+  "#2dd4bf", "#fbbf24", "#60a5fa", "#fb7185", "#a78bfa", "#4ade80",
+  "#f97316", "#22d3ee", "#e879f9", "#facc15", "#818cf8", "#34d399",
+];
+
+const StatisticsDistributionSection = ({ title, kind, rows, catalog }) => {
+  const [query, setQuery] = useState("");
+  const [hiddenIds, setHiddenIds] = useState([]);
+  const [providedTag, setProvidedTag] = useState("");
+  const [producedResource, setProducedResource] = useState("");
+  const [effectType, setEffectType] = useState("");
+  const [modifiedPillar, setModifiedPillar] = useState("");
+  const [hoveredId, setHoveredId] = useState("");
+  const rowNames = Object.fromEntries(rows.map((row) => [row.item_id, row.name || row.item_id]));
+  const rowIds = new Set(rows.map((row) => row.item_id));
+  const catalogEntries = (catalog[kind] || []).filter((entry) => rowIds.has(entry.id));
+  const entries = catalogEntries.length
+    ? catalogEntries
+    : Array.from(new Set(rows.map((row) => row.item_id))).map((id) => ({ id, name: rowNames[id], data: {} }));
+  const tags = catalog.tags || [];
+  const resources = tags.filter(tagIsVolatileResource);
+  const effects = entries.flatMap(entryEffects);
+  const filterOptions = {
+    tags: tags.filter((tag) => entries.some((entry) => Number(entry.data?.tags?.[tag.id] || 0) > 0)),
+    resources: resources.filter((resource) => entries.some((entry) => (
+      Number(entry.data?.production?.[resource.id] || 0) > 0
+      || entryEffects(entry).some((effect) => effect.effect_type === "modify_resources" && effect.payload?.resource_id === resource.id)
+    ))),
+    effects: Array.from(new Set(effects.map((effect) => effect.effect_type).filter(Boolean)))
+      .map((value) => ({ value, label: effectTypeLabel(value) })),
+    pillars: (catalog.pillars || []).filter((pillar) => effects.some((effect) => (
+      effect.effect_type === "modify_pillar" && effect.payload?.pillar_id === pillar.id
+    ))),
+  };
+  const normalizedQuery = query.trim().toLowerCase();
+  const filteredEntries = entries
+    .filter((entry) => !normalizedQuery || `${entry.name || ""} ${entry.id || ""}`.toLowerCase().includes(normalizedQuery))
+    .filter((entry) => kind === "tags" || matchesCatalogEffectFilters(entry, {
+      providedTag,
+      producedResource,
+      effectType,
+      modifiedPillar,
+    }))
+    .sort((left, right) => String(left.name || left.id).localeCompare(String(right.name || right.id)));
+  const visibleEntries = filteredEntries.filter((entry) => !hiddenIds.includes(entry.id));
+  const imageLookup = Object.fromEntries((catalog.images || []).map((image) => [image.id, image]));
+
+  return (
+    <section className="mt-4 border border-slate-800 bg-slate-900 p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-bold uppercase text-amber-100">{title}</h3>
+          <p className="mt-1 text-xs text-slate-500">Each lane is one item. Point size represents sample frequency; the line connects Era means.</p>
+        </div>
+        <input
+          className="w-52 border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-200 outline-none focus:border-teal-400"
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder={`Filter ${kind}`}
+          value={query}
+        />
+      </div>
+
+      {kind !== "tags" ? (
+        <div className="mt-3 flex flex-wrap items-end gap-2 border-y border-slate-800 py-3">
+          <CatalogFilterSelect label="Provides tag" value={providedTag} options={filterOptions.tags} onChange={setProvidedTag} />
+          <CatalogFilterSelect label="Produces" value={producedResource} options={filterOptions.resources} onChange={setProducedResource} />
+          <CatalogFilterSelect label="Effect" value={effectType} options={filterOptions.effects} onChange={setEffectType} />
+          <CatalogFilterSelect label="Modifies pillar" value={modifiedPillar} options={filterOptions.pillars} onChange={setModifiedPillar} />
+          {(providedTag || producedResource || effectType || modifiedPillar) ? (
+            <button
+              className="mb-px border border-slate-700 px-3 py-2 text-xs font-semibold text-slate-300 hover:bg-slate-800"
+              onClick={() => {
+                setProvidedTag("");
+                setProducedResource("");
+                setEffectType("");
+                setModifiedPillar("");
+              }}
+              type="button"
+            >
+              Clear filters
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
+      <div className="mt-3 flex flex-wrap items-center gap-2" aria-label={`${title} legend`}>
+        <button className="border border-slate-700 px-2 py-1 text-[0.65rem] font-bold text-slate-300 hover:bg-slate-800" onClick={() => setHiddenIds([])} type="button">Show all</button>
+        <button className="border border-slate-700 px-2 py-1 text-[0.65rem] font-bold text-slate-300 hover:bg-slate-800" onClick={() => setHiddenIds(filteredEntries.map((entry) => entry.id))} type="button">Hide all</button>
+        {filteredEntries.map((entry, index) => {
+          const hidden = hiddenIds.includes(entry.id);
+          const iconSrc = buildAssetUrl(imageLookup[entry.data?.icon_image_id]?.data?.src || "");
+          return (
+            <button
+              key={entry.id}
+              className={`inline-flex h-8 items-center gap-1.5 border px-2 text-xs font-semibold ${hidden ? "border-slate-800 bg-slate-950 text-slate-600" : "border-slate-600 bg-slate-950 text-slate-200"}`}
+              onClick={() => setHiddenIds((current) => current.includes(entry.id) ? current.filter((id) => id !== entry.id) : [...current, entry.id])}
+              type="button"
+            >
+              {iconSrc ? <img alt="" className="h-6 w-6 object-contain" src={iconSrc} /> : <span className="h-2.5 w-2.5" style={{ backgroundColor: entry.color || STATISTICS_COLORS[index % STATISTICS_COLORS.length] }} />}
+              {entry.name || entry.id}
+            </button>
+          );
+        })}
+      </div>
+
+      <DistributionLaneChart
+        entries={visibleEntries}
+        rows={rows}
+        imageLookup={imageLookup}
+        hoveredId={hoveredId}
+        setHoveredId={setHoveredId}
+      />
+    </section>
+  );
+};
+
+const DistributionLaneChart = ({ entries, rows, imageLookup, hoveredId, setHoveredId }) => {
+  const eras = Array.from(new Set(rows.map((row) => Number(row.era)))).sort((left, right) => left - right);
+  if (!entries.length || !eras.length) return <p className="py-8 text-sm text-slate-500">No visible samples.</p>;
+  const left = 190;
+  const top = 42;
+  const laneHeight = 68;
+  const eraWidth = 105;
+  const width = Math.max(760, left + Math.max(1, eras.length - 1) * eraWidth + 65);
+  const height = top + entries.length * laneHeight + 28;
+  const rowLookup = Object.fromEntries(rows.map((row) => [`${row.item_id}:${row.era}`, row]));
+  const maxValue = Math.max(1, ...rows.flatMap((row) => [
+    Number(row.mean || 0),
+    ...Object.keys(row.distribution || {}).map(Number),
+  ]));
+  const pointX = (era) => left + eras.indexOf(era) * eraWidth;
+  const valueY = (center, value) => center + 22 - (Number(value || 0) / maxValue) * 44;
+
+  return (
+    <div className="mt-4 overflow-x-auto border border-slate-800 bg-slate-950/70">
+      <svg aria-label="Interactive replay distribution chart" className="block" height={height} role="img" width={width}>
+        {eras.map((era) => (
+          <g key={era}>
+            <line stroke="#334155" strokeDasharray="2 5" x1={pointX(era)} x2={pointX(era)} y1={28} y2={height - 20} />
+            <text fill="#94a3b8" fontSize="10" textAnchor="middle" x={pointX(era)} y={18}>Era {era}</text>
+          </g>
+        ))}
+        {entries.map((entry, entryIndex) => {
+          const center = top + entryIndex * laneHeight + laneHeight / 2;
+          const color = entry.color || STATISTICS_COLORS[entryIndex % STATISTICS_COLORS.length];
+          const iconSrc = buildAssetUrl(imageLookup[entry.data?.icon_image_id]?.data?.src || "");
+          const points = eras.map((era) => {
+            const row = rowLookup[`${entry.id}:${era}`] || { mean: 0, distribution: { 0: 0 }, samples: 0 };
+            return { era, row, x: pointX(era), y: valueY(center, row.mean) };
+          });
+          const dimmed = hoveredId && hoveredId !== entry.id;
+          return (
+            <g key={entry.id} opacity={dimmed ? 0.2 : 1} onMouseEnter={() => setHoveredId(entry.id)} onMouseLeave={() => setHoveredId("")}>
+              <line stroke="#1e293b" x1="0" x2={width} y1={center + 26} y2={center + 26} />
+              {iconSrc ? <image height="28" href={iconSrc} preserveAspectRatio="xMidYMid meet" width="28" x="10" y={center - 14} /> : <circle cx="24" cy={center} fill={color} r="5" />}
+              <text fill="#e2e8f0" fontSize="11" fontWeight="600" x="45" y={center + 4}>{entry.name || entry.id}</text>
+              <polyline fill="none" points={points.map((point) => `${point.x},${point.y}`).join(" ")} stroke={color} strokeWidth="2" />
+              {points.map(({ era, row, x, y }) => (
+                <g key={era}>
+                  {Object.entries(row.distribution || {}).map(([value, count]) => Number(count) > 0 ? (
+                    <circle key={value} cx={x} cy={valueY(center, value)} fill={color} fillOpacity="0.38" r={Math.min(11, 2.5 + Math.sqrt(Number(count)) * 2)} stroke={color} strokeWidth="0.7">
+                      <title>{`${entry.name || entry.id} · Era ${era} · value ${value}: ${count} game${Number(count) === 1 ? "" : "s"}`}</title>
+                    </circle>
+                  ) : null)}
+                  <circle cx={x} cy={y} fill={color} r="3.5" stroke="#f8fafc" strokeWidth="1">
+                    <title>{`${entry.name || entry.id} · Era ${era} · mean ${row.mean} · ${row.samples || 0} samples`}</title>
+                  </circle>
+                </g>
+              ))}
+            </g>
+          );
+        })}
+      </svg>
+    </div>
   );
 };
 

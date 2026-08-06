@@ -57,7 +57,9 @@ def test_bot_replay_persists_and_produces_distributions():
         assert row is not None
         assert row.replay["catalog"]["game"]["cards"][1]["data"] == {}
         assert save_bot_replay(db, state=state, owner_user_id="owner").id == row.id
-        statistics = replay_statistics([row])
+        statistics = replay_statistics([row], fallback_catalog={
+            "tags": [{"id": "food", "name": "Food", "data": {"icon_image_id": "food-icon"}}],
+        })
 
     assert statistics["game_count"] == 1
     assert statistics["tags_by_era"][0]["mean"] == 2
@@ -65,3 +67,4 @@ def test_bot_replay_persists_and_produces_distributions():
     assert statistics["edicts_by_era"][0]["item_id"] == "edict"
     assert statistics["crises_by_era"][0]["item_id"] == "crisis"
     assert statistics["agenda_points"][0]["distribution"] == {"6": 1}
+    assert statistics["catalog"]["tags"][0]["data"]["icon_image_id"] == "food-icon"

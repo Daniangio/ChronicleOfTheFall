@@ -6,6 +6,8 @@ from sqlalchemy.orm import Session
 from .admin_router import require_admin
 from .database import get_db
 from .db_models import GameReplayRecord
+from .empire_catalog import list_catalog_records
+from .goldfishing_engine import public_catalog_entry
 from .replay_service import list_replays, replay_statistics, replay_summary
 from .schemas import ReplayStatisticsRequest
 from .security import get_current_user
@@ -57,4 +59,15 @@ async def admin_replay_statistics(
     if payload.replay_ids:
         selected = set(payload.replay_ids)
         rows = [row for row in rows if row.id in selected]
-    return replay_statistics(rows)
+    tags = [public_catalog_entry(entry) for entry in list_catalog_records(db, "tags")]
+    cards = [public_catalog_entry(entry) for entry in list_catalog_records(db, "cards")]
+    events = [public_catalog_entry(entry) for entry in list_catalog_records(db, "events")]
+    fallback_catalog = {
+        "tags": tags,
+        "structures": [entry for entry in cards if entry.get("category") == "structure"],
+        "edicts": [entry for entry in events if (entry.get("data") or {}).get("subtype") == "edict"],
+        "crises": [entry for entry in events if (entry.get("data") or {}).get("subtype") == "crisis"],
+        "images": [public_catalog_entry(entry) for entry in list_catalog_records(db, "images")],
+        "pillars": [public_catalog_entry(entry) for entry in list_catalog_records(db, "pillars")],
+    }
+    return replay_statistics(rows, fallback_catalog=fallback_catalog)
