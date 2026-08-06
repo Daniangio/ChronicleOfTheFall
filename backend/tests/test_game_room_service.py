@@ -1916,3 +1916,34 @@ class TestGameRoomService(unittest.IsolatedAsyncioTestCase):
                 user=User(id="user-1", username="Player One"),
                 game_type="campaign",
             )
+
+    async def test_owner_can_delete_bot_simulation_listing(self):
+        service = GameRoomService()
+        user = User(id="user-1", username="Player One")
+        room_id = "chronicle-delete-me"
+        service._memory_rooms[room_id] = {
+            "id": room_id,
+            "owner_user_id": user.id,
+            "mode": "bots_only",
+            "state": "FINISHED",
+            "game_state": "{}",
+        }
+        service._memory_simulations[user.id] = [room_id]
+
+        await service.delete_simulation(room_id=room_id, user_id=user.id)
+
+        self.assertEqual(await service.list_simulations(user_id=user.id), [])
+        self.assertIsNone(await service.get_room(room_id=room_id, user=user))
+
+    async def test_other_user_cannot_delete_bot_simulation(self):
+        service = GameRoomService()
+        service._memory_rooms["owned-simulation"] = {
+            "id": "owned-simulation",
+            "owner_user_id": "owner",
+            "mode": "bots_only",
+            "state": "FINISHED",
+            "game_state": "{}",
+        }
+
+        with self.assertRaisesRegex(LookupError, "not found"):
+            await service.delete_simulation(room_id="owned-simulation", user_id="other")

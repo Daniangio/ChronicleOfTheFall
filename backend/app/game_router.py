@@ -121,6 +121,14 @@ async def list_bot_simulations(current_user: User = Depends(get_current_user)):
     return await _service().list_simulations(user_id=current_user.id)
 
 
+@router.delete("/game/simulations/{room_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_bot_simulation(room_id: str, current_user: User = Depends(get_current_user)):
+    try:
+        await _service().delete_simulation(room_id=room_id, user_id=current_user.id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
 @router.get("/game/levels")
 async def list_game_levels(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     del current_user

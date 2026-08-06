@@ -81,17 +81,19 @@ const ReplayPage = () => {
     return () => window.clearTimeout(timer);
   }, [frameIndex, frames.length, playing, speed, viewMode]);
 
-  const deleteReplay = async () => {
-    if (!replayId || !window.confirm("Delete this replay permanently?")) return;
-    const response = await authenticatedFetch(buildApiUrl(`/api/game/replays/${replayId}`), { method: "DELETE" });
+  const deleteReplay = async (targetId = replayId) => {
+    if (!targetId || !window.confirm("Delete this replay permanently?")) return;
+    const response = await authenticatedFetch(buildApiUrl(`/api/game/replays/${targetId}`), { method: "DELETE" });
     if (!response.ok) {
       const payload = await response.json().catch(() => ({}));
       setError(payload.detail || "Failed to delete replay.");
       return;
     }
-    const remaining = replays.filter((entry) => entry.id !== replayId);
+    const remaining = replays.filter((entry) => entry.id !== targetId);
     setReplays(remaining);
-    navigate(remaining[0] ? `/replays/${remaining[0].id}` : "/replays", { replace: true });
+    if (targetId === replayId) {
+      navigate(remaining[0] ? `/replays/${remaining[0].id}` : "/replays", { replace: true });
+    }
   };
 
   const downloadReplay = () => {
@@ -157,15 +159,24 @@ const ReplayPage = () => {
         <h1 className="text-lg font-bold text-amber-50">Bot Replays</h1>
         <div className="mt-3 space-y-1">
           {replays.map((entry) => (
-            <button
-              key={entry.id}
-              className={`w-full border px-3 py-2 text-left ${entry.id === replayId ? "border-amber-700 bg-amber-950/40" : "border-slate-800 bg-slate-950 hover:border-slate-700"}`}
-              onClick={() => navigate(`/replays/${entry.id}`)}
-              type="button"
-            >
-              <span className="block text-xs font-bold text-slate-200">Era {entry.era} · {entry.player_count} bots</span>
-              <span className="mt-1 block text-[0.65rem] text-slate-500">{new Date(entry.created_at).toLocaleString()}</span>
-            </button>
+            <div key={entry.id} className={`flex border ${entry.id === replayId ? "border-amber-700 bg-amber-950/40" : "border-slate-800 bg-slate-950"}`}>
+              <button
+                className="min-w-0 flex-1 px-3 py-2 text-left hover:bg-slate-900"
+                onClick={() => navigate(`/replays/${entry.id}`)}
+                type="button"
+              >
+                <span className="block text-xs font-bold text-slate-200">Era {entry.era} · {entry.player_count} bots</span>
+                <span className="mt-1 block text-[0.65rem] text-slate-500">{new Date(entry.created_at).toLocaleString()}</span>
+              </button>
+              <button
+                className="inline-flex w-9 shrink-0 items-center justify-center border-l border-rose-900/70 text-rose-300 hover:bg-rose-950"
+                onClick={() => deleteReplay(entry.id)}
+                title="Delete replay"
+                type="button"
+              >
+                <Trash2 className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </div>
           ))}
           {!replays.length ? <p className="py-5 text-xs text-slate-500">No bot replays saved.</p> : null}
         </div>
@@ -195,7 +206,7 @@ const ReplayPage = () => {
                   </button>
                 </div>
                 <button className="inline-flex h-9 w-9 items-center justify-center border border-slate-700 hover:bg-slate-800" onClick={downloadReplay} title="Download replay JSON" type="button"><Download className="h-4 w-4" /></button>
-                <button className="inline-flex h-9 w-9 items-center justify-center border border-rose-900 text-rose-300 hover:bg-rose-950" onClick={deleteReplay} title="Delete replay" type="button"><Trash2 className="h-4 w-4" /></button>
+                <button className="inline-flex h-9 w-9 items-center justify-center border border-rose-900 text-rose-300 hover:bg-rose-950" onClick={() => deleteReplay()} title="Delete replay" type="button"><Trash2 className="h-4 w-4" /></button>
               </div>
             </div>
 

@@ -1,3 +1,4 @@
+import { Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { PageSubnavigation } from "../components/AuthenticatedLayout.jsx";
@@ -103,6 +104,19 @@ const SoloPlayPage = () => {
     ));
   };
 
+  const deleteSimulation = async (simulation) => {
+    const verb = simulation.state === "RUNNING" ? "Cancel and delete" : "Delete";
+    if (!window.confirm(`${verb} this bot simulation? Its saved replay, if any, will remain available separately.`)) return;
+    setError("");
+    const response = await authenticatedFetch(buildApiUrl(`/api/game/simulations/${simulation.id}`), { method: "DELETE" });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      setError(payload.detail || "Failed to delete simulation.");
+      return;
+    }
+    setSimulations((current) => current.filter((entry) => entry.id !== simulation.id));
+  };
+
   return (
     <>
       <PageSubnavigation items={playSubnavItems} />
@@ -182,7 +196,7 @@ const SoloPlayPage = () => {
         />
       </section>
 
-      <SimulationQueue simulations={simulations} onOpenReplay={(id) => navigate(`/replays/${id}`)} />
+      <SimulationQueue simulations={simulations} onDelete={deleteSimulation} onOpenReplay={(id) => navigate(`/replays/${id}`)} />
     </>
   );
 };
@@ -194,7 +208,7 @@ const simulationLabels = {
   FAILED: "Failed",
 };
 
-const SimulationQueue = ({ simulations, onOpenReplay }) => (
+const SimulationQueue = ({ simulations, onDelete, onOpenReplay }) => (
   <section className="mt-6 border-t border-slate-800 pt-5">
     <div className="mb-3 flex items-center justify-between">
       <div>
@@ -222,6 +236,14 @@ const SimulationQueue = ({ simulations, onOpenReplay }) => (
               View replay
             </button>
           ) : null}
+          <button
+            className="inline-flex h-8 w-8 items-center justify-center border border-rose-900 text-rose-300 hover:bg-rose-950"
+            onClick={() => onDelete(simulation)}
+            title={simulation.state === "RUNNING" ? "Cancel and delete simulation" : "Delete simulation"}
+            type="button"
+          >
+            <Trash2 className="h-4 w-4" aria-hidden="true" />
+          </button>
         </div>
       ))}
     </div>

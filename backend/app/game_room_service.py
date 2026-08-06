@@ -17,6 +17,7 @@ ROOM_STATE_FINISHED = "FINISHED"
 ROOM_STATE_QUEUED = "QUEUED"
 ROOM_STATE_RUNNING = "RUNNING"
 ROOM_STATE_FAILED = "FAILED"
+ROOM_STATE_CANCELLED = "CANCELLED"
 COMMAND_STREAM_KEY = "game:commands"
 DEFAULT_GAME_TYPE = "chronicle_solo"
 
@@ -65,6 +66,7 @@ class GameRoomService:
         self._memory_results: dict[str, dict[str, Any]] = {}
         self._memory_history: dict[str, list[str]] = {}
         self._memory_simulations: dict[str, list[str]] = {}
+        self._cancelled_simulations: set[str] = set()
 
     def configure_redis(self, redis_client) -> None:
         self.redis = redis_client
@@ -129,33 +131,76 @@ class GameRoomService:
         rooms = [await self._load_room(str(room_id)) for room_id in room_ids]
         return [_public_room(room) for room in rooms if room]
 
+    async def delete_simulation(self, *, room_id: str, user_id: str) -> None:
+        room = await self._load_room(room_id)
+        if not room or room.get("owner_user_id") != user_id or room.get("mode") != "bots_only":
+            raise LookupError("Bot simulation not found.")
+        if room.get("state") in {ROOM_STATE_QUEUED, ROOM_STATE_RUNNING}:
+            self._cancelled_simulations.add(room_id)
+        if self.redis is None:
+            self._memory_simulations[user_id] = [
+                candidate for candidate in self._memory_simulations.get(user_id, []) if candidate != room_id
+            ]
+            self._memory_rooms.pop(room_id, None)
+            self._cancelled_simulations.discard(room_id)
+            return
+        await self.redis.zrem(_simulation_history_key(user_id), room_id)
+        if room.get("state") == ROOM_STATE_RUNNING:
+            room["state"] = ROOM_STATE_CANCELLED
+            room["ended_at"] = _now_iso()
+            await self._store_room(room)
+        else:
+            await self.redis.delete(_room_key(room_id))
+
     async def run_bot_simulation_job(self, *, room_id: str, user_id: str) -> None:
         room = await self._load_room(room_id)
         if not room or room.get("owner_user_id") != user_id or room.get("state") not in {
             ROOM_STATE_QUEUED,
             ROOM_STATE_RUNNING,
         }:
+            self._cancelled_simulations.discard(room_id)
             return
         room["state"] = ROOM_STATE_RUNNING
         room["started_at"] = _now_iso()
         await self._store_room(room)
         try:
             state = await asyncio.to_thread(run_bot_simulation, _decode_state(room.get("game_state")))
+            latest_room = await self._load_room(room_id)
+            if room_id in self._cancelled_simulations or not latest_room or latest_room.get("state") == ROOM_STATE_CANCELLED:
+                await self._remove_cancelled_room(room_id)
+                return
             from .database import SessionLocal
             from .replay_service import save_bot_replay
 
             with SessionLocal() as db:
                 replay = save_bot_replay(db, state=state, owner_user_id=user_id)
+                latest_room = await self._load_room(room_id)
+                if room_id in self._cancelled_simulations or not latest_room or latest_room.get("state") == ROOM_STATE_CANCELLED:
+                    if replay is not None:
+                        db.delete(replay)
+                        db.commit()
+                    await self._remove_cancelled_room(room_id)
+                    return
             room["game_state"] = json.dumps(state)
             room["state"] = ROOM_STATE_FINISHED
             room["ended_at"] = _now_iso()
             room["result_id"] = replay.id if replay else ""
             room["error"] = ""
         except Exception as exc:
+            if room_id in self._cancelled_simulations:
+                await self._remove_cancelled_room(room_id)
+                return
             room["state"] = ROOM_STATE_FAILED
             room["ended_at"] = _now_iso()
             room["error"] = str(exc)
         await self._store_room(room)
+
+    async def _remove_cancelled_room(self, room_id: str) -> None:
+        self._cancelled_simulations.discard(room_id)
+        if self.redis is None:
+            self._memory_rooms.pop(room_id, None)
+        else:
+            await self.redis.delete(_room_key(room_id))
 
     async def _store_room(self, room: dict[str, Any]) -> None:
         if self.redis is None:

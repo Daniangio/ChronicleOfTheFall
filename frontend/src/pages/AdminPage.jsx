@@ -2552,7 +2552,14 @@ const AdminPage = () => {
       },
     });
     const payload = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(payload.detail || "Admin request failed.");
+    if (!response.ok) {
+      const detail = Array.isArray(payload.detail)
+        ? payload.detail.map((entry) => entry.msg || JSON.stringify(entry)).join("; ")
+        : typeof payload.detail === "object" && payload.detail
+          ? JSON.stringify(payload.detail)
+          : payload.detail;
+      throw new Error(detail || "Admin request failed.");
+    }
     return payload;
   };
 
@@ -2582,7 +2589,7 @@ const AdminPage = () => {
     try {
       const replays = replayEntries.length ? replayEntries : await request("/api/admin/replays");
       const ids = requestedIds || (selectedReplayIds.length ? selectedReplayIds : replays.map((entry) => entry.id));
-      const statistics = await request("/api/admin/replay-statistics", {
+      const statistics = await request("/api/admin/replays/statistics", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ replay_ids: ids }),

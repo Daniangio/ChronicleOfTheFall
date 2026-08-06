@@ -47,7 +47,7 @@ async def admin_replays(_admin: User = Depends(require_admin), db: Session = Dep
     return [replay_summary(row) for row in list_replays(db)]
 
 
-@router.post("/admin/replay-statistics")
+@router.post("/admin/replays/statistics")
 async def admin_replay_statistics(
     payload: ReplayStatisticsRequest,
     _admin: User = Depends(require_admin),
