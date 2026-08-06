@@ -26,6 +26,7 @@ import ProfilePage from "../pages/ProfilePage.jsx";
 import ReplayPage from "../pages/ReplayPage.jsx";
 import SoloPlayPage from "../pages/SoloPlayPage.jsx";
 import { useStore } from "../store.js";
+import { refreshAuthenticatedSession } from "../utils/authenticatedFetch.js";
 import { buildWsUrl } from "../utils/connection.js";
 
 const StateGuard = ({ children }) => {
@@ -75,6 +76,7 @@ function AppContent() {
   } = useStore();
   const socketRef = useRef(null);
   const reconnectTimerRef = useRef(null);
+  const socketAuthRejectedRef = useRef(false);
 
   const disconnect = useCallback(() => {
     if (reconnectTimerRef.current) {
@@ -104,7 +106,10 @@ function AppContent() {
         handleChatMessage(payload);
       } else if (type === "chat_direct_started") {
         handleChatDirectStarted(payload);
-      } else if (type === "error" || type === "auth_error") {
+      } else if (type === "auth_error") {
+        socketAuthRejectedRef.current = true;
+        setConnectionIssue("Refreshing session...");
+      } else if (type === "error") {
         handleError(payload);
       }
     },
@@ -115,6 +120,7 @@ function AppContent() {
       handleChatHistory,
       handleChatMessage,
       handleError,
+      setConnectionIssue,
     ]
   );
 
@@ -123,6 +129,7 @@ function AppContent() {
       if (!accessToken || socketRef.current) return;
       const socket = new WebSocket(buildWsUrl("/ws", { token: accessToken }));
       socketRef.current = socket;
+      socketAuthRejectedRef.current = false;
       setConnectionIssue("Connecting...");
 
       socket.onopen = () => {
@@ -144,14 +151,26 @@ function AppContent() {
         }
       };
 
-      socket.onclose = () => {
+      socket.onclose = (event) => {
         if (socketRef.current !== socket) return;
         socketRef.current = null;
         setSendMessage(null);
         setConnectionStatus(false);
         if (accessToken) {
-          setConnectionIssue("Disconnected. Reconnecting...");
-          reconnectTimerRef.current = window.setTimeout(() => connect(accessToken), 1500);
+          const refreshRequired = event.code === 4401 || socketAuthRejectedRef.current;
+          setConnectionIssue(refreshRequired ? "Refreshing session..." : "Disconnected. Reconnecting...");
+          reconnectTimerRef.current = window.setTimeout(async () => {
+            let nextToken = useStore.getState().token;
+            if (refreshRequired) {
+              try {
+                nextToken = await refreshAuthenticatedSession();
+              } catch (error) {
+                console.warn("Firebase token refresh failed.", error);
+                setConnectionIssue("Session refresh failed. Retrying...");
+              }
+            }
+            if (nextToken) connect(nextToken);
+          }, refreshRequired ? 250 : 1500);
         }
       };
 

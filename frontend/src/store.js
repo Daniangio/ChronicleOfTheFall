@@ -1,5 +1,6 @@
 import { jwtDecode } from "jwt-decode";
 import { create } from "zustand";
+import { refreshFirebaseIdToken } from "./lib/firebase.js";
 import { buildApiUrl } from "./utils/connection.js";
 
 const ACCESS_TOKEN_KEY = "authToken";
@@ -90,15 +91,18 @@ export const useStore = create((set, get) => ({
     })),
 
   fetchAuthMe: async () => {
-    const token = get().token;
+    let token = get().token;
     if (!token) return null;
     try {
-      const response = await fetch(buildApiUrl("/api/auth/me"), {
+      let response = await fetch(buildApiUrl("/api/auth/me"), {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (response.status === 401) {
-        get().clearAuth();
-        return null;
+        token = await refreshFirebaseIdToken();
+        if (!token || !get().setAuthSession({ accessToken: token })) return null;
+        response = await fetch(buildApiUrl("/api/auth/me"), {
+          headers: { Authorization: `Bearer ${token}` },
+        });
       }
       if (!response.ok) throw new Error("Failed to fetch auth profile");
       const payload = await response.json();
@@ -112,18 +116,21 @@ export const useStore = create((set, get) => ({
   },
 
   fetchSessionState: async () => {
-    const token = get().token;
+    let token = get().token;
     if (!token) {
       set({ sessionState: null });
       return null;
     }
     try {
-      const response = await fetch(buildApiUrl("/api/session/state"), {
+      let response = await fetch(buildApiUrl("/api/session/state"), {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (response.status === 401) {
-        get().clearAuth();
-        return null;
+        token = await refreshFirebaseIdToken();
+        if (!token || !get().setAuthSession({ accessToken: token })) return null;
+        response = await fetch(buildApiUrl("/api/session/state"), {
+          headers: { Authorization: `Bearer ${token}` },
+        });
       }
       if (!response.ok) throw new Error(`Failed to fetch session state (${response.status})`);
       const payload = await response.json();

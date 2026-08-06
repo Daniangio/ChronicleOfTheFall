@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { PageSubnavigation } from "../components/AuthenticatedLayout.jsx";
 import { useStore } from "../store.js";
+import { authenticatedFetch } from "../utils/authenticatedFetch.js";
 import { buildApiUrl } from "../utils/connection.js";
 
 const FriendsPage = () => {
@@ -26,9 +27,7 @@ const FriendsPage = () => {
     setLoading(true);
     setError("");
     try {
-      const response = await fetch(buildApiUrl("/api/friends"), {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const response = await authenticatedFetch(buildApiUrl("/api/friends"));
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.detail || "Failed to load friends.");
       setFriendsData(payload);
@@ -48,10 +47,9 @@ const FriendsPage = () => {
     setBusy(true);
     setError("");
     try {
-      const response = await fetch(buildApiUrl("/api/friends/requests"), {
+      const response = await authenticatedFetch(buildApiUrl("/api/friends/requests"), {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ username: usernameInput.trim() }),
@@ -71,10 +69,9 @@ const FriendsPage = () => {
     setBusy(true);
     setError("");
     try {
-      const response = await fetch(buildApiUrl(`/api/friends/requests/${requestId}`), {
+      const response = await authenticatedFetch(buildApiUrl(`/api/friends/requests/${requestId}`), {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ accept }),
@@ -93,9 +90,8 @@ const FriendsPage = () => {
     setBusy(true);
     setError("");
     try {
-      const response = await fetch(buildApiUrl(`/api/friends/${friendUserId}`), {
+      const response = await authenticatedFetch(buildApiUrl(`/api/friends/${friendUserId}`), {
         method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.detail || "Failed to remove friend.");

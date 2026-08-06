@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useStore } from "../store.js";
+import { authenticatedFetch } from "../utils/authenticatedFetch.js";
 import { buildApiUrl } from "../utils/connection.js";
 
 const PostGamePage = () => {
@@ -17,9 +18,7 @@ const PostGamePage = () => {
       if (!token || !roomId || cancelled) return;
       attempts += 1;
       try {
-        const response = await fetch(buildApiUrl(`/api/game/results/${roomId}`), {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const response = await authenticatedFetch(buildApiUrl(`/api/game/results/${roomId}`));
         const payload = await response.json().catch(() => ({}));
         if (response.status === 404 && attempts < 10) {
           window.setTimeout(loadResult, 500);

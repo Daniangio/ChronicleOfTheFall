@@ -13,6 +13,7 @@ import {
   X,
 } from "lucide-react";
 import { useStore } from "../store.js";
+import { authenticatedFetch } from "../utils/authenticatedFetch.js";
 import { buildApiUrl } from "../utils/connection.js";
 
 const DEFAULT_CHAT_ID = "global:global";
@@ -115,9 +116,7 @@ const GlobalChatOverlay = () => {
     let cancelled = false;
     const loadFriends = async () => {
       try {
-        const response = await fetch(buildApiUrl("/api/friends"), {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const response = await authenticatedFetch(buildApiUrl("/api/friends"));
         const payload = await response.json().catch(() => ({}));
         if (!cancelled && response.ok) {
           setFriends(Array.isArray(payload?.friends) ? payload.friends : []);

@@ -5,6 +5,7 @@ import { PageSubnavigation } from "../components/AuthenticatedLayout.jsx";
 import CatalogItemVisual from "../components/CatalogItemVisual.jsx";
 import TagIcon from "../components/TagIcon.jsx";
 import { useStore } from "../store.js";
+import { authenticatedFetch } from "../utils/authenticatedFetch.js";
 import { buildApiUrl, buildAssetUrl } from "../utils/connection.js";
 
 const sections = [
@@ -2561,10 +2562,9 @@ const AdminPage = () => {
   }, [activeSection]);
 
   const request = async (path, options = {}) => {
-    const response = await fetch(buildApiUrl(path), {
+    const response = await authenticatedFetch(buildApiUrl(path), {
       ...options,
       headers: {
-        Authorization: `Bearer ${token}`,
         ...(options.headers || {}),
       },
     });

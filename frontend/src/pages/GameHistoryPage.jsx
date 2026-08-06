@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { PageSubnavigation } from "../components/AuthenticatedLayout.jsx";
 import { useStore } from "../store.js";
+import { authenticatedFetch } from "../utils/authenticatedFetch.js";
 import { buildApiUrl } from "../utils/connection.js";
 
 const GameHistoryPage = () => {
@@ -28,9 +29,7 @@ const GameHistoryPage = () => {
       setError("");
       setLoading(true);
       try {
-        const response = await fetch(buildApiUrl("/api/game/history"), {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const response = await authenticatedFetch(buildApiUrl("/api/game/history"));
         const payload = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(payload.detail || "Failed to load match history.");
         setResults(Array.isArray(payload.results) ? payload.results : []);

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useStore } from "../store.js";
+import { authenticatedFetch } from "../utils/authenticatedFetch.js";
 import { buildApiUrl } from "../utils/connection.js";
 
 const LobbyPage = () => {
@@ -15,9 +16,7 @@ const LobbyPage = () => {
     setLoading(true);
     setError("");
     try {
-      const response = await fetch(buildApiUrl("/api/lobby/state"), {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const response = await authenticatedFetch(buildApiUrl("/api/lobby/state"));
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.detail || "Failed to load lobby.");
       setUsers(Array.isArray(payload.users) ? payload.users : []);

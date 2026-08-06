@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { PageSubnavigation } from "../components/AuthenticatedLayout.jsx";
 import { useStore } from "../store.js";
+import { authenticatedFetch } from "../utils/authenticatedFetch.js";
 import { buildApiUrl } from "../utils/connection.js";
 
 const ProfilePage = () => {
@@ -25,9 +26,7 @@ const ProfilePage = () => {
     setLoading(true);
     setError("");
     try {
-      const response = await fetch(buildApiUrl(`/api/players/${targetUserId}`), {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const response = await authenticatedFetch(buildApiUrl(`/api/players/${targetUserId}`));
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.detail || "Failed to load profile.");
       setProfile(payload);
@@ -52,20 +51,18 @@ const ProfilePage = () => {
           ? {
               method: "POST",
               headers: {
-                Authorization: `Bearer ${token}`,
                 "Content-Type": "application/json",
               },
               body: JSON.stringify({ target_user_id: profile.user.id }),
             }
           : {
               method: "DELETE",
-              headers: { Authorization: `Bearer ${token}` },
             };
       const url =
         action === "send"
           ? buildApiUrl("/api/friends/requests")
           : buildApiUrl(`/api/friends/${profile.user.id}`);
-      const response = await fetch(url, options);
+      const response = await authenticatedFetch(url, options);
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.detail || "Friend action failed.");
       await loadProfile();
