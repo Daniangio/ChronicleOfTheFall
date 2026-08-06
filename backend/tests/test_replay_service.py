@@ -55,6 +55,7 @@ def test_bot_replay_persists_and_produces_distributions():
     with Session() as db:
         row = save_bot_replay(db, state=state, owner_user_id="owner")
         assert row is not None
+        assert row.replay["catalog"]["game"]["cards"][1]["data"] == {}
         assert save_bot_replay(db, state=state, owner_user_id="owner").id == row.id
         statistics = replay_statistics([row])
 

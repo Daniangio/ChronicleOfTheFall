@@ -25,6 +25,7 @@ def build_replay_document(state: dict[str, Any]) -> dict[str, Any]:
         "player_count": int(state.get("player_count", 0)),
         "decks": deepcopy(state.get("decks", {})),
         "catalog": {
+            "game": deepcopy(catalog),
             "items": [
                 {
                     "id": item.get("id", ""),

@@ -1,6 +1,7 @@
-import { Download, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, List, Pause, Play, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import GameRoomPage from "./GameRoomPage.jsx";
 import { authenticatedFetch } from "../utils/authenticatedFetch.js";
 import { buildApiUrl } from "../utils/connection.js";
 
@@ -10,6 +11,9 @@ const ReplayPage = () => {
   const [replays, setReplays] = useState([]);
   const [detail, setDetail] = useState(null);
   const [frameIndex, setFrameIndex] = useState(0);
+  const [viewMode, setViewMode] = useState("summary");
+  const [playing, setPlaying] = useState(false);
+  const [speed, setSpeed] = useState(1);
   const [error, setError] = useState("");
 
   const loadList = async () => {
@@ -35,6 +39,8 @@ const ReplayPage = () => {
         if (!response.ok) throw new Error(payload.detail || "Failed to load replay.");
         setDetail(payload);
         setFrameIndex(Math.max(0, (payload.replay?.frames?.length || 1) - 1));
+        setPlaying(false);
+        setViewMode("summary");
       })
       .catch((loadError) => setError(loadError.message));
   }, [replayId]);
@@ -50,6 +56,30 @@ const ReplayPage = () => {
     () => Object.fromEntries((replay.catalog?.agendas || []).map((item) => [item.id, item])),
     [replay]
   );
+  const exactReplayAvailable = Boolean(frame?.state && replay.catalog?.game);
+  const exactGameState = useMemo(() => {
+    if (!frame?.state || !replay.catalog?.game) return null;
+    return {
+      ...frame.state,
+      catalog: replay.catalog.game,
+      possible_actions: [],
+      replay_enabled: false,
+    };
+  }, [frame, replay]);
+  const finalFrame = frames[frames.length - 1] || null;
+  const showingFinalFrame = Boolean(finalFrame && frameIndex === frames.length - 1);
+
+  useEffect(() => {
+    if (!playing || viewMode !== "game" || !frames.length) return undefined;
+    if (frameIndex >= frames.length - 1) {
+      setPlaying(false);
+      return undefined;
+    }
+    const timer = window.setTimeout(() => {
+      setFrameIndex((current) => Math.min(frames.length - 1, current + 1));
+    }, 1200 / speed);
+    return () => window.clearTimeout(timer);
+  }, [frameIndex, frames.length, playing, speed, viewMode]);
 
   const deleteReplay = async () => {
     if (!replayId || !window.confirm("Delete this replay permanently?")) return;
@@ -73,6 +103,53 @@ const ReplayPage = () => {
     anchor.click();
     URL.revokeObjectURL(url);
   };
+
+  const openGameReplay = () => {
+    if (!exactReplayAvailable) return;
+    setPlaying(false);
+    setFrameIndex(0);
+    setViewMode("game");
+  };
+
+  if (viewMode === "game" && exactGameState) {
+    return (
+      <div className="fixed inset-0 z-[1600] bg-slate-950">
+        <GameRoomPage
+          replayState={exactGameState}
+          replaySpeed={speed}
+          replayControls={(
+            <ReplayControls
+              frameIndex={frameIndex}
+              frameCount={frames.length}
+              playing={playing}
+              speed={speed}
+              onBack={() => {
+                setPlaying(false);
+                setViewMode("summary");
+              }}
+              onPrevious={() => {
+                setPlaying(false);
+                setFrameIndex((current) => Math.max(0, current - 1));
+              }}
+              onPlay={() => {
+                if (frameIndex >= frames.length - 1) setFrameIndex(0);
+                setPlaying((current) => !current);
+              }}
+              onNext={() => {
+                setPlaying(false);
+                setFrameIndex((current) => Math.min(frames.length - 1, current + 1));
+              }}
+              onSeek={(index) => {
+                setPlaying(false);
+                setFrameIndex(index);
+              }}
+              onSpeed={setSpeed}
+            />
+          )}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="grid gap-4 lg:grid-cols-[17rem_minmax(0,1fr)]">
@@ -105,6 +182,18 @@ const ReplayPage = () => {
                 <p className="mt-1 text-xs text-slate-500">Action {frame.sequence}: {frame.action}</p>
               </div>
               <div className="flex gap-2">
+                <div className="flex border border-slate-700">
+                  <button className="bg-amber-300 px-3 text-xs font-bold text-stone-950" type="button">Summary</button>
+                  <button
+                    className="border-l border-slate-700 px-3 text-xs font-bold text-slate-300 hover:bg-slate-800 disabled:cursor-not-allowed disabled:text-slate-600"
+                    disabled={!exactReplayAvailable}
+                    onClick={openGameReplay}
+                    title={exactReplayAvailable ? "Replay through the normal game board" : "This legacy replay does not contain full game snapshots"}
+                    type="button"
+                  >
+                    Game Board
+                  </button>
+                </div>
                 <button className="inline-flex h-9 w-9 items-center justify-center border border-slate-700 hover:bg-slate-800" onClick={downloadReplay} title="Download replay JSON" type="button"><Download className="h-4 w-4" /></button>
                 <button className="inline-flex h-9 w-9 items-center justify-center border border-rose-900 text-rose-300 hover:bg-rose-950" onClick={deleteReplay} title="Delete replay" type="button"><Trash2 className="h-4 w-4" /></button>
               </div>
@@ -138,12 +227,92 @@ const ReplayPage = () => {
                 </div>
               </aside>
             </div>
+            {showingFinalFrame ? (
+              <ReplayScoreboard
+                players={finalFrame.players || []}
+                results={(replay.final || {}).agenda_results || finalFrame.agenda_results || {}}
+                winnerPlayerIds={(replay.final || {}).winner_player_ids || finalFrame.winner_player_ids || []}
+                agendaLookup={agendaLookup}
+              />
+            ) : null}
           </>
         )}
       </section>
     </div>
   );
 };
+
+const ReplayControls = ({
+  frameIndex,
+  frameCount,
+  playing,
+  speed,
+  onBack,
+  onPrevious,
+  onPlay,
+  onNext,
+  onSeek,
+  onSpeed,
+}) => (
+  <div className="flex items-center gap-1.5">
+    <button className="inline-flex h-8 items-center gap-1 border border-slate-700 px-2 text-xs font-bold text-slate-200 hover:bg-slate-800" onClick={onBack} title="Return to summary" type="button">
+      <List className="h-3.5 w-3.5" aria-hidden="true" />
+      Summary
+    </button>
+    <button className="inline-flex h-8 w-8 items-center justify-center border border-slate-700 text-slate-200 hover:bg-slate-800 disabled:text-slate-600" disabled={frameIndex <= 0} onClick={onPrevious} title="Previous frame" type="button">
+      <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+    </button>
+    <button className="inline-flex h-8 w-8 items-center justify-center bg-amber-300 text-stone-950 hover:bg-amber-200" onClick={onPlay} title={playing ? "Pause" : "Play"} type="button">
+      {playing ? <Pause className="h-4 w-4" aria-hidden="true" /> : <Play className="h-4 w-4" aria-hidden="true" />}
+    </button>
+    <button className="inline-flex h-8 w-8 items-center justify-center border border-slate-700 text-slate-200 hover:bg-slate-800 disabled:text-slate-600" disabled={frameIndex >= frameCount - 1} onClick={onNext} title="Next frame" type="button">
+      <ChevronRight className="h-4 w-4" aria-hidden="true" />
+    </button>
+    <span className="min-w-14 text-center text-[0.65rem] font-semibold text-slate-400">{frameIndex + 1}/{frameCount}</span>
+    <input
+      aria-label="Replay position"
+      className="w-24 accent-amber-500"
+      max={Math.max(0, frameCount - 1)}
+      min="0"
+      onChange={(event) => onSeek(Number(event.target.value))}
+      type="range"
+      value={frameIndex}
+    />
+    <div className="flex border border-slate-700" aria-label="Replay speed">
+      {[0.5, 1, 2, 4].map((value) => (
+        <button
+          key={value}
+          className={`h-8 min-w-8 px-1 text-[0.65rem] font-bold ${speed === value ? "bg-teal-400 text-slate-950" : "text-slate-300 hover:bg-slate-800"}`}
+          onClick={() => onSpeed(value)}
+          type="button"
+        >
+          {value}x
+        </button>
+      ))}
+    </div>
+  </div>
+);
+
+const ReplayScoreboard = ({ players, results, winnerPlayerIds, agendaLookup }) => (
+  <section className="mt-5 border-t border-amber-900/60 pt-4">
+    <h3 className="text-sm font-bold uppercase text-amber-300">Final Agenda Points</h3>
+    <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+      {players.map((player) => {
+        const result = results[player.id] || {};
+        const winner = winnerPlayerIds.includes(player.id);
+        return (
+          <div key={player.id} className={`flex items-center justify-between border px-3 py-2 ${winner ? "border-amber-500 bg-amber-950/35" : "border-slate-800 bg-slate-950"}`}>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-bold text-slate-100">{player.name}</p>
+              <p className="truncate text-xs text-slate-500">{agendaLookup[player.agenda_id]?.name || player.agenda_id || "No Agenda"}</p>
+            </div>
+            <strong className={winner ? "text-xl text-amber-300" : "text-xl text-slate-300"}>{Number(result.score || 0)}</strong>
+          </div>
+        );
+      })}
+    </div>
+  </section>
+);
 
 const ReplayValues = ({ title, values = {} }) => (
   <div className="border border-slate-800 bg-slate-950 p-3">

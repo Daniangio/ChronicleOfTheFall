@@ -352,6 +352,11 @@ def perform_action(state: dict[str, Any], action: str, payload: dict[str, Any] |
 
 
 def _replay_frame(state: dict[str, Any], action: str, payload: dict[str, Any]) -> dict[str, Any]:
+    replay_state = {
+        key: deepcopy(value)
+        for key, value in state.items()
+        if key not in {"catalog", "log", "possible_actions", "replay_frames", "replay_enabled"}
+    }
     return {
         "sequence": len(state.get("replay_frames", [])),
         "action": action,
@@ -384,6 +389,7 @@ def _replay_frame(state: dict[str, Any], action: str, payload: dict[str, Any]) -
         "docket_resolution": deepcopy(state.get("docket_resolution", [])),
         "agenda_results": deepcopy(state.get("agenda_results", {})),
         "winner_player_ids": list(state.get("winner_player_ids", [])),
+        "state": replay_state,
     }
 
 

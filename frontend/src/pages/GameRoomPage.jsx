@@ -304,12 +304,13 @@ const CityZone = ({
   );
 };
 
-const GameRoomPage = () => {
+const GameRoomPage = ({ replayState = null, replayControls = null, replaySpeed = 1 }) => {
   const { roomId } = useParams();
   const { token } = useStore();
   const navigate = useNavigate();
-  const [room, setRoom] = useState(null);
-  const [gameState, setGameState] = useState(null);
+  const replayMode = Boolean(replayState);
+  const [room, setRoom] = useState(replayMode ? { state: "REPLAY" } : null);
+  const [gameState, setGameState] = useState(replayState);
   const [focusedPlayerId, setFocusedPlayerId] = useState("");
   const [storageSelection, setStorageSelection] = useState({});
   const [boardZoom, setBoardZoom] = useState(0.82);
@@ -346,7 +347,7 @@ const GameRoomPage = () => {
   }, []);
 
   const loadGame = useCallback(async () => {
-    if (!token || !roomId) return;
+    if (replayMode || !token || !roomId) return;
     setError("");
     try {
       const [roomResponse, stateResponse] = await Promise.all([
@@ -364,11 +365,22 @@ const GameRoomPage = () => {
     } catch (loadError) {
       setError(loadError.message || "Failed to load game.");
     }
-  }, [navigate, roomId, token]);
+  }, [navigate, replayMode, roomId, token]);
 
   useEffect(() => {
     void loadGame();
   }, [loadGame]);
+
+  useEffect(() => {
+    if (!replayMode || !replayState) return;
+    setRoom({ state: "REPLAY" });
+    setGameState(replayState);
+    setFocusedPlayerId((current) => (
+      replayState.players?.some((player) => player.id === current)
+        ? current
+        : replayState.active_player_id || replayState.players?.[0]?.id || ""
+    ));
+  }, [replayMode, replayState]);
 
   useEffect(() => {
     setStorageSelection({});
@@ -386,9 +398,9 @@ const GameRoomPage = () => {
     const timer = window.setTimeout(() => {
       setDisplayedPhase(nextPhase);
       setPhaseTransition(null);
-    }, 560);
+    }, Math.max(80, 560 / Math.max(0.5, replaySpeed)));
     return () => window.clearTimeout(timer);
-  }, [displayedPhase, gameState?.phase]);
+  }, [displayedPhase, gameState?.phase, replaySpeed]);
 
   useEffect(() => {
     setSelectedHandCardIndex(null);
@@ -479,7 +491,7 @@ const GameRoomPage = () => {
   );
 
   const perform = async (action, payload = {}) => {
-    if (!token || busy) return null;
+    if (replayMode || !token || busy) return null;
     setBusy(true);
     setError("");
     try {
@@ -515,23 +527,23 @@ const GameRoomPage = () => {
   useEffect(() => {
     const possibleActions = gameState?.possible_actions || [];
     const automaticReveal = possibleActions.length === 1 && possibleActions[0].type === "reveal_next";
-    if (!resolutionOpen || gameState?.phase !== "reveal" || !automaticReveal || busy) return undefined;
+    if (replayMode || !resolutionOpen || gameState?.phase !== "reveal" || !automaticReveal || busy) return undefined;
     const timer = window.setTimeout(() => {
       void performAction(possibleActions[0]);
     }, 500);
     return () => window.clearTimeout(timer);
-  }, [busy, gameState, resolutionOpen]);
+  }, [busy, gameState, replayMode, resolutionOpen]);
 
   useEffect(() => {
     const refillAction = authoritativePhase === "hand_refill"
       ? actions.find((entry) => entry.type === "refill_hand")
       : null;
-    if (!refillAction || busy) return undefined;
+    if (replayMode || !refillAction || busy) return undefined;
     const timer = window.setTimeout(() => {
       void performAction(refillAction);
     }, 280);
     return () => window.clearTimeout(timer);
-  }, [actions, authoritativePhase, busy]);
+  }, [actions, authoritativePhase, busy, replayMode]);
 
   useEffect(() => {
     const resolutions = gameState?.docket_resolution || [];
@@ -563,7 +575,7 @@ const GameRoomPage = () => {
         deltaX: targetLeft - left,
         deltaY: targetTop - top,
         scale: target && source?.width ? target.width / source.width : 0.72,
-        delay: index * 180,
+        delay: index * (180 / Math.max(0.5, replaySpeed)),
       };
     });
     setResolutionClosing(true);
@@ -571,23 +583,23 @@ const GameRoomPage = () => {
       setResolutionOpen(false);
       setResolutionClosing(false);
       setFlyingBuilds(flights);
-    }, 300);
+    }, 300 / Math.max(0.5, replaySpeed));
     return () => {
       window.clearTimeout(closeTimer);
     };
-  }, [authoritativePhase, gameState?.docket_resolution, gameState?.era, resolutionOpen]);
+  }, [authoritativePhase, gameState?.docket_resolution, gameState?.era, replaySpeed, resolutionOpen]);
 
   useEffect(() => {
     if (!flyingBuilds.length) return undefined;
     const timer = window.setTimeout(
       () => setFlyingBuilds([]),
-      1050 + Math.max(0, flyingBuilds.length - 1) * 180
+      (1050 + Math.max(0, flyingBuilds.length - 1) * 180) / Math.max(0.5, replaySpeed)
     );
     return () => window.clearTimeout(timer);
-  }, [flyingBuilds]);
+  }, [flyingBuilds, replaySpeed]);
 
   const endGame = async () => {
-    if (!token || ending) return;
+    if (replayMode || !token || ending) return;
     setEnding(true);
     try {
       const response = await authenticatedFetch(buildApiUrl(`/api/game/rooms/${roomId}/end`), {
@@ -866,7 +878,7 @@ const GameRoomPage = () => {
               <h1 className="mt-1 text-base font-bold text-amber-50">Era {gameState.era}</h1>
               <p className="mt-1 text-xs text-slate-500">{titleCase(phase)}</p>
             </div>
-            <button className="inline-flex h-8 w-8 items-center justify-center border border-slate-700 text-slate-300 hover:bg-slate-800 disabled:opacity-50" disabled={ending} onClick={endGame} title="End game" type="button"><LogOut className="h-4 w-4" /></button>
+            {!replayMode ? <button className="inline-flex h-8 w-8 items-center justify-center border border-slate-700 text-slate-300 hover:bg-slate-800 disabled:opacity-50" disabled={ending} onClick={endGame} title="End game" type="button"><LogOut className="h-4 w-4" /></button> : null}
           </div>
           <div className="mt-3 space-y-1.5">
             {players.map((player) => {
@@ -944,7 +956,11 @@ const GameRoomPage = () => {
                   <Info className="h-4 w-4" aria-hidden="true" />
                   Info
                 </button>
-                {phaseChanging ? <span className="text-xs font-semibold text-amber-300">Advancing phase...</span> : renderPhaseControls()}
+                {replayMode
+                  ? replayControls
+                  : phaseChanging
+                    ? <span className="text-xs font-semibold text-amber-300">Advancing phase...</span>
+                    : renderPhaseControls()}
               </div>
             </div>
             <div className="relative mx-2 mt-1 h-8" aria-label="Era phase timeline">
@@ -1463,7 +1479,7 @@ const GameRoomPage = () => {
         </section>
       </div>
 
-      {phaseChanging ? <div className="fixed inset-0 z-[1400] cursor-wait" aria-hidden="true" /> : null}
+      {phaseChanging && !replayMode ? <div className="fixed inset-0 z-[1400] cursor-wait" aria-hidden="true" /> : null}
 
       {flyingBuilds.map((flight) => (
         <div
@@ -1476,6 +1492,7 @@ const GameRoomPage = () => {
             "--flight-y": `${flight.deltaY}px`,
             "--flight-scale": flight.scale,
             animationDelay: `${flight.delay}ms`,
+            animationDuration: `${900 / Math.max(0.5, replaySpeed)}ms`,
           }}
         >
           <ItemVisual

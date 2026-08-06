@@ -222,6 +222,9 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
         self.assertTrue(all(player["controller"] == "bot" for player in state["players"]))
         self.assertEqual([player["hidden_agenda_id"] for player in state["players"]], ["survivor"] * 3)
         self.assertEqual(state["replay_frames"][0]["action"], "setup")
+        self.assertEqual(state["replay_frames"][0]["state"]["room_id"], "test-room")
+        self.assertNotIn("catalog", state["replay_frames"][0]["state"])
+        self.assertNotIn("replay_frames", state["replay_frames"][0]["state"])
 
         action = state["possible_actions"][0]
         state = perform_action(state, action["type"], action)
