@@ -56,6 +56,9 @@ TOKEN_VALUES = {
     "unrest-token": -2.5,
     "fortified-token": 1.5,
 }
+PLAGUE_FAR_FROM_WIN_PENALTY = 7.0
+PLAGUE_NO_OBJECTIVE_PENALTY = 4.0
+PLAGUE_UNPROTECTED_PENALTY = 3.0
 
 
 def advance_bot_players(state: dict[str, Any]) -> dict[str, Any]:
@@ -728,13 +731,13 @@ def _effects_value(
             value += max(0.0, target_value - source_value) * max(1, amount)
         elif effect_type in {"modify_plague", "modify_unrest", "modify_fortified"}:
             token_id = f"{effect_type.removeprefix('modify_')}-token"
-            value += amount * (TOKEN_VALUES.get(token_id, 0.0) + profile["tokens"].get(token_id, 0.0))
+            value += _token_change_value(state, bot_id, profile, token_id, amount)
         elif effect_type == "modify_city_tokens":
             for token_id, token_amount in _counts(payload.get("tokens")).items():
-                value += token_amount * (TOKEN_VALUES.get(token_id, 0.0) + profile["tokens"].get(token_id, 0.0))
+                value += _token_change_value(state, bot_id, profile, token_id, token_amount)
         elif effect_type == "modify_token":
             token_id = str(payload.get("token_id") or "")
-            value += amount * (TOKEN_VALUES.get(token_id, 0.0) + profile["tokens"].get(token_id, 0.0))
+            value += _token_change_value(state, bot_id, profile, token_id, amount)
         elif effect_type == "storage":
             value += max(0, amount) * 0.8
         elif effect_type == "add_building_slots":
@@ -754,6 +757,56 @@ def _effects_value(
         elif effect_type == "waive_next_structure_tag_requirement":
             value += 2.0
     return value
+
+
+def _token_change_value(
+    state: dict[str, Any],
+    bot_id: str,
+    profile: dict[str, defaultdict[str, float]],
+    token_id: str,
+    amount: int,
+) -> float:
+    value = amount * (TOKEN_VALUES.get(token_id, 0.0) + profile["tokens"].get(token_id, 0.0))
+    if token_id == "plague-token" and amount > 0:
+        value -= _plague_timing_penalty(state, bot_id, amount)
+    return value
+
+
+def _plague_timing_penalty(state: dict[str, Any], bot_id: str, amount: int) -> float:
+    progress, completed_points, threshold = _agenda_win_progress(state, bot_id)
+    distance = max(0.0, 1.0 - progress)
+    sanitary = sum(
+        int(_city_tag_counts(state, city).get("sanitary", 0))
+        for city in state.get("cities", [])
+    )
+    plague_after = int(_all_token_counts(state).get("plague-token", 0)) + amount
+    unprotected_ratio = min(1.0, max(0, plague_after - sanitary) / max(1, amount))
+    per_token = PLAGUE_FAR_FROM_WIN_PENALTY * distance
+    per_token += PLAGUE_UNPROTECTED_PENALTY * unprotected_ratio
+    if completed_points <= 0 and threshold > 0:
+        per_token += PLAGUE_NO_OBJECTIVE_PENALTY
+    return amount * per_token
+
+
+def _agenda_win_progress(state: dict[str, Any], player_id: str) -> tuple[float, int, int]:
+    agenda = _agenda_for_player(state, player_id)
+    if not agenda:
+        return 0.0, 0, 6
+    data = agenda.get("data") or {}
+    threshold = max(1, int(data.get("win_threshold") or 6))
+    section_points = {"primary": 4, "secondary": 2, "collapse": 2}
+    completed_points = 0
+    potential_points = 0.0
+    for section_name, points in section_points.items():
+        conditions = (data.get(section_name) or {}).get("conditions") or []
+        if not conditions:
+            continue
+        if all(_agenda_condition_met(state, condition) for condition in conditions):
+            completed_points += points
+        progress = sum(_condition_progress(state, condition) for condition in conditions) / len(conditions)
+        potential_points += points * progress
+    effective_points = max(float(completed_points), potential_points)
+    return min(1.0, effective_points / threshold), completed_points, threshold
 
 
 def _agenda_profile(state: dict[str, Any], player_id: str) -> dict[str, defaultdict[str, float]]:

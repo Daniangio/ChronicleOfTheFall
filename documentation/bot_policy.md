@@ -46,6 +46,12 @@ During Plotting, the bot:
 4. If no common submission is available, plays the best legal Edict fallback
    because a player must still play at least one card when able.
 
+Plague-producing cards receive an additional timing penalty. The penalty is
+largest while the bot has completed no positive Agenda objective and while the
+Empire lacks enough Sanitary tags to cover the resulting Plague. It decreases
+with weighted Agenda progress and disappears once the bot has reached its Agenda
+win threshold; the normal negative value of Plague still applies afterward.
+
 Before committing, the bot may move one high-value, currently unplayable card to
 a Scheme Slot. It estimates readiness from missing tags, available tag providers,
 resource production, storage, and City slots. The current horizon is three Eras;

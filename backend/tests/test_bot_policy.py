@@ -4,6 +4,7 @@ import unittest
 
 from backend.app.bot_policy import (
     _forecast_role_holder,
+    _item_value,
     advance_bot_players,
     choose_next_bot_action,
     public_game_state,
@@ -207,6 +208,84 @@ class TestBotPolicy(unittest.TestCase):
 
         self.assertEqual(action["type"], "select_commit_card")
         self.assertEqual(action["item_id"], "industry-seed")
+
+    def test_plague_crisis_is_heavily_penalized_until_agenda_can_win(self):
+        agenda = agenda_for_tag("military", resource_id="knowledge")
+        plague_crisis = catalog_entry(
+            "early-pestilence",
+            "Early Pestilence",
+            "events",
+            data={
+                "subtype": "crisis",
+                "requirements": [],
+                "main_effects": [
+                    {
+                        "effect_type": "modify_city_tokens",
+                        "payload": {"tokens": {"plague-token": 2}},
+                    }
+                ],
+                "alternative_effects": [],
+            },
+        )
+        knowledge_structure = catalog_entry(
+            "archive",
+            "Archive",
+            "cards",
+            category="structure",
+            data={"tags": {}, "production": {"knowledge": 2}},
+        )
+        state = prepare_bot_state()
+        state["catalog"]["agendas"].append(agenda)
+        state["catalog"]["events"].append(plague_crisis)
+        state["catalog"]["cards"].append(knowledge_structure)
+        bot = state["players"][1]
+        bot["hidden_agenda_id"] = agenda["id"]
+
+        early_value = _item_value(state, plague_crisis, bot["id"])
+
+        state["cities"][0]["cards"].extend(["garrison", "garrison", "archive"])
+        winning_value = _item_value(state, plague_crisis, bot["id"])
+
+        self.assertLess(early_value, -20)
+        self.assertGreater(winning_value - early_value, 20)
+
+    def test_bot_prefers_safe_structure_over_early_unprotected_plague(self):
+        agenda = agenda_for_tag("science", resource_id="knowledge")
+        plague_crisis = catalog_entry(
+            "early-pestilence",
+            "Early Pestilence",
+            "events",
+            data={
+                "subtype": "crisis",
+                "requirements": [],
+                "main_effects": [
+                    {
+                        "effect_type": "modify_city_tokens",
+                        "payload": {"tokens": {"plague-token": 2}},
+                    }
+                ],
+                "alternative_effects": [],
+            },
+        )
+        state = prepare_bot_state()
+        state["catalog"]["agendas"].append(agenda)
+        state["catalog"]["events"].append(plague_crisis)
+        bot = state["players"][1]
+        bot["hidden_agenda_id"] = agenda["id"]
+        bot["hand"] = ["garrison", "early-pestilence"]
+        bot["scheme_slots"] = [None, None]
+        bot["committed"] = False
+        state["phase"] = "plotting"
+        state["active_player_id"] = ""
+        state["global_resource_pool"] = {"labor": 2}
+        for player in state["players"]:
+            if player["id"] != bot["id"]:
+                player["committed"] = True
+        state = _prepare_state(state)
+
+        _, action, _ = advance_bot_until_selection(state)
+
+        self.assertEqual(action["item_id"], "garrison")
 
     def test_bot_fills_both_scheme_slots_and_prioritizes_a_crisis(self):
         military_agenda = agenda_for_tag("military")
