@@ -10,6 +10,7 @@ from .build_path_solver import find_build_distances
 from .goldfishing_engine import (
     MINISTRY_ROTATION_ORDER,
     _agenda_condition_met,
+    _agenda_evaluation,
     _can_pay_cost,
     _city_tag_counts,
     _commitment_priority,
@@ -479,7 +480,15 @@ def _action_value(state: dict[str, Any], bot_id: str, action: dict[str, Any]) ->
         return float("-inf")
     if action_type == "choose_unrest_resolution":
         successor = _simulate_revolt_destructions(successor, bot_id)
+    if successor.get("phase") == "game_over" and not _bot_is_victory_eligible(successor, bot_id):
+        return float("-inf")
     return _board_value(successor, bot_id)
+
+
+def _bot_is_victory_eligible(state: dict[str, Any], bot_id: str) -> bool:
+    player = _player(state, bot_id)
+    result = _agenda_evaluation(state, str(player.get("hidden_agenda_id") or ""))
+    return bool(result.get("eligible"))
 
 
 def _simulate_revolt_destructions(state: dict[str, Any], bot_id: str) -> dict[str, Any]:

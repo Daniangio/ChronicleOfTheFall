@@ -34,6 +34,11 @@ used for placement, token placement, destruction, resource effects, and similar
 choices. General resource gains and conversions prefer resources with greater
 Agenda value and spend resources with lower Agenda value.
 
+A simulated choice that immediately collapses the Empire is rejected unless the
+acting bot's current Agenda score reaches its win threshold. This prevents bots
+from deliberately ending the game through Revolt or other direct choices when
+they would not qualify to win.
+
 ## Plotting And Schemes
 
 During Plotting, the bot:

@@ -137,6 +137,39 @@ const TOKEN_RULES = {
   "fortified-token": "A City can have at most 1. It provides +1 Military and is removed to prevent one Structure in that City from being destroyed.",
 };
 
+const UNREST_RESOLUTION_DETAILS = {
+  suppress: {
+    title: "Suppress the Revolt",
+    consequence: "Lose 1 Stability",
+    description: "Remove all Unrest from this City. The Empire answers disorder with force.",
+  },
+  buy_peace: {
+    title: "Buy Peace",
+    consequence: "Lose 1 Treasury",
+    description: "Remove all Unrest from this City. Imperial wealth temporarily restores order.",
+  },
+  let_burn: {
+    title: "Let It Burn",
+    consequence: "Destroy up to 2 Structures",
+    description: "Remove all Unrest, then the Minister of War chooses the Structures destroyed in this City.",
+  },
+  repression: {
+    title: "Repression",
+    consequence: "Lose 2 Morale · Gain 1 Stability",
+    description: "Remove all Global Unrest and restore control at the cost of Imperial Morale.",
+  },
+  concessions: {
+    title: "Concessions",
+    consequence: "Lose 2 Treasury · Gain 1 Morale",
+    description: "Remove all Global Unrest by funding concessions across the Empire.",
+  },
+  fragmentation: {
+    title: "Fragmentation",
+    consequence: "Lose 2 Stability · Gain 1 Treasury",
+    description: "Remove all Global Unrest while allowing Imperial authority to fracture.",
+  },
+};
+
 const IngredientReferenceRow = ({ entry, resolvedEntry, detail }) => (
   <div className="flex min-h-20 items-center gap-4 border-b border-slate-800 py-3 last:border-b-0">
     <span className="flex h-14 w-14 shrink-0 items-center justify-center">
@@ -328,6 +361,7 @@ const GameRoomPage = ({ replayState = null, replayControls = null, replaySpeed =
   const [infoOpen, setInfoOpen] = useState(false);
   const [storageOpen, setStorageOpen] = useState(false);
   const [empireFallOpen, setEmpireFallOpen] = useState(false);
+  const [animatedUnrestChoice, setAnimatedUnrestChoice] = useState("");
   const [displayedPhase, setDisplayedPhase] = useState("");
   const [phaseTransition, setPhaseTransition] = useState(null);
   const [resolutionClosing, setResolutionClosing] = useState(false);
@@ -668,6 +702,18 @@ const GameRoomPage = ({ replayState = null, replayControls = null, replaySpeed =
   };
   const selectedGenericStorage = storageGenericNeeded(storageSelection);
   const boardWidth = Math.max(760, (gameState.cities?.length || 1) * 610);
+  const unrestResolutionChoices = actions.filter((entry) => entry.type === "choose_unrest_resolution");
+  const unrestResolutionCity = gameState.cities.find(
+    (candidate) => candidate.id === unrestResolutionChoices[0]?.city_id
+  );
+
+  const resolveUnrestChoice = async (entry) => {
+    if (busy || animatedUnrestChoice) return;
+    setAnimatedUnrestChoice(entry.choice);
+    await new Promise((resolve) => window.setTimeout(resolve, 650));
+    await performAction(entry);
+    setAnimatedUnrestChoice("");
+  };
 
   const renderPhaseControls = () => {
     if (phase === "game_over") {
@@ -682,38 +728,11 @@ const GameRoomPage = ({ replayState = null, replayControls = null, replaySpeed =
         </button>
       );
     }
-    const unrestResolutionChoices = actions.filter((entry) => entry.type === "choose_unrest_resolution");
     if (unrestResolutionChoices.length) {
-      const city = gameState.cities.find(
-        (candidate) => candidate.id === unrestResolutionChoices[0].city_id
-      );
-      const labels = {
-        suppress: "Suppress: -2 Morale",
-        buy_peace: "Buy Peace: -2 Treasury",
-        let_burn: "Let It Burn: destroy 2 Structures",
-        repression: "Repression: -2 Morale, +1 Stability",
-        concessions: "Concessions: -2 Treasury, +1 Morale",
-        fragmentation: "Fragmentation: -2 Stability, +1 Treasury",
-      };
       return (
-        <div>
-          <p className="mb-2 text-sm font-semibold text-amber-100">
-            Minister of War: resolve {city ? `the Revolt in ${city.name}` : "the Imperial Unrest Crisis"}
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {unrestResolutionChoices.map((entry) => (
-              <button
-                key={entry.choice}
-                className="rounded-md border border-rose-900 bg-stone-950 px-3 py-2 text-sm font-semibold text-rose-100 hover:bg-rose-950/50 disabled:opacity-50"
-                disabled={busy}
-                onClick={() => performAction(entry)}
-                type="button"
-              >
-                {labels[entry.choice] || entry.choice}
-              </button>
-            ))}
-          </div>
-        </div>
+        <p className="animate-pulse text-sm font-semibold text-rose-100">
+          The Minister of War is resolving {unrestResolutionCity ? `the Revolt in ${unrestResolutionCity.name}` : "the Imperial Unrest Crisis"}.
+        </p>
       );
     }
     const revoltDestructionChoices = actions.filter(
@@ -1562,6 +1581,61 @@ const GameRoomPage = ({ replayState = null, replayControls = null, replaySpeed =
       </div>
 
       {phaseChanging && !replayMode ? <div className="fixed inset-0 z-[1400] cursor-wait" aria-hidden="true" /> : null}
+
+      {unrestResolutionChoices.length && !replayMode ? (
+        <div className="overlay-backdrop fixed inset-0 z-[1480] flex items-center justify-center overflow-y-auto bg-slate-950/90 p-6">
+          <section className="overlay-panel-from-right w-full max-w-3xl border border-rose-900/80 bg-slate-900 p-5 shadow-2xl">
+            <div className="mb-5 border-b border-slate-800 pb-4 text-center">
+              <p className="text-xs font-bold uppercase text-rose-500">Minister of War Decision</p>
+              <h2 className="mt-1 text-xl font-bold text-amber-50">
+                {unrestResolutionCity ? `Revolt in ${unrestResolutionCity.name}` : "Imperial Unrest Crisis"}
+              </h2>
+              <p className="mt-2 text-sm text-slate-400">Choose one resolution. Its consequences apply immediately.</p>
+            </div>
+            <div className="space-y-3">
+              {unrestResolutionChoices.map((entry) => {
+                const detail = UNREST_RESOLUTION_DETAILS[entry.choice] || {
+                  title: titleCase(entry.choice),
+                  consequence: "Resolve this option",
+                  description: "Apply the selected Unrest resolution.",
+                };
+                const selected = animatedUnrestChoice === entry.choice;
+                const muted = Boolean(animatedUnrestChoice) && !selected;
+                return (
+                  <button
+                    key={entry.choice}
+                    className={`w-full border bg-stone-950 p-4 text-left transition-all duration-300 disabled:cursor-wait ${
+                      selected
+                        ? "revolt-choice-resolving border-amber-300 bg-amber-950/50"
+                        : muted
+                          ? "scale-[0.97] border-slate-800 opacity-25"
+                          : "border-rose-900/70 hover:border-rose-500 hover:bg-rose-950/30"
+                    }`}
+                    disabled={busy || Boolean(animatedUnrestChoice)}
+                    onClick={() => void resolveUnrestChoice(entry)}
+                    type="button"
+                  >
+                    <span className="flex items-start justify-between gap-4">
+                      <span>
+                        <strong className="block text-sm text-amber-50">{detail.title}</strong>
+                        <span className="mt-1 block text-xs leading-5 text-slate-400">{detail.description}</span>
+                      </span>
+                      <strong className="shrink-0 border border-rose-900/80 bg-rose-950/40 px-3 py-2 text-xs text-rose-100">
+                        {detail.consequence}
+                      </strong>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            {animatedUnrestChoice ? (
+              <p className="mt-4 animate-pulse border-t border-slate-800 pt-4 text-center text-sm font-semibold text-amber-200">
+                Applying {UNREST_RESOLUTION_DETAILS[animatedUnrestChoice]?.title || titleCase(animatedUnrestChoice)}...
+              </p>
+            ) : null}
+          </section>
+        </div>
+      ) : null}
 
       {flyingBuilds.map((flight) => (
         <div

@@ -3,6 +3,7 @@ from __future__ import annotations
 import unittest
 
 from backend.app.bot_policy import (
+    _action_value,
     _forecast_role_holder,
     _item_value,
     advance_bot_players,
@@ -442,6 +443,60 @@ class TestBotPolicy(unittest.TestCase):
         action = choose_next_bot_action(state)
 
         self.assertEqual(action["resource_id"], "knowledge")
+
+    def test_bot_rejects_revolt_choice_that_ends_game_without_winning_score(self):
+        science_agenda = agenda_for_tag("science", resource_id="knowledge")
+        state = prepare_bot_state()
+        state["catalog"]["agendas"].append(science_agenda)
+        bot = state["players"][1]
+        bot["hidden_agenda_id"] = science_agenda["id"]
+        state["minister_of_empire_player_id"] = bot["id"]
+        state["pillars"]["stability"] = 1
+        state["pillars"]["treasury"] = 5
+        state["cities"][0]["condition_tokens"] = {"unrest-token": 2}
+        state["pending_unrest_resolution"] = {
+            "scope": "city",
+            "city_id": state["cities"][0]["id"],
+            "decision_player_id": bot["id"],
+            "remaining_destructions": 0,
+            "resume": None,
+        }
+        state["phase"] = "reveal"
+        state["active_player_id"] = bot["id"]
+        state = _prepare_state(state)
+        suppress = next(
+            action
+            for action in state["possible_actions"]
+            if action["type"] == "choose_unrest_resolution" and action["choice"] == "suppress"
+        )
+
+        self.assertEqual(_action_value(state, bot["id"], suppress), float("-inf"))
+        chosen = choose_next_bot_action(state)
+        self.assertNotEqual(chosen["choice"], "suppress")
+
+    def test_bot_may_end_game_after_reaching_agenda_win_threshold(self):
+        state = prepare_bot_state()
+        bot = state["players"][1]
+        bot["hidden_agenda_id"] = "survivor"
+        state["pillars"]["stability"] = 1
+        state["cities"][0]["condition_tokens"] = {"unrest-token": 2}
+        state["pending_unrest_resolution"] = {
+            "scope": "city",
+            "city_id": state["cities"][0]["id"],
+            "decision_player_id": bot["id"],
+            "remaining_destructions": 0,
+            "resume": None,
+        }
+        state["phase"] = "reveal"
+        state["active_player_id"] = bot["id"]
+        state = _prepare_state(state)
+        suppress = next(
+            action
+            for action in state["possible_actions"]
+            if action["type"] == "choose_unrest_resolution" and action["choice"] == "suppress"
+        )
+
+        self.assertGreater(_action_value(state, bot["id"], suppress), float("-inf"))
 
     def test_ministry_forecast_tracks_state_holder_rotating_into_war(self):
         state = prepare_bot_state()
