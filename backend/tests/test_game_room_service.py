@@ -13,6 +13,7 @@ from backend.app.goldfishing_engine import (
     _end_era,
     _legal_placements,
     _plotting_resolution_preview,
+    _prepare_state,
     build_goldfishing_state,
     perform_action,
 )
@@ -566,7 +567,8 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
 
         player = next(player for player in state["players"] if player["id"] == player_id)
         self.assertFalse(player["committed"])
-        self.assertEqual(player["selected_commitment"]["item_id"], action["item_id"])
+        selection_key = f"selected_{action['commitment_slot']}_commitment"
+        self.assertEqual(player[selection_key]["item_id"], action["item_id"])
         confirm = next(
             entry
             for entry in state["possible_actions"]
@@ -581,6 +583,83 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
             {entry.get("player_id") for entry in state["possible_actions"]},
             {"player-1", "player-2", "player-4"},
         )
+
+    def test_plotting_confirms_one_common_card_and_one_personal_edict(self):
+        state = build_state()
+        player = state["players"][0]
+        player["hand"] = ["farm", "tax-riots"]
+        player["scheme_slots"] = [None, None]
+        state["phase"] = "plotting"
+
+        state = perform_action(
+            state,
+            "select_commit_card",
+            {"player_id": player["id"], "source": "hand", "index": 0, "commitment_slot": "common"},
+        )
+        state = perform_action(
+            state,
+            "select_commit_card",
+            {"player_id": player["id"], "source": "hand", "index": 1, "commitment_slot": "edict"},
+        )
+        player = next(entry for entry in state["players"] if entry["id"] == player["id"])
+        self.assertEqual(player["selected_common_commitment"]["item_id"], "farm")
+        self.assertEqual(player["selected_edict_commitment"]["item_id"], "tax-riots")
+
+        state = perform_action(state, "confirm_plotting", {"player_id": player["id"]})
+
+        player = next(entry for entry in state["players"] if entry["id"] == player["id"])
+        commitments = [entry for entry in state["commitments"] if entry.get("owner_player_id") == player["id"]]
+        self.assertEqual(len(commitments), 1)
+        self.assertEqual(commitments[0]["item_id"], "tax-riots")
+        self.assertEqual(commitments[0]["commitment_slot"], "edict")
+        self.assertEqual(
+            {entry["item_id"] for entry in state["commitments"]},
+            {"farm", "tax-riots"},
+        )
+        self.assertEqual(player["hand"], [])
+
+    def test_selecting_crisis_replaces_selected_structure_in_common_slot(self):
+        state = build_state()
+        player = state["players"][0]
+        player["hand"] = ["farm", "border-raid"]
+        state["phase"] = "plotting"
+
+        state = perform_action(
+            state,
+            "select_commit_card",
+            {"player_id": player["id"], "source": "hand", "index": 0},
+        )
+        state = perform_action(
+            state,
+            "select_commit_card",
+            {"player_id": player["id"], "source": "hand", "index": 1},
+        )
+
+        player = next(entry for entry in state["players"] if entry["id"] == player["id"])
+        self.assertEqual(player["selected_common_commitment"]["item_id"], "border-raid")
+        self.assertIsNone(player["selected_edict_commitment"])
+
+    def test_ministry_specific_edict_is_only_available_to_current_holder(self):
+        state = build_state()
+        edict = next(entry for entry in state["catalog"]["events"] if entry["id"] == "tax-riots")
+        edict["data"]["ministry_id"] = "minister-of-state"
+        holder_id = state["ministry_assignments"]["minister-of-state"]
+        other = next(player for player in state["players"] if player["id"] != holder_id)
+        other["hand"] = ["tax-riots"]
+        state["phase"] = "plotting"
+        state = _prepare_state(state)
+
+        self.assertFalse(any(
+            action["type"] == "select_commit_card"
+            and action["player_id"] == other["id"]
+            for action in state["possible_actions"]
+        ))
+        with self.assertRaisesRegex(ValueError, "indicated Minister"):
+            perform_action(
+                state,
+                "select_commit_card",
+                {"player_id": other["id"], "source": "hand", "index": 0},
+            )
 
     def test_ministries_auto_assign_in_order_and_state_rotates_to_war(self):
         state = build_state()
@@ -712,7 +791,7 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
         self.assertEqual(player["hand"], ["border-raid", "garrison"])
         self.assertEqual(player["scheme_slots"], ["farm", None])
 
-    def test_scheming_preserves_and_rebases_selected_commitment(self):
+    def test_scheming_preserves_and_rebases_selected_common_commitment(self):
         state = build_state()
         player_id = state["minister_of_empire_player_id"]
         player = next(entry for entry in state["players"] if entry["id"] == player_id)
@@ -732,12 +811,13 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
         )
         player = next(entry for entry in state["players"] if entry["id"] == player_id)
         self.assertEqual(
-            player["selected_commitment"],
+            player["selected_common_commitment"],
             {
                 "item_id": "farm",
                 "source": "hand",
                 "index": 0,
                 "face_up": False,
+                "commitment_slot": "common",
             },
         )
 
@@ -747,9 +827,9 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
             {"player_id": player_id, "hand_index": 0, "slot_index": 0, "mode": "swap"},
         )
         player = next(entry for entry in state["players"] if entry["id"] == player_id)
-        self.assertEqual(player["selected_commitment"]["source"], "scheme")
-        self.assertEqual(player["selected_commitment"]["index"], 0)
-        self.assertEqual(player["selected_commitment"]["item_id"], "farm")
+        self.assertEqual(player["selected_common_commitment"]["source"], "scheme")
+        self.assertEqual(player["selected_common_commitment"]["index"], 0)
+        self.assertEqual(player["selected_common_commitment"]["item_id"], "farm")
 
         state = perform_action(
             state,
@@ -757,8 +837,8 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
             {"player_id": player_id, "slot_index": 0, "mode": "to_hand"},
         )
         player = next(entry for entry in state["players"] if entry["id"] == player_id)
-        self.assertEqual(player["selected_commitment"]["source"], "hand")
-        self.assertEqual(player["selected_commitment"]["index"], 1)
+        self.assertEqual(player["selected_common_commitment"]["source"], "hand")
+        self.assertEqual(player["selected_common_commitment"]["index"], 1)
         self.assertEqual(player["hand"][1], "farm")
 
     def test_plotting_offers_no_voluntary_discard_actions(self):
@@ -910,13 +990,13 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
                 {"player_id": state["minister_of_empire_player_id"]},
             )
 
-    def test_plotting_reveals_commitments_into_unshuffled_docket(self):
+    def test_plotting_shuffles_common_pool_before_personal_edicts(self):
         state = build_state()
         state["phase"] = "plotting"
         state["commitments"] = [
-            {"id": "first", "item_id": "farm", "kind": "cards", "owner_player_id": "", "face_up": False},
-            {"id": "second", "item_id": "tax-riots", "kind": "events", "owner_player_id": "", "face_up": False},
-            {"id": "third", "item_id": "garrison", "kind": "cards", "owner_player_id": "", "face_up": False},
+            {"id": "first", "item_id": "farm", "kind": "cards", "owner_player_id": "", "face_up": False, "commitment_slot": "common"},
+            {"id": "second", "item_id": "tax-riots", "kind": "events", "owner_player_id": "player-2", "face_up": False, "commitment_slot": "edict"},
+            {"id": "third", "item_id": "garrison", "kind": "cards", "owner_player_id": "", "face_up": False, "commitment_slot": "common"},
         ]
         for player in state["players"][:3]:
             player["committed"] = True
@@ -938,10 +1018,10 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
         state = perform_action(state, "continue_phase", {})
         self.assertEqual(state["phase"], "docket_ordering")
         self.assertEqual(state["active_player_id"], state["minister_of_empire_player_id"])
-        self.assertEqual(
-            [entry["id"] for entry in state["council_stack"][:3]],
-            ["first", "second", "third"],
-        )
+        self.assertEqual(state["council_stack"][-1]["id"], "second")
+        common_ids = {entry["id"] for entry in state["council_stack"][:-1]}
+        self.assertEqual(len(common_ids), 3)
+        self.assertTrue({"first", "third"}.issubset(common_ids))
 
     def test_production_combines_storage_and_all_built_cards(self):
         state = finish_ministry_draft(build_state())
@@ -1410,7 +1490,8 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
             state["cities"][1]["condition_tokens"],
             {"plague-token": 1, "fortified-token": 1},
         )
-        self.assertEqual(state["pillars"]["morale"], 3)
+        self.assertEqual(state["pillars"]["stability"], 4)
+        self.assertEqual(state["pillars"]["morale"], 5)
 
     def test_unspecified_unrest_uses_state_minister_scope_and_city_choices(self):
         state = build_state()
@@ -1473,7 +1554,7 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
         state = perform_action(state, buy_peace["type"], buy_peace)
 
         self.assertEqual(state["cities"][1]["condition_tokens"], {})
-        self.assertEqual(state["pillars"]["treasury"], 3)
+        self.assertEqual(state["pillars"]["treasury"], 4)
         self.assertIn(event["id"], state["foundation_discard"])
 
     def test_global_unrest_triggers_imperial_crisis_and_resumes_event(self):
@@ -1784,7 +1865,7 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
             2,
         )
 
-    def test_fifth_era_crisis_intake_and_hand_reset_preserve_crises(self):
+    def test_odd_era_crisis_intake_and_hand_reset_preserve_crises(self):
         state = build_state()
         state["era"] = 5
         state["phase"] = "crisis_intake"
@@ -1802,6 +1883,23 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
                 for player in state["players"]
             )
         )
+
+    def test_even_era_crisis_intake_does_not_draw_crises(self):
+        state = build_state()
+        state["era"] = 2
+        state["phase"] = "crisis_intake"
+        crisis_counts = {
+            player["id"]: player["hand"].count("border-raid")
+            for player in state["players"]
+        }
+
+        state = perform_action(state, "continue_phase", {})
+
+        self.assertEqual(state["phase"], "hand_refill")
+        self.assertTrue(all(
+            player["hand"].count("border-raid") == crisis_counts[player["id"]]
+            for player in state["players"]
+        ))
 
     def test_event_tag_requirement_uses_permanent_empire_tags(self):
         state = build_state()

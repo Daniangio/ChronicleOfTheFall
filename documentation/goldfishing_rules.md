@@ -33,16 +33,24 @@ and submits one through `POST /api/game/rooms/{room_id}/actions`:
   "payload": {
     "player_id": "player-2",
     "source": "hand",
-    "index": 0
+    "index": 0,
+    "commitment_slot": "common"
   }
 }
 ```
 
-Selecting a Plotting card does not commit it. The backend records
-`selected_commitment` for that player and exposes `confirm_plotting`. Scheme
-rearrangement clears the pending selection so a stale hand or Scheme index cannot
-be confirmed. Only `confirm_plotting` removes the selected card and completes
-that player's Plotting Phase.
+Selecting a Plotting card does not submit it. The backend records independent
+`selected_common_commitment` and `selected_edict_commitment` values and exposes
+`confirm_plotting` after at least one is selected. The common slot accepts one
+Structure or Crisis. The optional Edict slot accepts an Edict only when its
+Ministry restriction matches the player. Scheme rearrangement rebases both
+selections so stale hand or Scheme indexes cannot be confirmed. Only
+`confirm_plotting` removes the selected card or cards and completes that player's
+Plotting Phase.
+
+After every player confirms, the backend shuffles the anonymous common
+submissions, reveals the personal Edicts as a separate group, merges both groups,
+and enforces Crisis-first Docket ordering.
 
 The engine supports Agenda selection, Ministry assignment, Suspicion placement,
 Production, parallel anonymous commitments, Docket ordering, reveal and

@@ -484,6 +484,9 @@ const GameRoomPage = ({ replayState = null, replayControls = null, replaySpeed =
   const confirmPlottingAction = actions.find(
     (entry) => entry.type === "confirm_plotting" && entry.player_id === focusedPlayer?.id
   );
+  const focusedCoveredEdict = (gameState?.commitments || []).find(
+    (entry) => entry.commitment_slot === "edict" && entry.owner_player_id === focusedPlayer?.id
+  );
   const discardCount = (gameState?.foundation_discard?.length || 0) + (gameState?.crisis_discard?.length || 0);
   const hiddenBuildTargets = useMemo(
     () => new Set(flyingBuilds.map((flight) => flight.targetKey)),
@@ -1174,8 +1177,10 @@ const GameRoomPage = ({ replayState = null, replayControls = null, replaySpeed =
                   <ItemVisual item={itemLookup[normalize(currentReveal.item_id)]} catalogs={catalogs} tagLookup={tagLookup} storageIconSrc={storageIconSrc} />
                   {currentReveal.priority_kind === "founding" ? (
                     <p className="mt-2 text-xs text-amber-700">Supported for founding by the Council.</p>
-                  ) : currentReveal.face_up ? (
-                    <p className="mt-2 text-xs text-amber-700">Committed by {players.find((player) => player.id === currentReveal.owner_player_id)?.name}</p>
+                  ) : currentReveal.face_up || currentReveal.commitment_slot === "edict" ? (
+                    <p className="mt-2 text-xs text-amber-700">
+                      {currentReveal.commitment_slot === "edict" ? "Edict played" : "Committed"} by {players.find((player) => player.id === currentReveal.owner_player_id)?.name}
+                    </p>
                   ) : null}
                 </section>
               ) : null}
@@ -1290,10 +1295,16 @@ const GameRoomPage = ({ replayState = null, replayControls = null, replaySpeed =
                                     setSchemeSourceIndex(null);
                                     void performAction(plottingAction);
                                   }}
-                                  title={plottingAction.face_up ? "Commit face up" : "Commit anonymously"}
+                                  title={plottingAction.commitment_slot === "edict" ? "Play this Edict" : "Submit to the anonymous common pool"}
                                   type="button"
                                 >
-                                  {plottingAction.selected ? "Committed" : "Commit"}
+                                  {plottingAction.selected
+                                    ? "Selected"
+                                    : plottingAction.commitment_slot === "edict"
+                                      ? "Play Edict"
+                                      : isCrisis
+                                        ? "Submit Crisis"
+                                        : "Submit Structure"}
                                 </button>
                               ) : null}
                               {schemeActions.length ? (
@@ -1434,7 +1445,13 @@ const GameRoomPage = ({ replayState = null, replayControls = null, replaySpeed =
                                   }}
                                   type="button"
                                 >
-                                  {plottingAction.selected ? "Committed" : "Commit"}
+                                  {plottingAction.selected
+                                    ? "Selected"
+                                    : plottingAction.commitment_slot === "edict"
+                                      ? "Play Edict"
+                                      : isCrisis
+                                        ? "Submit Crisis"
+                                        : "Submit Structure"}
                                 </button>
                               ) : null}
                               {returnAction ? (
@@ -1472,6 +1489,14 @@ const GameRoomPage = ({ replayState = null, replayControls = null, replaySpeed =
                 </div>
               </div> : null}
               <aside className="flex min-w-0 flex-col items-center gap-2 border-l border-slate-800 px-1 lg:col-start-3">
+                {phase === "plotting" && (focusedPlayer?.selected_edict_commitment || focusedCoveredEdict) ? (
+                  <div
+                    className="flex aspect-[5/7] w-12 items-center justify-center border border-violet-700 bg-violet-950/70 text-violet-200"
+                    title={focusedCoveredEdict ? "Covered personal Edict submitted" : "Selected personal Edict"}
+                  >
+                    <ScrollText className="h-5 w-5" aria-hidden="true" />
+                  </div>
+                ) : null}
                 <div className="grid grid-cols-2 gap-2">
                   {focusedMinistries.map((ministry) => {
                     const iconSrc = buildAssetUrl(
@@ -1515,11 +1540,13 @@ const GameRoomPage = ({ replayState = null, replayControls = null, replaySpeed =
                 </div>
                 {phase === "plotting" && confirmPlottingAction ? (
                   <button
-                    aria-label={confirmPlottingAction.has_selection ? "Confirm submitted card" : "Confirm no card"}
+                    aria-label={confirmPlottingAction.has_selection ? "Confirm submitted cards" : "Confirm no legal card"}
                     className="inline-flex h-9 w-full items-center justify-center gap-1 bg-amber-300 px-1 text-stone-950 hover:bg-amber-200 disabled:opacity-50"
                     disabled={busy}
                     onClick={() => performAction(confirmPlottingAction)}
-                    title={confirmPlottingAction.has_selection ? "Confirm submitted card" : "Confirm no card"}
+                    title={confirmPlottingAction.has_selection
+                      ? `Confirm ${confirmPlottingAction.selection_count} submitted card${confirmPlottingAction.selection_count === 1 ? "" : "s"}`
+                      : "Confirm no legal card"}
                     type="button"
                   >
                     <Check className="h-4 w-4 shrink-0" aria-hidden="true" />
@@ -1852,8 +1879,11 @@ const GameRoomPage = ({ replayState = null, replayControls = null, replaySpeed =
                       <span>Order {index + 1}</span>
                       {commitment.priority_kind === "founding" ? (
                         <span>City founding</span>
-                      ) : commitment.face_up ? (
-                        <span>{players.find((player) => player.id === commitment.owner_player_id)?.name}</span>
+                      ) : commitment.face_up || commitment.commitment_slot === "edict" ? (
+                        <span>
+                          {commitment.commitment_slot === "edict" ? "Edict · " : ""}
+                          {players.find((player) => player.id === commitment.owner_player_id)?.name}
+                        </span>
                       ) : <span>Anonymous</span>}
                     </div>
                     <ItemVisual item={itemLookup[normalize(commitment.item_id)]} catalogs={catalogs} tagLookup={tagLookup} storageIconSrc={storageIconSrc} />

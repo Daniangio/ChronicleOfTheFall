@@ -14,7 +14,7 @@ The Empire does not win. The Empire will fall.
 
 Each player secretly represents a faction with a Hidden Agenda. Players must help the Empire survive long enough to shape it, but they are not trying to preserve the same future. When the Empire collapses, Hidden Agendas are revealed. A player wins if the final state of the Empire satisfies their Agenda.
 
-The central mechanic of the game is the **Anonymous Council**. Each Era, players secretly commit cards into the machinery of government. These cards are revealed anonymously into the Council Docket, ordered by the Minister of the Empire, and resolved one at a time. Some cards build the Empire. Others disturb it. Since most contributors are anonymous, players must infer who is shaping the Empire, who is protecting it, and who is accelerating its fall.
+The central mechanic of the game is the **Anonymous Council**. Each Era, players secretly submit Structures or Crises to a common pool and may also play a personal Edict. Common-pool cards are revealed anonymously into the Council Docket, while Edicts remain associated with their player. The Minister of the Empire orders the Docket, then its cards resolve one at a time. Some cards build the Empire. Others disturb it. Since most contributors are anonymous, players must infer who is shaping the Empire, who is protecting it, and who is accelerating its fall.
 
 ---
 
@@ -855,15 +855,25 @@ The Global Resource Pool becomes:
 
 # 14. Plotting Phase
 
-Each player must commit 1 card if able.
+Each player must play at least 1 card if able.
 
-A player may commit:
+A player may make both of the following submissions:
 
-* 1 card from hand;
-* or 1 card from a Scheme Slot.
+* submit exactly 1 Structure or 1 Crisis face down to the anonymous common pool;
+* optionally play 1 Edict face down in front of themselves.
+
+A player may therefore play an Edict alone, a Structure alone, a Crisis alone,
+an Edict with a Structure, or an Edict with a Crisis. A player may never submit
+both a Structure and a Crisis in the same Era.
+
+Each submitted card may come from hand or from a Scheme Slot. An Edict that
+names a Ministry may be played only by the current holder of that Ministry. A
+general Edict that names no Ministry may be played by any current Minister. The
+digital game prevents illegal Edict submissions before confirmation.
 
 Players perform Plotting in parallel. There is no active-player order during this
-phase. Once a player commits, that player has completed Plotting for the Era.
+phase. A player may change either selected submission until confirming. Once a
+player confirms, that player has completed Plotting for the Era.
 
 ---
 
@@ -879,11 +889,12 @@ The player may:
 
 At all times, the player may have no more than 2 cards in Scheme Slots.
 
-After Scheming, the player commits 1 card from either hand or Scheme, if able.
+After Scheming, the player selects and confirms their common submission, personal
+Edict, or both.
 
-Committing a card ends that player's Plotting turn.
+Confirming the selected cards ends that player's Plotting turn.
 
-A committed Scheme card leaves its Scheme Slot.
+A submitted Scheme card leaves its Scheme Slot.
 
 ---
 
@@ -899,29 +910,31 @@ Cards are discarded only when:
 
 ---
 
-## 14.3 Anonymous Commitments
+## 14.3 Covered Submissions
 
-Cards are normally committed face down.
+All submissions are initially played face down.
 
-All face-down committed cards are collected without revealing who contributed each card.
+Structure and Crisis submissions enter a common pool without revealing who
+contributed each card. Personal Edicts remain covered in front of their player,
+so their owner is known but their identity is not.
 
-Players should not know which player submitted which face-down card.
+Players should not know who submitted a Structure or Crisis.
 
 ---
 
-## 14.4 Face-Up Committed Cards
+## 14.4 Face-Up Submissions
 
 This subsection is inactive while Suspicion is disabled.
 
-A player with 2+ Suspicion must commit face up.
+A player with 2+ Suspicion must submit their cards face up.
 
-If a player must commit face up, the card remains visibly associated with that player.
+Each face-up submission remains visibly associated with that player.
 
 For physical play:
 
-* place the real card face up in front of that player;
-* place a face-down placeholder among the commitments;
-* when commitments enter the Council Docket, replace that placeholder with the associated face-up card.
+* place each submitted card face up in front of that player;
+* place a face-down placeholder in the appropriate submission area;
+* when submissions enter the Council Docket, replace each placeholder with its associated face-up card.
 
 For digital play, the Docket shows that the card belongs to the suspected player.
 
@@ -929,7 +942,7 @@ For digital play, the Docket shows that the card belongs to the suspected player
 
 # 15. Hand Reset Phase
 
-After every player has committed or declared that they cannot commit, each player
+After every player has confirmed or declared that they cannot play a card, each player
 discards all non-Crisis cards remaining in hand face up into the Foundation discard
 pile.
 
@@ -937,25 +950,28 @@ Crisis cards remain in hand.
 
 Cards in Scheme Slots are not discarded.
 
-After Hand Reset, reveal the committed cards into the Council Docket.
+After Hand Reset, reveal the submitted cards into the Council Docket.
 
 ---
 
 # 16. Council Docket Phase
 
-After every player has committed or declared that they cannot commit:
+After every player has confirmed or declared that they cannot play a card:
 
-1. Reveal all committed cards into the **Council Docket**.
-2. Keep each normal contributor anonymous.
-3. Keep any face-up Suspicion commitments associated with their contributor.
-4. Move every Crisis to the front of the Docket.
-5. Place supported City cards in the normal range after all Crisis cards.
-6. The Minister of the Empire orders Crisis cards among themselves, then freely
+1. Reveal all personal Edicts together and verify their Ministry eligibility.
+2. Shuffle the covered common pool, then reveal its Structures and Crises anonymously.
+3. Merge the revealed Edicts and common-pool cards into the **Council Docket**.
+4. Keep each Structure and Crisis contributor anonymous; keep each Edict associated with its player.
+5. Keep any face-up Suspicion commitments associated with their contributor.
+6. Move every Crisis to the front of the Docket.
+7. Place supported City cards in the normal range after all Crisis cards.
+8. The Minister of the Empire orders Crisis cards among themselves, then freely
    orders supported Cities, Edicts, and Structures together in the normal range.
-7. Lock the chosen order.
-8. Resolve the first card, then continue through the Docket from left to right.
+9. Lock the chosen order.
+10. Resolve the first card, then continue through the Docket from left to right.
 
-The Docket is not shuffled and its resolution order is not random.
+Only the anonymous common pool is shuffled. The final resolution order is chosen,
+not random.
 
 Every Crisis must finish before any supported City, Edict, or Structure.
 
@@ -1133,12 +1149,12 @@ The Minister of War chooses one resolution:
 ### Suppress the Revolt
 
 Remove all Unrest from that City.
-Lose 2 Morale.
+Lose 1 Stability.
 
 ### Buy Peace
 
 Remove all Unrest from that City.
-Lose 2 Treasury.
+Lose 1 Treasury.
 
 ### Let It Burn
 
@@ -1271,8 +1287,8 @@ The remaining Labor and Wealth are discarded.
 
 After Storage and before Hand Refill, check the completed Era number.
 
-If it is divisible by 5, each player draws 1 card from the Crisis Deck and adds
-it to their hand. This occurs at the end of Eras 5, 10, 15, 20, and so on.
+If it is odd, each player draws 1 card from the Crisis Deck and adds it to their
+hand. This occurs at the end of Eras 1, 3, 5, 7, and so on.
 
 If the Crisis Deck is empty, skip any draw it cannot supply.
 

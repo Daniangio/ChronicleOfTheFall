@@ -130,12 +130,19 @@ def public_game_state(state: dict[str, Any]) -> dict[str, Any]:
             if not source.get("hand_revealed"):
                 player["hand"] = []
                 player["scheme_slots"] = [None] * len(source.get("scheme_slots", []))
+                player["selected_common_commitment"] = None
+                player["selected_edict_commitment"] = None
             if not reveal_agendas:
                 player["hidden_agenda_id"] = ""
             player["agenda_options"] = []
         for key in list(player):
             if key.startswith("bot_"):
                 player.pop(key, None)
+    if state.get("phase") == "plotting":
+        for commitment in public.get("commitments", []):
+            if commitment.get("owner_player_id") != human_player_id:
+                commitment["item_id"] = ""
+                commitment["kind"] = ""
     public["possible_actions"] = [
         action
         for action in public.get("possible_actions", [])
@@ -237,23 +244,44 @@ def _choose_plotting_action(
     )
     already_adjusted = int(player.get("bot_scheme_adjusted_era", 0)) == int(state.get("era", 1))
     select_actions = [action for action in actions if action["type"] == "select_commit_card"]
-    preferred_commitment = _preferred_plotting_commitment(state, bot_id, select_actions)
+    common_actions = [action for action in select_actions if action.get("commitment_slot") == "common"]
+    edict_actions = [action for action in select_actions if action.get("commitment_slot") == "edict"]
+    preferred_common = _preferred_plotting_commitment(state, bot_id, common_actions)
+    preferred_edict = _preferred_plotting_commitment(state, bot_id, edict_actions)
+    selected_common = player.get("selected_common_commitment")
+    selected_edict = player.get("selected_edict_commitment")
+    should_play_edict = preferred_edict is not None and (
+        not common_actions
+        or _item_value(
+            state,
+            item_by_id(state, str(preferred_edict.get("item_id") or "")),
+            bot_id,
+        ) > 0
+    )
+    reserved_commitments = [
+        selection
+        for selection in (
+            selected_common or preferred_common,
+            selected_edict or (preferred_edict if should_play_edict else None),
+        )
+        if selection
+    ]
     scheme_action = _choose_scheme_action(
         state,
         bot_id,
         actions,
-        preferred_commitment=preferred_commitment,
+        reserved_commitments=reserved_commitments,
         allow_replacement=not already_adjusted,
     )
     if scheme_action is not None:
         return scheme_action
-    if player.get("selected_commitment") and confirm_action:
+    if not selected_common and preferred_common is not None:
+        return preferred_common
+    if not selected_edict and should_play_edict:
+        return preferred_edict
+    if confirm_action:
         return confirm_action
-    if preferred_commitment is None:
-        if confirm_action:
-            return confirm_action
-        raise ValueError("Bot has no Plotting action.")
-    return preferred_commitment
+    raise ValueError("Bot has no Plotting action.")
 
 
 def _preferred_plotting_commitment(
@@ -284,20 +312,18 @@ def _choose_scheme_action(
     bot_id: str,
     actions: list[dict[str, Any]],
     *,
-    preferred_commitment: dict[str, Any] | None,
+    reserved_commitments: list[dict[str, Any]],
     allow_replacement: bool,
 ) -> dict[str, Any] | None:
     player = _player(state, bot_id)
-    selected = player.get("selected_commitment") or {}
-    reserved_source = selected.get("source")
-    reserved_index = int(selected.get("index", -1))
-    if not selected and preferred_commitment:
-        reserved_source = preferred_commitment.get("source")
-        reserved_index = int(preferred_commitment.get("index", -1))
+    reserved_locations = {
+        (str(commitment.get("source") or ""), int(commitment.get("index", -1)))
+        for commitment in reserved_commitments
+    }
 
     hand_candidates: list[tuple[float, int, str, int]] = []
     for index, item_id in enumerate(player.get("hand", [])):
-        if reserved_source == "hand" and reserved_index == index:
+        if ("hand", index) in reserved_locations:
             continue
         item = item_by_id(state, item_id)
         readiness = _readiness_turns(state, item)
@@ -338,7 +364,7 @@ def _choose_scheme_action(
             index,
         )
         for index, item_id in enumerate(player.get("scheme_slots", []))
-        if item_id and not (reserved_source == "scheme" and reserved_index == index)
+        if item_id and ("scheme", index) not in reserved_locations
     ]
     if not existing:
         return None

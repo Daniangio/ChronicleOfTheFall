@@ -6,6 +6,7 @@ from backend.app.bot_policy import (
     _forecast_role_holder,
     advance_bot_players,
     choose_next_bot_action,
+    public_game_state,
 )
 from backend.app.game_room_service import GameRoomService
 from backend.app.goldfishing_engine import _prepare_state, perform_action
@@ -235,6 +236,52 @@ class TestBotPolicy(unittest.TestCase):
             2,
         )
 
+    def test_bot_can_submit_a_common_card_and_positive_value_edict_together(self):
+        edict = catalog_entry(
+            "labor-grant",
+            "Labor Grant",
+            "events",
+            data={
+                "subtype": "edict",
+                "requirements": [],
+                "main_effects": [
+                    {
+                        "effect_type": "modify_resources",
+                        "payload": {"resource_id": "labor", "amount": 2},
+                    }
+                ],
+                "alternative_effects": [],
+            },
+        )
+        state = prepare_bot_state()
+        state["catalog"]["events"].append(edict)
+        bot = state["players"][1]
+        bot["hand"] = ["farm", "labor-grant"]
+        bot["scheme_slots"] = ["garrison", "border-raid"]
+        bot["committed"] = False
+        state["phase"] = "plotting"
+        state["active_player_id"] = ""
+        for player in state["players"]:
+            if player["id"] != bot["id"]:
+                player["committed"] = True
+        state = _prepare_state(state)
+
+        for _ in range(4):
+            action = choose_next_bot_action(state)
+            self.assertIsNotNone(action)
+            state = perform_action(
+                state,
+                action["type"],
+                {key: value for key, value in action.items() if key != "type"},
+            )
+            if next(player for player in state["players"] if player["id"] == bot["id"])["committed"]:
+                break
+
+        submitted = [entry for entry in state["commitments"] if entry.get("item_id") == "labor-grant"]
+        self.assertEqual(len(submitted), 1)
+        self.assertEqual(submitted[0]["commitment_slot"], "edict")
+        self.assertTrue(any(entry.get("commitment_slot") == "common" for entry in state["commitments"]))
+
     def test_bot_prefers_crisis_for_the_last_empty_scheme_slot(self):
         military_agenda = agenda_for_tag("military")
         state = prepare_bot_state()
@@ -372,3 +419,44 @@ class TestBotRoomService(unittest.IsolatedAsyncioTestCase):
                 action="choose_agenda",
                 payload={"player_id": "player-2", "agenda_id": "survivor"},
             )
+
+    async def test_public_plotting_state_hides_bot_submissions(self):
+        state = build_state(
+            mode="solo_bots",
+            player_count=3,
+            human_player_name="Human",
+        )
+        state["phase"] = "plotting"
+        state["commitments"] = [
+            {
+                "id": "bot-common",
+                "item_id": "farm",
+                "kind": "cards",
+                "owner_player_id": "",
+                "face_up": False,
+                "commitment_slot": "common",
+            },
+            {
+                "id": "bot-edict",
+                "item_id": "tax-riots",
+                "kind": "events",
+                "owner_player_id": "player-2",
+                "face_up": False,
+                "commitment_slot": "edict",
+            },
+        ]
+        state["players"][1]["selected_edict_commitment"] = {
+            "item_id": "tax-riots",
+            "source": "hand",
+            "index": 0,
+            "commitment_slot": "edict",
+        }
+
+        public = public_game_state(state)
+
+        self.assertTrue(all(
+            not commitment["item_id"]
+            for commitment in public["commitments"]
+            if commitment.get("owner_player_id") != "player-1"
+        ))
+        self.assertIsNone(public["players"][1]["selected_edict_commitment"])

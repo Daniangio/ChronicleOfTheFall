@@ -40,9 +40,11 @@ During Plotting, the bot:
 
 1. Scores playable cards from their tags, production, effects, costs, placement,
    and Agenda contribution.
-2. Commits the highest-valued playable card.
-3. If no playable card exists, commits the best legal fallback because a player
-   must still play a card when able.
+2. Submits the highest-valued playable Structure or Crisis to the common pool.
+3. Also plays a positive-value Edict when its current Ministry assignment permits
+   it.
+4. If no common submission is available, plays the best legal Edict fallback
+   because a player must still play at least one card when able.
 
 Before committing, the bot may move one high-value, currently unplayable card to
 a Scheme Slot. It estimates readiness from missing tags, available tag providers,

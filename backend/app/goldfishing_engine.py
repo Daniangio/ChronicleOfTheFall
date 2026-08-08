@@ -211,7 +211,8 @@ def build_goldfishing_state(
                 "ministry_ids": [],
                 "suspicion": 0,
                 "committed": False,
-                "selected_commitment": None,
+                "selected_common_commitment": None,
+                "selected_edict_commitment": None,
                 "pending_draws": 0,
                 "hidden_agenda_id": selected_agendas[index] if bot_only else "",
                 "agenda_options": agenda_options,
@@ -565,11 +566,20 @@ def _select_commit_card(state: dict[str, Any], payload: dict[str, Any]) -> None:
     item = item_by_id(state, item_id)
     if _cannot_commit_events(state, player) and _is_event(item):
         raise ValueError("A deposed player cannot commit an Event.")
-    player["selected_commitment"] = {
+    commitment_slot = _plotting_commitment_slot(item)
+    if not commitment_slot:
+        raise ValueError("Only a Structure, Crisis, or eligible Edict can be played during Plotting.")
+    requested_slot = str(payload.get("commitment_slot") or commitment_slot)
+    if requested_slot != commitment_slot:
+        raise ValueError("That card cannot be played in the selected Plotting slot.")
+    if commitment_slot == "edict" and not _can_player_commit_edict(state, player, item):
+        raise ValueError("Only the indicated Minister may play this Edict.")
+    player[_selection_key(commitment_slot)] = {
         "item_id": item_id,
         "source": source,
         "index": index,
         "face_up": _must_commit_face_up(player),
+        "commitment_slot": commitment_slot,
     }
 
 
@@ -577,8 +587,8 @@ def _confirm_plotting(state: dict[str, Any], payload: dict[str, Any]) -> None:
     _require_phase(state, "plotting")
     player_id = _require_plotting_player(state, payload)
     player = _player(state, player_id)
-    selected = player.get("selected_commitment")
-    if not selected:
+    selections = _selected_plotting_commitments(player)
+    if not selections:
         if _legal_commit_options(state, player):
             raise ValueError("Select a card before confirming Plotting.")
         if _cannot_commit_events(state, player):
@@ -595,41 +605,54 @@ def _confirm_plotting(state: dict[str, Any], payload: dict[str, Any]) -> None:
         _advance_plotting(state)
         return
 
-    source = str(selected.get("source") or "")
-    index = int(selected.get("index", -1))
-    cards = player["hand"] if source == "hand" else player["scheme_slots"] if source == "scheme" else None
-    if (
-        cards is None
-        or index < 0
-        or index >= len(cards)
-        or cards[index] != selected.get("item_id")
+    resolved: list[tuple[dict[str, Any], dict[str, Any]]] = []
+    for selected in selections:
+        source = str(selected.get("source") or "")
+        index = int(selected.get("index", -1))
+        cards = player["hand"] if source == "hand" else player["scheme_slots"] if source == "scheme" else None
+        if cards is None or index < 0 or index >= len(cards) or cards[index] != selected.get("item_id"):
+            _clear_plotting_selections(player)
+            raise ValueError("A selected commitment is no longer available.")
+        item = item_by_id(state, str(selected["item_id"]))
+        slot = _plotting_commitment_slot(item)
+        if slot != selected.get("commitment_slot"):
+            _clear_plotting_selections(player)
+            raise ValueError("A selected commitment is no longer legal.")
+        if _cannot_commit_events(state, player) and _is_event(item):
+            _clear_plotting_selections(player)
+            raise ValueError("A deposed player cannot commit an Event.")
+        if slot == "edict" and not _can_player_commit_edict(state, player, item):
+            _clear_plotting_selections(player)
+            raise ValueError("Only the indicated Minister may play this Edict.")
+        resolved.append((selected, item))
+
+    for index in sorted(
+        (int(selected["index"]) for selected, _ in resolved if selected["source"] == "hand"),
+        reverse=True,
     ):
-        player["selected_commitment"] = None
-        raise ValueError("The selected commitment is no longer available.")
-    item_id = str(cards[index])
-    item = item_by_id(state, item_id)
-    if _cannot_commit_events(state, player) and _is_event(item):
-        player["selected_commitment"] = None
-        raise ValueError("A deposed player cannot commit an Event.")
-    if source == "hand":
-        cards.pop(index)
-    else:
-        cards[index] = None
-    face_up = bool(selected.get("face_up"))
-    state["commitments"].append(
-        {
-            "id": f"commitment-{uuid.uuid4().hex[:10]}",
-            "item_id": item_id,
-            "kind": "events" if _is_event(item) else "cards",
-            "owner_player_id": player_id if face_up else "",
-            "face_up": face_up,
-        }
-    )
-    player["selected_commitment"] = None
+        player["hand"].pop(index)
+    for selected, _ in resolved:
+        if selected["source"] == "scheme":
+            player["scheme_slots"][int(selected["index"])] = None
+
+    committed_names: list[str] = []
+    for selected, item in resolved:
+        face_up = bool(selected.get("face_up"))
+        slot = str(selected["commitment_slot"])
+        state["commitments"].append(
+            {
+                "id": f"commitment-{uuid.uuid4().hex[:10]}",
+                "item_id": item["id"],
+                "kind": "events" if _is_event(item) else "cards",
+                "owner_player_id": player_id if slot == "edict" or face_up else "",
+                "face_up": face_up,
+                "commitment_slot": slot,
+            }
+        )
+        committed_names.append(item.get("name", item["id"]) if face_up else f"a face-down {slot}")
+    _clear_plotting_selections(player)
     player["committed"] = True
-    state["log"].append(
-        f"{player['name']} committed {item.get('name', item_id) if face_up else 'a face-down card'}."
-    )
+    state["log"].append(f"{player['name']} committed {' and '.join(committed_names)}.")
     _advance_plotting(state)
 
 
@@ -643,16 +666,17 @@ def _plotting_scheme(state: dict[str, Any], payload: dict[str, Any]) -> None:
     if slot_index < 0 or slot_index >= SCHEME_SLOTS:
         raise ValueError("Scheme Slot not found.")
     slot_card = player["scheme_slots"][slot_index]
-    selected = player.get("selected_commitment")
+    selections = _selected_plotting_commitments(player)
     if mode == "to_hand":
         if not slot_card:
             raise ValueError("Scheme Slot is empty.")
         destination_index = len(player["hand"])
         player["scheme_slots"][slot_index] = None
         player["hand"].append(slot_card)
-        if selected and selected.get("source") == "scheme" and int(selected.get("index", -1)) == slot_index:
-            selected["source"] = "hand"
-            selected["index"] = destination_index
+        for selected in selections:
+            if selected.get("source") == "scheme" and int(selected.get("index", -1)) == slot_index:
+                selected["source"] = "hand"
+                selected["index"] = destination_index
     elif mode in {"to_scheme", "swap"}:
         if hand_index < 0 or hand_index >= len(player["hand"]):
             raise ValueError("Hand card not found.")
@@ -666,21 +690,21 @@ def _plotting_scheme(state: dict[str, Any], payload: dict[str, Any]) -> None:
             player["hand"][hand_index] = slot_card
         else:
             player["hand"].pop(hand_index)
-        if selected and selected.get("source") == "hand":
-            selected_index = int(selected.get("index", -1))
-            if selected_index == hand_index:
-                selected["source"] = "scheme"
-                selected["index"] = slot_index
-            elif mode == "to_scheme" and hand_index < selected_index:
-                selected["index"] = selected_index - 1
-        elif (
-            selected
-            and mode == "swap"
-            and selected.get("source") == "scheme"
-            and int(selected.get("index", -1)) == slot_index
-        ):
-            selected["source"] = "hand"
-            selected["index"] = hand_index
+        for selected in selections:
+            if selected.get("source") == "hand":
+                selected_index = int(selected.get("index", -1))
+                if selected_index == hand_index:
+                    selected["source"] = "scheme"
+                    selected["index"] = slot_index
+                elif mode == "to_scheme" and hand_index < selected_index:
+                    selected["index"] = selected_index - 1
+            elif (
+                mode == "swap"
+                and selected.get("source") == "scheme"
+                and int(selected.get("index", -1)) == slot_index
+            ):
+                selected["source"] = "hand"
+                selected["index"] = hand_index
     else:
         raise ValueError("Unknown Scheme action.")
     state["log"].append(f"{player['name']} rearranged their Scheme Slots.")
@@ -953,7 +977,7 @@ def _begin_plotting(state: dict[str, Any]) -> None:
     state["docket_resolution"] = []
     for player in state["players"]:
         player["committed"] = False
-        player["selected_commitment"] = None
+        _clear_plotting_selections(player)
     state["active_player_id"] = ""
     state["log"].append("Plotting Phase began.")
 
@@ -962,9 +986,23 @@ def _advance_plotting(state: dict[str, Any]) -> None:
     committed = {player["id"] for player in state["players"] if player.get("committed")}
     if len(committed) < len(state["players"]):
         return
+    common_commitments = [
+        commitment
+        for commitment in state["commitments"]
+        if commitment.get("commitment_slot") != "edict"
+    ]
+    random.Random(f"{state.get('room_id', '')}:{state.get('era', 1)}:common-docket").shuffle(
+        common_commitments
+    )
+    edict_commitments = [
+        commitment
+        for commitment in state["commitments"]
+        if commitment.get("commitment_slot") == "edict"
+    ]
     state["council_stack"] = [
         *state.get("founding_commitments", []),
-        *state["commitments"],
+        *common_commitments,
+        *edict_commitments,
     ]
     _begin_hand_reset(state)
 
@@ -1038,7 +1076,7 @@ def _begin_crisis_intake(state: dict[str, Any]) -> None:
 
 
 def _run_crisis_intake(state: dict[str, Any]) -> None:
-    if int(state.get("era", 1)) % 5 == 0:
+    if int(state.get("era", 1)) % 2 == 1:
         deck = Deck(state.get("crisis_deck", []))
         for player in state["players"]:
             player["hand"].extend(deck.draw(1))
@@ -1094,7 +1132,7 @@ def _end_era(state: dict[str, Any]) -> None:
     for player in state["players"]:
         player["suspicion"] = 0
         player["committed"] = False
-        player["selected_commitment"] = None
+        _clear_plotting_selections(player)
         player["hand_revealed"] = False
     state["era"] = int(state.get("era", 1)) + 1
     state["epoch"] = state["era"]
@@ -1188,18 +1226,19 @@ def _possible_actions(state: dict[str, Any]) -> list[dict[str, Any]]:
                     "item_id": item_id,
                     "source": source,
                     "index": index,
+                    "commitment_slot": commitment_slot,
                     "face_up": _must_commit_face_up(player),
                     "resolution_preview": _plotting_resolution_preview(
                         state,
                         item_by_id(state, item_id),
                     ),
                     "selected": (
-                        (player.get("selected_commitment") or {}).get("source") == source
-                        and (player.get("selected_commitment") or {}).get("index") == index
-                        and (player.get("selected_commitment") or {}).get("item_id") == item_id
+                        (player.get(_selection_key(commitment_slot)) or {}).get("source") == source
+                        and (player.get(_selection_key(commitment_slot)) or {}).get("index") == index
+                        and (player.get(_selection_key(commitment_slot)) or {}).get("item_id") == item_id
                     ),
                 }
-                for source, index, item_id in _legal_commit_options(state, player)
+                for source, index, item_id, commitment_slot in _legal_commit_options(state, player)
             ]
             scheme_actions = [
                 *[
@@ -1240,12 +1279,14 @@ def _possible_actions(state: dict[str, Any]) -> list[dict[str, Any]]:
                 ],
             ]
             actions.extend(select_actions)
-            if player.get("selected_commitment") or not select_actions:
+            selections = _selected_plotting_commitments(player)
+            if selections or not select_actions:
                 actions.append(
                     {
                         "type": "confirm_plotting",
                         "player_id": player_id,
-                        "has_selection": bool(player.get("selected_commitment")),
+                        "has_selection": bool(selections),
+                        "selection_count": len(selections),
                     }
                 )
             actions.extend(scheme_actions)
@@ -1387,7 +1428,10 @@ def _prepare_state(state: dict[str, Any]) -> dict[str, Any]:
     return state
 
 
-def _legal_commit_options(state: dict[str, Any], player: dict[str, Any]) -> list[tuple[str, int, str]]:
+def _legal_commit_options(
+    state: dict[str, Any],
+    player: dict[str, Any],
+) -> list[tuple[str, int, str, str]]:
     options = [
         ("hand", index, item_id)
         for index, item_id in enumerate(player.get("hand", []))
@@ -1398,12 +1442,16 @@ def _legal_commit_options(state: dict[str, Any], player: dict[str, Any]) -> list
         for index, item_id in enumerate(player.get("scheme_slots", []))
         if item_id
     )
-    if _cannot_commit_events(state, player):
-        options = [
-            option for option in options
-            if not _is_event(item_by_id(state, option[2]))
-        ]
-    return options
+    legal: list[tuple[str, int, str, str]] = []
+    for source, index, item_id in options:
+        item = item_by_id(state, item_id)
+        slot = _plotting_commitment_slot(item)
+        if not slot or (_cannot_commit_events(state, player) and _is_event(item)):
+            continue
+        if slot == "edict" and not _can_player_commit_edict(state, player, item):
+            continue
+        legal.append((source, index, item_id, slot))
+    return legal
 
 
 def _plotting_resolution_preview(state: dict[str, Any], item: dict[str, Any]) -> str:
@@ -1903,9 +1951,9 @@ def _choose_unrest_resolution(state: dict[str, Any], payload: dict[str, Any]) ->
             raise ValueError("Unknown City Revolt resolution.")
         city.setdefault("condition_tokens", {}).pop("unrest-token", None)
         if choice == "suppress":
-            _modify_pillar(state, _pillar_id_by_name(state, "morale"), -2)
+            _modify_pillar(state, _pillar_id_by_name(state, "stability"), -1)
         elif choice == "buy_peace":
-            _modify_pillar(state, _pillar_id_by_name(state, "treasury"), -2)
+            _modify_pillar(state, _pillar_id_by_name(state, "treasury"), -1)
         else:
             pending["remaining_destructions"] = min(2, len(city.get("cards", [])))
             if pending["remaining_destructions"]:
@@ -2707,6 +2755,55 @@ def _is_event(item: dict[str, Any]) -> bool:
 
 def _is_crisis(item: dict[str, Any]) -> bool:
     return _is_event(item) and str((item.get("data") or {}).get("subtype") or "").lower() == "crisis"
+
+
+def _is_edict(item: dict[str, Any]) -> bool:
+    return _is_event(item) and not _is_crisis(item)
+
+
+def _plotting_commitment_slot(item: dict[str, Any]) -> str:
+    if _is_edict(item):
+        return "edict"
+    if _is_crisis(item) or (
+        item.get("kind") == "cards" and str(item.get("category") or "").lower() == "structure"
+    ):
+        return "common"
+    return ""
+
+
+def _selection_key(commitment_slot: str) -> str:
+    if commitment_slot not in {"common", "edict"}:
+        raise ValueError("Unknown Plotting commitment slot.")
+    return f"selected_{commitment_slot}_commitment"
+
+
+def _selected_plotting_commitments(player: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        selection
+        for selection in (
+            player.get("selected_common_commitment"),
+            player.get("selected_edict_commitment"),
+        )
+        if selection
+    ]
+
+
+def _clear_plotting_selections(player: dict[str, Any]) -> None:
+    player["selected_common_commitment"] = None
+    player["selected_edict_commitment"] = None
+
+
+def _can_player_commit_edict(
+    state: dict[str, Any],
+    player: dict[str, Any],
+    event: dict[str, Any],
+) -> bool:
+    if not _is_edict(event):
+        return False
+    ministry_id = str((event.get("data") or {}).get("ministry_id") or "")
+    if ministry_id:
+        return state.get("ministry_assignments", {}).get(ministry_id) == player["id"]
+    return bool(player.get("ministry_ids"))
 
 
 def _commitment_is_crisis(state: dict[str, Any], commitment: dict[str, Any]) -> bool:
