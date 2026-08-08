@@ -288,6 +288,138 @@ class TestBotPolicy(unittest.TestCase):
 
         self.assertEqual(action["item_id"], "garrison")
 
+    def test_bot_prefers_unbuildable_structure_over_resolvable_early_plague(self):
+        agenda = agenda_for_tag("science", resource_id="knowledge")
+        plague_crisis = catalog_entry(
+            "early-pestilence",
+            "Early Pestilence",
+            "events",
+            data={
+                "subtype": "crisis",
+                "requirements": [],
+                "main_effects": [
+                    {
+                        "effect_type": "modify_city_tokens",
+                        "payload": {"tokens": {"plague-token": 2}},
+                    }
+                ],
+                "alternative_effects": [],
+            },
+        )
+        state = prepare_bot_state()
+        state["catalog"]["agendas"].append(agenda)
+        state["catalog"]["events"].append(plague_crisis)
+        bot = state["players"][1]
+        bot["hidden_agenda_id"] = agenda["id"]
+        bot["hand"] = ["garrison", "early-pestilence"]
+        bot["scheme_slots"] = [None, None]
+        bot["committed"] = False
+        state["phase"] = "plotting"
+        state["active_player_id"] = ""
+        state["global_resource_pool"] = {}
+        for player in state["players"]:
+            if player["id"] != bot["id"]:
+                player["committed"] = True
+        state = _prepare_state(state)
+
+        _, action, _ = advance_bot_until_selection(state)
+
+        self.assertEqual(action["item_id"], "garrison")
+
+    def test_plagued_bot_can_play_protective_edict_without_common_crisis(self):
+        agenda = agenda_for_tag("science", resource_id="knowledge")
+        plague_crisis = catalog_entry(
+            "worsen-plague",
+            "Worsen Plague",
+            "events",
+            data={
+                "subtype": "crisis",
+                "requirements": [],
+                "main_effects": [
+                    {
+                        "effect_type": "modify_city_tokens",
+                        "payload": {"tokens": {"plague-token": 1}},
+                    }
+                ],
+            },
+        )
+        quarantine = catalog_entry(
+            "quarantine",
+            "Quarantine",
+            "events",
+            data={
+                "subtype": "edict",
+                "requirements": [],
+                "main_effects": [{"effect_type": "suppress_plague_morale", "payload": {}}],
+            },
+        )
+        state = prepare_bot_state()
+        state["catalog"]["agendas"].append(agenda)
+        state["catalog"]["events"].extend([plague_crisis, quarantine])
+        bot = state["players"][1]
+        bot["hidden_agenda_id"] = agenda["id"]
+        bot["hand"] = ["worsen-plague", "quarantine"]
+        bot["scheme_slots"] = [None, None]
+        bot["committed"] = False
+        state["cities"][0]["condition_tokens"] = {"plague-token": 1}
+        state["phase"] = "plotting"
+        state["active_player_id"] = ""
+        for player in state["players"]:
+            if player["id"] != bot["id"]:
+                player["committed"] = True
+        state = _prepare_state(state)
+
+        state, action, _ = advance_bot_until_selection(state)
+
+        self.assertEqual(action["item_id"], "quarantine")
+        state = perform_action(state, action["type"], {key: value for key, value in action.items() if key != "type"})
+        confirm = choose_next_bot_action(state)
+        self.assertEqual(confirm["type"], "confirm_plotting")
+
+    def test_sanitary_and_temporary_suppression_gain_value_under_plague(self):
+        agenda = agenda_for_tag("science", resource_id="knowledge")
+        hospice = catalog_entry(
+            "hospice",
+            "Hospice",
+            "cards",
+            category="structure",
+            data={"cost": {"labor": 1}, "tags": {"sanitary": 1}},
+        )
+        ordinary = catalog_entry(
+            "ordinary-hall",
+            "Ordinary Hall",
+            "cards",
+            category="structure",
+            data={"cost": {"labor": 1}, "tags": {"faith": 1}},
+        )
+        quarantine = catalog_entry(
+            "quarantine",
+            "Quarantine",
+            "events",
+            data={
+                "subtype": "edict",
+                "requirements": [],
+                "main_effects": [{"effect_type": "suppress_plague_morale", "payload": {}}],
+            },
+        )
+        state = prepare_bot_state()
+        state["catalog"]["agendas"].append(agenda)
+        state["catalog"]["cards"].extend([hospice, ordinary])
+        state["catalog"]["events"].append(quarantine)
+        bot = state["players"][1]
+        bot["hidden_agenda_id"] = agenda["id"]
+        safe_suppression_value = _item_value(state, quarantine, bot["id"])
+        state["cities"][0]["condition_tokens"] = {"plague-token": 1}
+
+        self.assertGreater(
+            _item_value(state, hospice, bot["id"]),
+            _item_value(state, ordinary, bot["id"]) + 7,
+        )
+        self.assertGreater(
+            _item_value(state, quarantine, bot["id"]),
+            safe_suppression_value + 10,
+        )
+
     def test_bot_fills_both_scheme_slots_and_prioritizes_a_crisis(self):
         military_agenda = agenda_for_tag("military")
         state = prepare_bot_state()

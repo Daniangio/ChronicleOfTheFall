@@ -60,6 +60,8 @@ TOKEN_VALUES = {
 PLAGUE_FAR_FROM_WIN_PENALTY = 7.0
 PLAGUE_NO_OBJECTIVE_PENALTY = 4.0
 PLAGUE_UNPROTECTED_PENALTY = 3.0
+PLAGUE_SANITARY_RELIEF_VALUE = 10.0
+PLAGUE_TEMPORARY_SUPPRESSION_VALUE = 12.0
 
 
 def advance_bot_players(state: dict[str, Any]) -> dict[str, Any]:
@@ -254,18 +256,23 @@ def _choose_plotting_action(
     preferred_edict = _preferred_plotting_commitment(state, bot_id, edict_actions)
     selected_common = player.get("selected_common_commitment")
     selected_edict = player.get("selected_edict_commitment")
+    common_value = _plotting_action_item_value(state, bot_id, selected_common or preferred_common)
+    edict_value = _plotting_action_item_value(state, bot_id, selected_edict or preferred_edict)
+    should_play_common = preferred_common is not None and (
+        selected_common is not None
+        or common_value > 0
+        or preferred_edict is None
+        or common_value >= edict_value
+    )
     should_play_edict = preferred_edict is not None and (
-        not common_actions
-        or _item_value(
-            state,
-            item_by_id(state, str(preferred_edict.get("item_id") or "")),
-            bot_id,
-        ) > 0
+        selected_edict is not None
+        or edict_value > 0
+        or not should_play_common
     )
     reserved_commitments = [
         selection
         for selection in (
-            selected_common or preferred_common,
+            selected_common or (preferred_common if should_play_common else None),
             selected_edict or (preferred_edict if should_play_edict else None),
         )
         if selection
@@ -279,7 +286,7 @@ def _choose_plotting_action(
     )
     if scheme_action is not None:
         return scheme_action
-    if not selected_common and preferred_common is not None:
+    if not selected_common and should_play_common:
         return preferred_common
     if not selected_edict and should_play_edict:
         return preferred_edict
@@ -293,22 +300,42 @@ def _preferred_plotting_commitment(
     bot_id: str,
     actions: list[dict[str, Any]],
 ) -> dict[str, Any] | None:
+    if not actions:
+        return None
     playable = [
         action
         for action in actions
         if _item_playable_now(state, item_by_id(state, str(action.get("item_id") or "")))
     ]
-    candidates = playable or actions
-    if not candidates:
-        return None
-    return max(
-        candidates,
+    best_playable = max(
+        playable,
         key=lambda action: (
             _item_value(state, item_by_id(state, str(action.get("item_id") or "")), bot_id),
             action.get("source") == "scheme",
             _stable_action_key(action),
         ),
+        default=None,
     )
+    if best_playable and _plotting_action_item_value(state, bot_id, best_playable) >= 0:
+        return best_playable
+    return max(
+        actions,
+        key=lambda action: (
+            _plotting_action_item_value(state, bot_id, action),
+            action.get("source") == "scheme",
+            _stable_action_key(action),
+        ),
+    )
+
+
+def _plotting_action_item_value(
+    state: dict[str, Any],
+    bot_id: str,
+    action: dict[str, Any] | None,
+) -> float:
+    if not action:
+        return float("-inf")
+    return _item_value(state, item_by_id(state, str(action.get("item_id") or "")), bot_id)
 
 
 def _choose_scheme_action(
@@ -598,6 +625,8 @@ def _item_value(
             )
             novelty = 1.5 if tag_is_new and preference >= 0 else 0.0
             value += amount * (2.0 + preference + novelty)
+            if tag_id == "sanitary":
+                value += _sanitary_relief_value(state, bot_id, amount, candidate_cities)
         for resource_id, amount in _counts(data.get("production")).items():
             preference = profile["resources"].get(resource_id, 0.0)
             resource_is_new = _is_city_card(item) or any(
@@ -762,7 +791,7 @@ def _effects_value(
         elif effect_type == "discard_cards":
             value -= max(1, amount)
         elif effect_type == "suppress_plague_morale":
-            value += max(1, _all_token_counts(state).get("plague-token", 0)) * 1.5
+            value += _temporary_plague_suppression_value(state, bot_id)
         elif effect_type == "waive_next_structure_tag_requirement":
             value += 2.0
     return value
@@ -778,6 +807,9 @@ def _token_change_value(
     value = amount * (TOKEN_VALUES.get(token_id, 0.0) + profile["tokens"].get(token_id, 0.0))
     if token_id == "plague-token" and amount > 0:
         value -= _plague_timing_penalty(state, bot_id, amount)
+    elif token_id == "plague-token" and amount < 0 and not _bot_is_victory_eligible(state, bot_id):
+        removable = min(-amount, int(_all_token_counts(state).get("plague-token", 0)))
+        value += removable * 6.0
     return value
 
 
@@ -794,7 +826,81 @@ def _plague_timing_penalty(state: dict[str, Any], bot_id: str, amount: int) -> f
     per_token += PLAGUE_UNPROTECTED_PENALTY * unprotected_ratio
     if completed_points <= 0 and threshold > 0:
         per_token += PLAGUE_NO_OBJECTIVE_PENALTY
+    morale = _current_pillar_value(state, "morale")
+    expected_losses = _plague_morale_losses(state, additional_plague=amount)
+    if morale is not None and expected_losses >= morale and not _bot_is_victory_eligible(state, bot_id):
+        per_token += 12.0
     return amount * per_token
+
+
+def _sanitary_relief_value(
+    state: dict[str, Any],
+    bot_id: str,
+    amount: int,
+    candidate_cities: list[dict[str, Any]],
+) -> float:
+    if amount <= 0 or _bot_is_victory_eligible(state, bot_id):
+        return 0.0
+    best_relief = max(
+        (
+            min(
+                amount,
+                max(
+                    0,
+                    int(_counts(city.get("condition_tokens")).get("plague-token", 0))
+                    - int(_city_tag_counts(state, city).get("sanitary", 0)),
+                ),
+            )
+            for city in candidate_cities
+        ),
+        default=0,
+    )
+    total_plague = int(_all_token_counts(state).get("plague-token", 0))
+    future_cover = min(amount, max(0, total_plague - best_relief))
+    return best_relief * PLAGUE_SANITARY_RELIEF_VALUE + future_cover * 2.0
+
+
+def _temporary_plague_suppression_value(state: dict[str, Any], bot_id: str) -> float:
+    losses = _plague_morale_losses(state)
+    if losses <= 0:
+        return 0.0
+    if _bot_is_victory_eligible(state, bot_id):
+        return losses * 1.5
+    morale = _current_pillar_value(state, "morale")
+    collapse_prevented = morale is not None and losses >= morale
+    return (
+        losses * PLAGUE_TEMPORARY_SUPPRESSION_VALUE
+        + (20.0 if collapse_prevented else 0.0)
+    )
+
+
+def _plague_morale_losses(state: dict[str, Any], *, additional_plague: int = 0) -> int:
+    cities = state.get("cities", [])
+    losses = sum(
+        int(_counts(city.get("condition_tokens")).get("plague-token", 0))
+        > int(_city_tag_counts(state, city).get("sanitary", 0))
+        for city in cities
+    )
+    if additional_plague > 0 and cities and losses == 0:
+        best_margin = max(
+            int(_counts(city.get("condition_tokens")).get("plague-token", 0))
+            + additional_plague
+            - int(_city_tag_counts(state, city).get("sanitary", 0))
+            for city in cities
+        )
+        if best_margin > 0:
+            losses = 1
+    return losses
+
+
+def _current_pillar_value(state: dict[str, Any], name: str) -> int | None:
+    normalized = name.lower()
+    catalog = state.get("catalog", {}).get("pillars", [])
+    for pillar_id, value in state.get("pillars", {}).items():
+        entry = next((pillar for pillar in catalog if pillar.get("id") == pillar_id), {})
+        if normalized in f"{pillar_id} {entry.get('name', '')}".lower():
+            return int(value)
+    return None
 
 
 def _agenda_win_progress(state: dict[str, Any], player_id: str) -> tuple[float, int, int]:

@@ -51,11 +51,22 @@ During Plotting, the bot:
 4. If no common submission is available, plays the best legal Edict fallback
    because a player must still play at least one card when able.
 
+The common submission is optional when the bot can legally play an Edict. A bot
+therefore skips a negative-value common Crisis when an Edict alone is preferable.
+If every currently resolvable common card is strongly harmful, the bot may submit
+a non-resolving Structure instead; its normal failure cost is compared against
+the Crisis consequences rather than filtered out in advance.
+
 Plague-producing cards receive an additional timing penalty. The penalty is
 largest while the bot has completed no positive Agenda objective and while the
 Empire lacks enough Sanitary tags to cover the resulting Plague. It decreases
 with weighted Agenda progress and disappears once the bot has reached its Agenda
 win threshold; the normal negative value of Plague still applies afterward.
+While below that threshold, existing Plague also raises the value of Sanitary
+Structures according to the exposure they cover, raises the value of Plague
+removal, and strongly raises the value of an Edict that prevents Plague Morale
+loss for the current Era. Preventing an otherwise immediate Morale collapse gets
+an additional emergency premium.
 
 Before committing, the bot may move one high-value, currently unplayable card to
 a Scheme Slot. It estimates readiness from missing tags, available tag providers,
