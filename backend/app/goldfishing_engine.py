@@ -1076,7 +1076,8 @@ def _begin_crisis_intake(state: dict[str, Any]) -> None:
 
 
 def _run_crisis_intake(state: dict[str, Any]) -> None:
-    if int(state.get("era", 1)) % 2 == 1:
+    era = int(state.get("era", 1))
+    if era >= 4 and era % 2 == 0:
         deck = Deck(state.get("crisis_deck", []))
         for player in state["players"]:
             player["hand"].extend(deck.draw(1))

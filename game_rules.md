@@ -1287,8 +1287,12 @@ The remaining Labor and Wealth are discarded.
 
 After Storage and before Hand Refill, check the completed Era number.
 
-If it is odd, each player draws 1 card from the Crisis Deck and adds it to their
-hand. This occurs at the end of Eras 1, 3, 5, 7, and so on.
+Starting with Era 4, each player draws 1 card from the Crisis Deck every 2 Eras
+and adds it to their hand. This occurs at the end of Eras 4, 6, 8, 10, and so on.
+
+No periodic Crisis cards are drawn during Eras 1, 2, or 3. The first periodic
+Crisis Intake therefore happens in the same Era in which the Institution Deck
+enters the Foundation Deck, immediately before Hand Refill.
 
 If the Crisis Deck is empty, skip any draw it cannot supply.
 

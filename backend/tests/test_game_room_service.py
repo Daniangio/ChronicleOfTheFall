@@ -1865,41 +1865,43 @@ class TestAnonymousCouncilEngine(unittest.TestCase):
             2,
         )
 
-    def test_odd_era_crisis_intake_and_hand_reset_preserve_crises(self):
-        state = build_state()
-        state["era"] = 5
-        state["phase"] = "crisis_intake"
-        crisis_counts = {
-            player["id"]: player["hand"].count("border-raid")
-            for player in state["players"]
-        }
+    def test_crisis_intake_draws_every_two_eras_starting_with_era_four(self):
+        for era in (4, 6, 8):
+            with self.subTest(era=era):
+                state = build_state()
+                state["era"] = era
+                state["phase"] = "crisis_intake"
+                crisis_counts = {
+                    player["id"]: player["hand"].count("border-raid")
+                    for player in state["players"]
+                }
 
-        state = perform_action(state, "continue_phase", {})
+                state = perform_action(state, "continue_phase", {})
 
-        self.assertEqual(state["phase"], "hand_refill")
-        self.assertTrue(
-            all(
-                player["hand"].count("border-raid") == crisis_counts[player["id"]] + 1
-                for player in state["players"]
-            )
-        )
+                self.assertEqual(state["phase"], "hand_refill")
+                self.assertTrue(all(
+                    player["hand"].count("border-raid") == crisis_counts[player["id"]] + 1
+                    for player in state["players"]
+                ))
 
-    def test_even_era_crisis_intake_does_not_draw_crises(self):
-        state = build_state()
-        state["era"] = 2
-        state["phase"] = "crisis_intake"
-        crisis_counts = {
-            player["id"]: player["hand"].count("border-raid")
-            for player in state["players"]
-        }
+    def test_crisis_intake_does_not_draw_before_era_four_or_on_odd_eras(self):
+        for era in (1, 2, 3, 5, 7):
+            with self.subTest(era=era):
+                state = build_state()
+                state["era"] = era
+                state["phase"] = "crisis_intake"
+                crisis_counts = {
+                    player["id"]: player["hand"].count("border-raid")
+                    for player in state["players"]
+                }
 
-        state = perform_action(state, "continue_phase", {})
+                state = perform_action(state, "continue_phase", {})
 
-        self.assertEqual(state["phase"], "hand_refill")
-        self.assertTrue(all(
-            player["hand"].count("border-raid") == crisis_counts[player["id"]]
-            for player in state["players"]
-        ))
+                self.assertEqual(state["phase"], "hand_refill")
+                self.assertTrue(all(
+                    player["hand"].count("border-raid") == crisis_counts[player["id"]]
+                    for player in state["players"]
+                ))
 
     def test_event_tag_requirement_uses_permanent_empire_tags(self):
         state = build_state()
