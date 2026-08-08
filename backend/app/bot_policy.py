@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import math
+import random
 from collections import Counter, defaultdict
 from copy import deepcopy
 from typing import Any
@@ -203,6 +204,9 @@ def choose_next_bot_action(state: dict[str, Any]) -> dict[str, Any] | None:
             if action.get("target_type") == "city" and action.get("buildable")
         ]
         if buildable_cities:
+            coordination_vote = _city_capacity_coordination_vote(state, bot_id, buildable_cities)
+            if coordination_vote:
+                return coordination_vote
             return max(
                 buildable_cities,
                 key=lambda action: (
@@ -236,6 +240,43 @@ def choose_next_bot_action(state: dict[str, Any]) -> dict[str, Any] | None:
         bot_actions,
         key=lambda action: (_action_value(state, bot_id, action), _stable_action_key(action)),
     )
+
+
+def _city_capacity_coordination_vote(
+    state: dict[str, Any],
+    bot_id: str,
+    buildable_cities: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    cities = state.get("cities", [])
+    if not cities or any(
+        len(city.get("cards", [])) < int(city.get("building_slots", 0))
+        for city in cities
+    ):
+        return None
+    supported = [action for action in buildable_cities if int(action.get("votes") or 0) > 0]
+    if not supported:
+        return None
+    highest_support = max(int(action.get("votes") or 0) for action in supported)
+    candidates = [
+        action
+        for action in supported
+        if int(action.get("votes") or 0) == highest_support
+    ]
+    candidates.sort(key=_stable_action_key)
+    if len(candidates) == 1:
+        return candidates[0]
+    seed = ":".join(
+        (
+            str(state.get("room_id") or ""),
+            str(state.get("era") or 1),
+            bot_id,
+            ",".join(
+                f"{action.get('target_id')}={action.get('votes', 0)}"
+                for action in candidates
+            ),
+        )
+    )
+    return random.Random(seed).choice(candidates)
 
 
 def _choose_plotting_action(

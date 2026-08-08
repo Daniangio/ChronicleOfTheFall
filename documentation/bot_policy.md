@@ -85,6 +85,17 @@ and draw choices are included.
 The Minister of the Empire orders the Council Docket by Crisis priority, build
 dependencies, and Agenda-adjusted card value.
 
+## City Vote Coordination
+
+When every building slot in the existing Cities is occupied, adding another City
+becomes a shared priority. The first bot voter may select its preferred buildable
+Charter normally. Later bots prioritize buildable Charters that already received
+support, choosing among those with the highest vote count. Equal candidates are
+sampled with a deterministic game, Era, and player seed so bot simulations remain
+replayable. This makes the next bot converge on the first supported Charter and
+reach the two-vote founding threshold instead of repeatedly splitting support by
+Agenda preference.
+
 ## Current Limits
 
 - Bots never place Suspicion.

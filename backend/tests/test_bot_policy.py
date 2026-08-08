@@ -104,6 +104,81 @@ class TestBotPolicy(unittest.TestCase):
         self.assertTrue(all(player["committed"] for player in state["players"][1:]))
         self.assertFalse(state["players"][0]["committed"])
 
+    def test_bots_converge_on_supported_city_when_all_existing_slots_are_full(self):
+        state = prepare_bot_state()
+        city_charters = [
+            catalog_entry(
+                city_id,
+                name,
+                "cards",
+                category="city",
+                data={"building_slots": 2},
+            )
+            for city_id, name in (
+                ("river-city", "River City"),
+                ("hill-city", "Hill City"),
+                ("forest-city", "Forest City"),
+            )
+        ]
+        state["catalog"]["cards"].extend(city_charters)
+        state["available_city_card_ids"] = [entry["id"] for entry in city_charters]
+        state["cities"][0]["building_slots"] = 2
+        state["cities"][0]["cards"] = ["farm", "garrison"]
+        state["phase"] = "council_vote"
+        state["council_votes"] = {}
+        state["city_vote_counts"] = {}
+        state["active_player_id"] = "player-1"
+        for player in state["players"]:
+            player["controller"] = "bot"
+        state = _prepare_state(state)
+
+        first_vote = choose_next_bot_action(state)
+        state = perform_action(
+            state,
+            first_vote["type"],
+            {key: value for key, value in first_vote.items() if key != "type"},
+        )
+        second_vote = choose_next_bot_action(state)
+
+        self.assertEqual(first_vote["target_type"], "city")
+        self.assertEqual(second_vote["target_id"], first_vote["target_id"])
+
+    def test_city_coordination_samples_only_from_previously_supported_tied_charters(self):
+        state = prepare_bot_state()
+        city_charters = [
+            catalog_entry(
+                city_id,
+                name,
+                "cards",
+                category="city",
+                data={"building_slots": 2},
+            )
+            for city_id, name in (
+                ("river-city", "River City"),
+                ("hill-city", "Hill City"),
+                ("forest-city", "Forest City"),
+            )
+        ]
+        state["catalog"]["cards"].extend(city_charters)
+        state["available_city_card_ids"] = [entry["id"] for entry in city_charters]
+        state["cities"][0]["building_slots"] = 2
+        state["cities"][0]["cards"] = ["farm", "garrison"]
+        state["phase"] = "council_vote"
+        state["council_votes"] = {
+            "player-1": {"target_type": "city", "target_id": "river-city"},
+            "player-2": {"target_type": "city", "target_id": "hill-city"},
+        }
+        state["city_vote_counts"] = {"river-city": 1, "hill-city": 1}
+        state["active_player_id"] = "player-3"
+        for player in state["players"]:
+            player["controller"] = "bot"
+        state = _prepare_state(state)
+
+        vote = choose_next_bot_action(state)
+
+        self.assertIn(vote["target_id"], {"river-city", "hill-city"})
+        self.assertNotEqual(vote["target_id"], "forest-city")
+
     def test_system_steps_advance_until_the_human_has_a_decision(self):
         state = prepare_bot_state()
         human_agenda = next(
